@@ -49,7 +49,13 @@ export function useThemeColor(colorFrom: () => string | Promise<string>) {
     if (!('window' in globalThis) || globalThis.window == null)
       return
 
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', new Color(await colorFrom()).to('srgb').toString({ format: 'hex' }))
+    const value = (await colorFrom()).trim()
+    // An element can have no computed color for a moment, for example while the stage changes the model.
+    // `Color` throws "Empty color reference" for an empty value. The meta tag then keeps its last color.
+    if (!value)
+      return
+
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', new Color(value).to('srgb').toString({ format: 'hex' }))
   }
 
   return {

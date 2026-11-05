@@ -4,7 +4,7 @@ import * as v from 'valibot'
 
 import { useConsciousnessStore } from './modules/consciousness'
 import { useHearingStore } from './modules/hearing'
-import { useNeoAliceBridgeStore } from './modules/neoalice-bridge'
+import { defaultNeoAliceBrokerUrl, useNeoAliceBridgeStore } from './modules/neoalice-bridge'
 import { useSpeechStore } from './modules/speech'
 import { useProviderConfigStore } from './providers/config'
 import { useProviderStore } from './providers/provider'
@@ -30,34 +30,40 @@ const ServerDefaultsSchema = v.object({
     speechMode: v.optional(v.picklist(['silent', 'neoalice-audio', 'airi-voice']), 'silent'),
     voiceInput: v.optional(v.boolean(), false),
     userId: v.optional(v.string(), ''),
+    announceState: v.optional(v.boolean(), false),
+    /** WebSocket URL of the broker. Empty: the `/mqtt` path of the server. */
+    brokerUrl: v.optional(v.string(), ''),
   })),
 })
 
 export type ServerDefaults = v.InferOutput<typeof ServerDefaultsSchema>
 
 /**
- * Settings that the server of the page offers as defaults, at `/airi-defaults.json`.
+ * Settings that an Alice server offers as defaults, at `/airi-defaults.json`.
  *
  * The Alice deployment (`deploy/alice`) writes this file from its `.env`: the proxies of the local
  * LLM, TTS, and STT, the model names, and the NeoAlice site. Paths become absolute URLs on the
- * origin of the page. Empty values are removed, so a provider without a base URL is left out.
+ * origin of the server. Empty values are removed, so a provider without a base URL is left out.
  *
- * Returns undefined when the page is not served over HTTP, or the server has no such file.
+ * The server is the server of the page (web app), or `serverOrigin` (desktop app, from
+ * `VITE_AIRI_SERVER_URL`). Returns undefined when there is no server, or it has no such file.
  */
 export async function fetchServerDefaults(
   page: Pick<Location, 'origin' | 'protocol'> | undefined = globalThis.location,
   fetchFile: typeof fetch = globalThis.fetch,
+  serverOrigin?: string,
 ): Promise<ServerDefaults | undefined> {
-  if (!page || !/^https?:$/.test(page.protocol) || typeof fetchFile !== 'function')
+  const origin = serverOrigin ?? (page && /^https?:$/.test(page.protocol) ? page.origin : undefined)
+  if (!origin || typeof fetchFile !== 'function')
     return undefined
   try {
-    const response = await fetchFile(new URL('/airi-defaults.json', page.origin).href, { headers: { Accept: 'application/json' } })
+    const response = await fetchFile(new URL('/airi-defaults.json', origin).href, { headers: { Accept: 'application/json' } })
     if (!response.ok || !response.headers.get('content-type')?.includes('json'))
       return undefined
     const parsed = v.safeParse(ServerDefaultsSchema, await response.json())
     if (!parsed.success)
       return undefined
-    return resolveServerDefaults(parsed.output, page.origin)
+    return resolveServerDefaults(parsed.output, origin)
   }
   catch (error) {
     console.warn('[server-defaults] the server defaults did not load:', errorMessageFrom(error) ?? error)
@@ -75,7 +81,11 @@ export function resolveServerDefaults(defaults: ServerDefaults, origin: string):
     if (resolved.baseUrl)
       providers[providerId] = resolved
   }
-  return { ...defaults, providers }
+  const neoalice = defaults.neoalice && {
+    ...defaults.neoalice,
+    brokerUrl: defaults.neoalice.brokerUrl || defaultNeoAliceBrokerUrl(new URL(origin)),
+  }
+  return { ...defaults, providers, neoalice }
 }
 
 /** Hosts that refuse calls from a browser page (CORS). The server proxy reaches them. */
@@ -175,5 +185,8 @@ export async function applyServerDefaults(defaults: ServerDefaults | undefined, 
     bridge.speechMode = defaults.neoalice.speechMode
     bridge.voiceInput = defaults.neoalice.voiceInput
     bridge.userId = defaults.neoalice.userId
+    bridge.announceState = defaults.neoalice.announceState
+    if (defaults.neoalice.brokerUrl)
+      bridge.brokerUrl = defaults.neoalice.brokerUrl
   }
 }

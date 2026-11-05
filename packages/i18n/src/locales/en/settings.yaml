@@ -1179,7 +1179,7 @@ pages:
     neoalice-bridge:
       title: NeoAlice Bridge
       description: Speech, mood, and gestures from NeoAlice over MQTT
-      intro: AIRI listens to the MQTT topics of one NeoAlice site and plays its speech, mood, and gestures. The bridge only reads. It never publishes, so NeoAlice and the mirror do not change.
+      intro: AIRI listens to the MQTT topics of one NeoAlice site and plays its speech, mood, and gestures. It publishes only when you turn on the microphone or the satellite announcement, and only on its own site. Use a site of its own, for example airi-avatar, not the site of the mirror.
       enable: Enable the NeoAlice bridge
       enable-description: Connect to the broker while the stage is open
       broker-url: Broker WebSocket URL
@@ -1208,23 +1208,18 @@ pages:
       counters: '{received} messages received, {ignored} ignored'
       last-event: 'Last event: {event}'
       last-ignored: 'Last ignored message: {reason}'
+      announce-state: Announce the avatar as a satellite
+      announce-state-description: Publishes evt/state on the site every 30 seconds, so NeoAlice lists the avatar as an active satellite and sends it broadcasts, for example alarms
       voice:
         enable: Send the microphone to NeoAlice
-        enable-description: AIRI sends each spoken phrase to the /audio route of the NeoAlice API, and plays the reply with lip sync. Turn off Hearing, so AIRI does not answer the same phrase.
-        api-url: NeoAlice API URL
-        api-url-description: The default is the /proxy/neoalice/ path of this page. The Alice Docker server forwards it and adds the API key.
+        enable-description: Each spoken phrase goes to NeoAlice as evt/audio on the site of the avatar, like a satellite. NeoAlice answers with cmd/tts/audio. Set Speech to "Play the audio that NeoAlice sends", and turn off Hearing, so AIRI does not answer the same phrase.
         user-id: NeoAlice user ID
-        user-id-description: The user_id that NeoAlice expects, for example the ID of your NeoAlice profile
-        reply:
-          title: Spoken reply
-          description: Use MQTT when NeoAlice also sends the reply to this site as cmd/tts/audio, so the reply plays one time
-          http: In the response of the API
-          mqtt: Over MQTT, as cmd/tts/audio
+        user-id-description: The UUID of the NeoAlice user. Empty uses the default user of NeoAlice.
         status:
           'off': The microphone is off. It listens only while the stage page is open.
           starting: Starting the microphone...
           listening: Listening
-          sending: Sending the phrase to NeoAlice...
+          waiting: Waiting for the reply of NeoAlice. It can take about two minutes.
           error: Voice error
         last-reply: 'Last reply: {text}'
     messaging-discord:

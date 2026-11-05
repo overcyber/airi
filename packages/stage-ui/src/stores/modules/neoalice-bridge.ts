@@ -1,8 +1,8 @@
-import type { NeoAliceBridgeEvent } from '@proj-airi/alice-motion'
+import type { NeoAliceBridgeEvent, NeoAliceSatelliteMessage } from '@proj-airi/alice-motion'
 import type { MqttClient } from 'mqtt'
 
 import { errorMessageFrom } from '@moeru/std'
-import { neoAliceBridgeTopics, NeoAliceTranslator } from '@proj-airi/alice-motion'
+import { isPublishableSite, neoAliceBridgeTopics, NeoAliceTranslator } from '@proj-airi/alice-motion'
 import { useLocalStorageManualReset } from '@proj-airi/stage-shared/composables'
 import { createEventHook, watchDebounced } from '@vueuse/core'
 import { nanoid } from 'nanoid'
@@ -50,20 +50,7 @@ export type NeoAliceSpeechMode = 'airi-voice' | 'neoalice-audio' | 'silent'
 
 export type NeoAliceBridgeStatus = 'off' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
-/** Where the spoken reply to the microphone comes from: the HTTP response, or `cmd/tts/audio` over MQTT. */
-export type NeoAliceVoiceReply = 'http' | 'mqtt'
-
-export type NeoAliceVoiceStatus = 'off' | 'starting' | 'listening' | 'sending' | 'error'
-
-/**
- * Default base URL of the NeoAlice API: the `/proxy/neoalice/` path of the page.
- * The Alice Docker server forwards it to the NeoAlice API and adds the API key.
- */
-export function defaultNeoAliceApiUrl(page: Pick<Location, 'protocol' | 'origin'> | undefined = globalThis.location) {
-  if (!page || !/^https?:$/.test(page.protocol))
-    return 'http://localhost:8080/'
-  return new URL('/proxy/neoalice/', page.origin).href
-}
+export type NeoAliceVoiceStatus = 'off' | 'starting' | 'listening' | 'waiting' | 'error'
 
 /**
  * Default broker URL: the `/mqtt` path of the page address.
@@ -84,8 +71,9 @@ export function defaultNeoAliceBrokerUrl(page: Pick<Location, 'protocol' | 'host
  *
  * A read-only MQTT client over WebSocket. It subscribes to the topics of one NeoAlice site and of the
  * companion service, translates each message with `NeoAliceTranslator`, and hands the events to the stage.
- * It has no publish call, so it cannot change NeoAlice or the mirror. The microphone of the avatar
- * talks to NeoAlice through its HTTP API (`voiceInput`), not through MQTT.
+ * It publishes only on its own site, and only two kinds of messages, like a NeoAlice satellite:
+ * `evt/audio` with the microphone phrases (`voiceInput`), and the `evt/state` heartbeat (`announceState`).
+ * Both are off by default. NeoAlice answers on the same site with `cmd/tts/audio`.
  *
  * The connection lives while at least one holder needs it: the stage and the settings page call `hold`.
  */
@@ -99,15 +87,15 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
   const username = useLocalStorageManualReset<string>('settings/neoalice-bridge/username', '')
   const password = useLocalStorageManualReset<string>('settings/neoalice-bridge/password', '')
   const speechMode = useLocalStorageManualReset<NeoAliceSpeechMode>('settings/neoalice-bridge/speech-mode', 'silent')
-  /** Sends what the avatar microphone hears to the `/audio` route of the NeoAlice API. */
+  /** Publishes each phrase of the avatar microphone as `evt/audio` on the site, like a satellite. */
   const voiceInput = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/voice-input', false)
-  const apiUrl = useLocalStorageManualReset<string>('settings/neoalice-bridge/api-url', defaultNeoAliceApiUrl())
-  /** The `user_id` of the NeoAlice API. */
+  /** The NeoAlice user UUID of the phrases. Empty: NeoAlice uses its default user. */
   const userId = useLocalStorageManualReset<string>('settings/neoalice-bridge/user-id', '')
-  const voiceReply = useLocalStorageManualReset<NeoAliceVoiceReply>('settings/neoalice-bridge/voice-reply', 'http')
+  /** Publishes the `evt/state` heartbeat, so NeoAlice lists the avatar as an active satellite. */
+  const announceState = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/announce-state', false)
   const voiceStatus = ref<NeoAliceVoiceStatus>('off')
   const voiceError = ref('')
-  /** Text that NeoAlice understood from the last phrase, and its reply. */
+  /** The text of the last reply of NeoAlice. */
   const lastHeard = ref('')
 
   const status = ref<NeoAliceBridgeStatus>('off')
@@ -205,6 +193,22 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     })
   }
 
+  /**
+   * Publishes a satellite message of the avatar. Resolves `false` when the bridge is not connected.
+   * Only `neoalice/v1/{site}/evt/audio` and `.../evt/state` of the configured site are permitted.
+   */
+  async function publish(message: NeoAliceSatelliteMessage) {
+    const current = client
+    const ownSite = site.value.trim()
+    if (!current || status.value !== 'connected' || !isPublishableSite(ownSite))
+      return false
+    const permitted = [`neoalice/v1/${ownSite}/evt/audio`, `neoalice/v1/${ownSite}/evt/state`]
+    if (!permitted.includes(message.topic))
+      throw new Error(`The bridge does not publish on ${message.topic}`)
+    await current.publishAsync(message.topic, message.payload, { qos: message.qos })
+    return true
+  }
+
   function disconnect() {
     generation++
     client?.end(true)
@@ -246,9 +250,8 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     password.reset()
     speechMode.reset()
     voiceInput.reset()
-    apiUrl.reset()
     userId.reset()
-    voiceReply.reset()
+    announceState.reset()
   }
 
   return {
@@ -261,9 +264,8 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     password,
     speechMode,
     voiceInput,
-    apiUrl,
     userId,
-    voiceReply,
+    announceState,
     voiceStatus,
     voiceError,
     lastHeard,
@@ -275,6 +277,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     lastIgnored,
     lastEvent,
     hold,
+    publish,
     reconnect: connect,
     onEvent: eventHook.on,
     onReconnect: reconnectHook.on,

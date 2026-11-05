@@ -44,13 +44,24 @@ O AIRI só usa um padrão onde o navegador ainda não tem uma configuração pr�
 
 As chaves `NVIDIA_API_KEY` e `NEOALICE_API_KEY` ficam no contêiner. O repasse as acrescenta, e o navegador nunca as recebe.
 
+## App desktop (Tamagotchi)
+
+O app desktop não tem servidor próprio, então não lê este `.env`. Ele busca as configurações neste servidor:
+
+1. Antes de compilar o desktop, crie `apps/stage-tamagotchi/.env.local` com `VITE_AIRI_SERVER_URL=http://<ip-do-docker>:4173`. Use a porta HTTP: o desktop não confia no certificado local do HTTPS.
+2. Mantenha `AIRI_CORS_ORIGINS=null` neste `.env`. É o padrão. Sem isso, o servidor recusa as chamadas do desktop, que abre as páginas por `file://`.
+3. Compile o desktop. Na primeira abertura, ele configura os provedores nos repasses deste servidor e a ponte NeoAlice em `ws://<ip-do-docker>:4173/mqtt`.
+
 ## Voz com a NeoAlice
 
 - **A fala da NeoAlice no avatar:** a ponte lê `cmd/tts/audio` do site. Com o modo de fala "Play the audio that NeoAlice sends" (`AIRI_DEFAULT_NEOALICE_SPEECH_MODE=neoalice-audio`), o avatar toca o áudio com lip sync. O modo padrão é `silent`, para o espelho e o avatar não falarem juntos.
-- **O microfone do avatar para a NeoAlice:** com "Send the microphone to NeoAlice" (`AIRI_DEFAULT_NEOALICE_VOICE_INPUT=true`), o AIRI corta o áudio em frases e envia cada uma, em WAV, para `POST /audio` da API da NeoAlice. A resposta toca no avatar com lip sync. O microfone fica mudo enquanto o avatar fala.
-- `AIRI_DEFAULT_NEOALICE_USER_ID` é o `user_id` que a API da NeoAlice espera.
+- **O microfone do avatar para a NeoAlice:** com "Send the microphone to NeoAlice" (`AIRI_DEFAULT_NEOALICE_VOICE_INPUT=true`), o AIRI corta o áudio em frases e publica cada uma como `evt/audio` (formato v1, WAV 16 kHz) no site do avatar, como um satélite. A NeoAlice responde com `cmd/tts/audio` no mesmo site, e o avatar toca com lip sync. O microfone fica mudo enquanto o avatar fala, e nenhuma frase nova sai enquanto uma espera resposta (até 150 s).
+- Use um site só do avatar, por exemplo `airi-avatar`. A NeoAlice envia `cmd/tts/audio` para um site só. Com o site do espelho, os dois tocam a mesma resposta.
+- `AIRI_DEFAULT_NEOALICE_USER_ID` é o UUID do usuário. Vazio, a NeoAlice usa o `NEOALICE_MQTT__DEFAULT_USER_ID` dela.
+- "Announce the avatar as a satellite" (`AIRI_DEFAULT_NEOALICE_ANNOUNCE_STATE=true`) publica `evt/state` a cada 30 s. Assim a NeoAlice lista o avatar em `/satellites/active` e envia a ele os avisos gerais, por exemplo alarmes.
+- O AIRI só publica no próprio site, e só `evt/audio` e `evt/state`. As duas opções começam desligadas.
 - Desligue a "Audição" (Hearing) do AIRI quando usar o microfone para a NeoAlice. Senão, o AIRI também responde à mesma frase.
-- Se a NeoAlice também publicar a resposta em `cmd/tts/audio` para o site do avatar, escolha "Over MQTT" em "Spoken reply". Assim a resposta toca uma vez só.
+- A rota HTTP `POST /audio` não devolve áudio nesta versão da NeoAlice. Por isso, a voz usa o MQTT.
 
 ## Serviços em outra máquina
 

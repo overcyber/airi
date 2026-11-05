@@ -32,6 +32,24 @@ export function hasSameOriginProxy(): boolean {
   return isEnvTruthy(import.meta.env.VITE_AIRI_PROXY) || import.meta.env.DEV === true
 }
 
+/**
+ * Origin of the Alice Docker server (`deploy/alice`) that gives the first settings, from
+ * `VITE_AIRI_SERVER_URL`. The desktop app has no server of its own, so its `.env` names one,
+ * for example `VITE_AIRI_SERVER_URL=http://192.0.2.10:4173`. Undefined when it is not set or not a URL.
+ */
+export function serverDefaultsOrigin(): string | undefined {
+  const value = import.meta.env.VITE_AIRI_SERVER_URL?.trim()
+  if (!value)
+    return undefined
+  try {
+    return new URL(value).origin
+  }
+  catch {
+    console.warn('[env] VITE_AIRI_SERVER_URL is not a URL:', value)
+    return undefined
+  }
+}
+
 export function isFluxPurchaseDisabled(): boolean {
   return isEnvTruthy(import.meta.env.VITE_DISABLE_FLUX_PURCHASE)
 }

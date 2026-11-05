@@ -19,7 +19,7 @@ describe('fetchServerDefaults', () => {
       modules: {
         speech: { provider: 'openai-compatible-audio-speech', model: 'kokoro', voice: 'pf_dora' },
       },
-      neoalice: { site: 'mirror', enabled: true, speechMode: 'neoalice-audio', voiceInput: true, userId: 'user-1' },
+      neoalice: { site: 'mirror', enabled: true, speechMode: 'neoalice-audio', voiceInput: true, userId: 'user-1', announceState: true },
     }))
 
     const defaults = await fetchServerDefaults(page, fetchFile)
@@ -30,7 +30,7 @@ describe('fetchServerDefaults', () => {
       'openai-compatible-audio-speech': { apiKey: 'local', baseUrl: 'https://192.0.2.10:4443/proxy/tts/v1/', model: 'kokoro', voice: 'pf_dora' },
     })
     expect(defaults?.modules.speech).toEqual({ provider: 'openai-compatible-audio-speech', model: 'kokoro', voice: 'pf_dora' })
-    expect(defaults?.neoalice).toEqual({ site: 'mirror', enabled: true, speechMode: 'neoalice-audio', voiceInput: true, userId: 'user-1' })
+    expect(defaults?.neoalice).toEqual({ site: 'mirror', enabled: true, speechMode: 'neoalice-audio', voiceInput: true, userId: 'user-1', announceState: true, brokerUrl: 'wss://192.0.2.10:4443/mqtt' })
   })
 
   it('returns nothing for the HTML page of a dev server, a failed request, or a page outside HTTP', async () => {
@@ -45,6 +45,21 @@ describe('fetchServerDefaults', () => {
     expect(await fetchServerDefaults({ origin: 'file://', protocol: 'file:' }, html)).toBeUndefined()
     expect(warn).toHaveBeenCalledOnce()
     warn.mockRestore()
+  })
+})
+
+describe('fetchServerDefaults of the desktop app', () => {
+  it('reads the server of VITE_AIRI_SERVER_URL from a file page, and points the bridge at its /mqtt', async () => {
+    const fetchFile = vi.fn<typeof fetch>(async () => jsonResponse({
+      providers: { ollama: { baseUrl: '/proxy/llm/v1/' } },
+      neoalice: { site: 'airi-avatar' },
+    }))
+
+    const defaults = await fetchServerDefaults({ origin: 'null', protocol: 'file:' }, fetchFile, 'http://192.0.2.10:4173')
+
+    expect(fetchFile).toHaveBeenCalledWith('http://192.0.2.10:4173/airi-defaults.json', expect.anything())
+    expect(defaults?.providers.ollama).toEqual({ baseUrl: 'http://192.0.2.10:4173/proxy/llm/v1/' })
+    expect(defaults?.neoalice?.brokerUrl).toBe('ws://192.0.2.10:4173/mqtt')
   })
 })
 

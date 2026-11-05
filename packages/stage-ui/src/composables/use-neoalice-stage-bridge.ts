@@ -3,9 +3,10 @@ import type { NeoAliceBridgeEvent, SpeechSegment } from '@proj-airi/alice-motion
 import type { StageEmote } from '../libs/alice-motion/stage-motion'
 
 import { errorMessageFrom } from '@moeru/std'
+import { isPublishableSite, neoAliceAudioEvent, neoAliceStateEvent } from '@proj-airi/alice-motion'
 import { onScopeDispose, ref, watch } from 'vue'
 
-import { NeoAliceMicrophone, segmentToWavBase64, sendNeoAliceAudio } from '../libs/alice-motion/neoalice-voice'
+import { NeoAliceMicrophone, neoAliceVoiceSampleRate, segmentToWavBase64 } from '../libs/alice-motion/neoalice-voice'
 import { StageMotionRuntime } from '../libs/alice-motion/stage-motion'
 import { useNeoAliceBridgeStore } from '../stores/modules/neoalice-bridge'
 
@@ -31,6 +32,13 @@ const thinkingTimeoutMs = 20_000
 const tickIntervalMs = 100
 /** The microphone stays deaf for this time after the avatar speaks, so the room echo is not sent. */
 const echoTailMs = 700
+/**
+ * Wait for the reply to one phrase. NeoAlice measured up to about 115 s (Whisper on the CPU, the LLM,
+ * and one TTS at a time). No new phrase goes out while one waits, so NeoAlice does not fill its queue.
+ */
+const voiceReplyTimeoutMs = 150_000
+/** Interval of the `evt/state` heartbeat. NeoAlice forgets a satellite after 120 s without one. */
+const heartbeatIntervalMs = 30_000
 
 /**
  * Mounted stages that use the bridge, in mount order. Only the first one plays bridge events,
@@ -60,10 +68,20 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
 
   const clock = () => performance.now()
 
+  let voiceSequence = 0
+  let deafUntilMs = 0
+  /** The phrase that waits for its reply, and since when. */
+  let waitingSince: number | undefined
+  const microphone = new NeoAliceMicrophone(segment => void sendPhrase(segment))
+
   watch(options.emotes, emotes => runtime.setEmotes(emotes), { immediate: true })
 
   async function speak(sessionId: string, text: string, audio: () => Promise<Blob | null>) {
     const now = clock()
+    stopWaiting()
+    if (text)
+      bridge.lastHeard = text
+    announce('speaking', sessionId)
     currentSession = sessionId
     sessionsOfConnection.add(sessionId)
     thinking.value = false
@@ -82,8 +100,10 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     }
     finally {
       runtime.speechEnded(sessionId, clock())
-      if (currentSession === sessionId)
+      if (currentSession === sessionId) {
         currentSession = undefined
+        announce(microphone.running ? 'listening' : 'idle')
+      }
     }
   }
 
@@ -102,6 +122,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     const now = clock()
     switch (event.type) {
       case 'speech-text': {
+        stopWaiting()
         speechSequence++
         const sessionId = event.sessionId ?? `neoalice-${speechSequence}`
         if (bridge.speechMode !== 'airi-voice') {
@@ -115,6 +136,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         return
       }
       case 'speech-audio': {
+        stopWaiting()
         speechSequence++
         const sessionId = event.sessionId ?? `neoalice-${speechSequence}`
         if (bridge.speechMode === 'silent') {
@@ -152,56 +174,65 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
 
   const token = Symbol('neoalice-stage')
   mountedStages.push(token)
-  // Microphone of the avatar: each phrase goes to the `/audio` route of NeoAlice. Only the first
-  // mounted stage listens, like the playback of bridge events.
-  let voiceSequence = 0
-  let voiceRequest: AbortController | undefined
-  let deafUntilMs = 0
-  const microphone = new NeoAliceMicrophone(segment => void sendPhrase(segment))
+  // Microphone of the avatar: each phrase goes to NeoAlice as `evt/audio` on the site of the avatar,
+  // like a satellite. NeoAlice answers with `cmd/tts/audio` on the same site. Only the first mounted
+  // stage listens, like the playback of bridge events.
 
   async function sendPhrase(segment: SpeechSegment) {
-    const userId = bridge.userId.trim()
-    if (!userId) {
+    if (waitingSince !== undefined)
+      return
+    const site = bridge.site.trim()
+    if (bridge.acceptAnySite || !isPublishableSite(site)) {
       bridge.voiceStatus = 'error'
-      bridge.voiceError = 'Set the NeoAlice user ID.'
+      bridge.voiceError = 'Set one site for the avatar, for example airi-avatar. The microphone does not publish with "Follow every site".'
       return
     }
-    voiceRequest?.abort()
-    const controller = new AbortController()
-    voiceRequest = controller
     const sessionId = `airi-voice-${Date.now()}-${++voiceSequence}`
-    const returnAudio = bridge.voiceReply === 'http' && bridge.speechMode !== 'silent'
-    bridge.voiceStatus = 'sending'
-    bridge.voiceError = ''
-    runtime.director.userStartedSpeaking(clock())
-    runtime.director.userFinishedSpeaking(clock())
-    thinking.value = true
-    thinkingSinceMs = clock()
     try {
-      const reply = await sendNeoAliceAudio({
-        apiBaseUrl: bridge.apiUrl.trim(),
-        userId,
+      const sent = await bridge.publish(neoAliceAudioEvent({
+        site,
+        userId: bridge.userId,
         sessionId,
-        audioBase64: segmentToWavBase64(segment),
-        returnAudio,
-      }, globalThis.fetch, controller.signal)
-      if (controller.signal.aborted)
+        wavBase64: segmentToWavBase64(segment),
+        sampleRateHz: neoAliceVoiceSampleRate,
+        nowMs: Date.now(),
+      }))
+      if (!sent) {
+        bridge.voiceStatus = 'error'
+        bridge.voiceError = 'The bridge is not connected to the broker.'
         return
-      bridge.lastHeard = reply.text
-      bridge.voiceStatus = 'listening'
-      if (returnAudio && reply.audioBase64)
-        await speak(sessionId, reply.text, async () => base64ToWav(reply.audioBase64))
-      else if (reply.text && bridge.voiceReply === 'http')
-        options.showCaption(reply.text)
+      }
+      waitingSince = clock()
+      bridge.voiceStatus = 'waiting'
+      bridge.voiceError = ''
+      runtime.director.userStartedSpeaking(clock())
+      runtime.director.userFinishedSpeaking(clock())
+      thinking.value = true
+      thinkingSinceMs = clock()
+      announce('thinking', sessionId)
     }
     catch (error) {
-      if (controller.signal.aborted)
-        return
-      thinking.value = false
       bridge.voiceStatus = 'error'
-      bridge.voiceError = errorMessageFrom(error) ?? 'NeoAlice did not answer'
-      console.warn('[neoalice-bridge] the voice request failed:', bridge.voiceError)
+      bridge.voiceError = errorMessageFrom(error) ?? 'The phrase was not published'
     }
+  }
+
+  /** Ends the wait for a reply: the reply arrived, or it took too long. */
+  function stopWaiting() {
+    if (waitingSince === undefined)
+      return
+    waitingSince = undefined
+    if (microphone.running)
+      bridge.voiceStatus = 'listening'
+  }
+
+  function announce(state: 'idle' | 'listening' | 'thinking' | 'speaking', sessionId?: string) {
+    const site = bridge.site.trim()
+    if (!bridge.announceState || bridge.acceptAnySite || !isPublishableSite(site) || mountedStages[0] !== token)
+      return
+    const detail = state === 'idle' ? 'hb' : state
+    void bridge.publish(neoAliceStateEvent({ site, state, detail, sessionId, nowMs: Date.now() }))
+      .catch(error => console.warn('[neoalice-bridge] evt/state failed:', errorMessageFrom(error) ?? 'unknown error'))
   }
 
   async function updateMicrophone() {
@@ -209,7 +240,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     if (wanted === microphone.running)
       return
     if (!wanted) {
-      voiceRequest?.abort()
+      stopWaiting()
       await microphone.stop()
       bridge.voiceStatus = 'off'
       return
@@ -238,6 +269,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     sessionsOfConnection.clear()
   })
   const release = bridge.hold()
+  let lastHeartbeatMs = Number.NEGATIVE_INFINITY
   const stopVoiceWatch = watch(() => bridge.voiceInput, () => void updateMicrophone(), { immediate: true })
   const timer = setInterval(() => {
     const now = clock()
@@ -245,8 +277,16 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     if (currentSession !== undefined)
       deafUntilMs = now + echoTailMs
     microphone.paused = now < deafUntilMs
-    if (thinking.value && now - thinkingSinceMs > thinkingTimeoutMs)
+    if (waitingSince !== undefined && now - waitingSince > voiceReplyTimeoutMs) {
+      stopWaiting()
       thinking.value = false
+    }
+    if (thinking.value && waitingSince === undefined && now - thinkingSinceMs > thinkingTimeoutMs)
+      thinking.value = false
+    if (now - lastHeartbeatMs >= heartbeatIntervalMs) {
+      lastHeartbeatMs = now
+      announce(currentSession ? 'speaking' : waitingSince !== undefined ? 'thinking' : microphone.running ? 'listening' : 'idle')
+    }
     void runtime.tick(now)
   }, tickIntervalMs)
 
@@ -257,7 +297,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     stopReconnect.off()
     synthesis?.abort()
     stopVoiceWatch()
-    voiceRequest?.abort()
+    waitingSince = undefined
     void microphone.stop().then(() => {
       bridge.voiceStatus = 'off'
     })

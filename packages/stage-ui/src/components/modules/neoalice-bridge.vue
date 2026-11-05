@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NeoAliceSpeechMode, NeoAliceVoiceReply } from '../../stores/modules/neoalice-bridge'
+import type { NeoAliceSpeechMode } from '../../stores/modules/neoalice-bridge'
 
 import { Alert, FieldCheckbox, FieldInput, FieldSelect, SettingsCard } from '@proj-airi/ui'
 import { storeToRefs } from 'pinia'
@@ -20,9 +20,8 @@ const {
   password,
   speechMode,
   voiceInput,
-  apiUrl,
   userId,
-  voiceReply,
+  announceState,
   voiceStatus,
   voiceError,
   lastHeard,
@@ -42,11 +41,6 @@ const speechModes = computed<{ value: NeoAliceSpeechMode, label: string }[]>(() 
   { value: 'silent', label: t('settings.pages.modules.neoalice-bridge.speech-mode.silent') },
   { value: 'neoalice-audio', label: t('settings.pages.modules.neoalice-bridge.speech-mode.neoalice-audio') },
   { value: 'airi-voice', label: t('settings.pages.modules.neoalice-bridge.speech-mode.airi-voice') },
-])
-
-const voiceReplies = computed<{ value: NeoAliceVoiceReply, label: string }[]>(() => [
-  { value: 'http', label: t('settings.pages.modules.neoalice-bridge.voice.reply.http') },
-  { value: 'mqtt', label: t('settings.pages.modules.neoalice-bridge.voice.reply.mqtt') },
 ])
 
 const voiceTone = computed(() => voiceStatus.value === 'error' ? 'danger' : 'info')
@@ -109,23 +103,9 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
 
     <template v-if="voiceInput">
       <FieldInput
-        v-model="apiUrl"
-        :label="t('settings.pages.modules.neoalice-bridge.voice.api-url')"
-        :description="t('settings.pages.modules.neoalice-bridge.voice.api-url-description')"
-        placeholder="https://192.0.2.10:4443/proxy/neoalice/"
-      />
-
-      <FieldInput
         v-model="userId"
         :label="t('settings.pages.modules.neoalice-bridge.voice.user-id')"
         :description="t('settings.pages.modules.neoalice-bridge.voice.user-id-description')"
-      />
-
-      <FieldSelect
-        v-model="voiceReply"
-        :options="voiceReplies"
-        :label="t('settings.pages.modules.neoalice-bridge.voice.reply.title')"
-        :description="t('settings.pages.modules.neoalice-bridge.voice.reply.description')"
       />
 
       <Alert :tone="voiceTone" data-testid="neoalice-voice-status">
@@ -138,6 +118,12 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
         </div>
       </Alert>
     </template>
+
+    <FieldCheckbox
+      v-model="announceState"
+      :label="t('settings.pages.modules.neoalice-bridge.announce-state')"
+      :description="t('settings.pages.modules.neoalice-bridge.announce-state-description')"
+    />
 
     <Alert v-if="enabled && !configured" tone="warning">
       {{ t('settings.pages.modules.neoalice-bridge.not-configured') }}

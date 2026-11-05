@@ -44,6 +44,33 @@ put_key() {
 put_key AIRI_NVIDIA_AUTH Authorization "Bearer " "${NVIDIA_API_KEY:-}" NVIDIA_API_KEY
 put_key AIRI_NEOALICE_AUTH X-API-Key "" "${NEOALICE_API_KEY:-}" NEOALICE_API_KEY
 
+# CORS: the origins of AIRI_CORS_ORIGINS (comma separated) can call the proxies from another origin.
+# The default "null" is the desktop app (file://). The headers of the upstream are replaced.
+cors_map=/etc/nginx/airi-cors-origins.map
+: > "$cors_map"
+for origin in $(printf '%s' "${AIRI_CORS_ORIGINS-null}" | tr ',' ' '); do
+  case "$origin" in
+    *[!A-Za-z0-9.:/_-]*)
+      echo "airi-setup: WARNING the CORS origin $origin has characters that are not permitted. It is left out."
+      continue
+      ;;
+  esac
+  printf '  "%s" "%s";\n' "$origin" "$origin" >> "$cors_map"
+done
+cat > /etc/nginx/airi-cors.inc <<'CORS'
+proxy_hide_header Access-Control-Allow-Origin;
+proxy_hide_header Access-Control-Allow-Headers;
+proxy_hide_header Access-Control-Allow-Methods;
+add_header Access-Control-Allow-Origin $airi_cors_origin always;
+add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, X-API-Key" always;
+add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+add_header Vary Origin always;
+if ($request_method = OPTIONS) {
+  return 204;
+}
+CORS
+echo "airi-setup: CORS for the origins: ${AIRI_CORS_ORIGINS-null}"
+
 # JSON string: escapes the backslash and the double quote.
 json() {
   printf '"%s"' "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
@@ -77,7 +104,8 @@ cat > /etc/airi-runtime/airi-defaults.json <<JSON
     "enabled": $(bool "${AIRI_DEFAULT_NEOALICE_ENABLED:-false}"),
     "speechMode": $(json "${AIRI_DEFAULT_NEOALICE_SPEECH_MODE:-silent}"),
     "voiceInput": $(bool "${AIRI_DEFAULT_NEOALICE_VOICE_INPUT:-false}"),
-    "userId": $(json "${AIRI_DEFAULT_NEOALICE_USER_ID:-}")
+    "userId": $(json "${AIRI_DEFAULT_NEOALICE_USER_ID:-}"),
+    "announceState": $(bool "${AIRI_DEFAULT_NEOALICE_ANNOUNCE_STATE:-false}")
   }
 }
 JSON

@@ -4,7 +4,7 @@ import type { ArtistrySyncPayload } from '@proj-airi/stage-shared'
 import { defineInvokeHandler } from '@moeru/eventa'
 import { useElectronEventaContext, useElectronEventaInvoke } from '@proj-airi/electron-vueuse'
 import { themeColorFromValue, useThemeColor } from '@proj-airi/stage-layouts/composables/theme-color'
-import { artistrySyncConfig } from '@proj-airi/stage-shared'
+import { artistrySyncConfig, serverDefaultsOrigin } from '@proj-airi/stage-shared'
 import { ToasterRoot } from '@proj-airi/stage-ui/components'
 import { updateModelAssetStatus, useInferencePreload } from '@proj-airi/stage-ui/composables'
 import { usePiniaSynced } from '@proj-airi/stage-ui/libs/pinia'
@@ -26,6 +26,7 @@ import { useVisionStore } from '@proj-airi/stage-ui/stores/modules/vision'
 import { useOnboardingStore } from '@proj-airi/stage-ui/stores/onboarding'
 import { usePerfTracerBridgeStore } from '@proj-airi/stage-ui/stores/perf-tracer-bridge'
 import { listProvidersForPluginHost, shouldPublishPluginHostCapabilities } from '@proj-airi/stage-ui/stores/plugin-host-capabilities'
+import { applyServerDefaults, fetchServerDefaults } from '@proj-airi/stage-ui/stores/server-defaults'
 import { useSettings, useSettingsAudioDevice } from '@proj-airi/stage-ui/stores/settings'
 import { useSettingsStageModel } from '@proj-airi/stage-ui/stores/settings/stage-model'
 import { useTheme } from '@proj-airi/ui'
@@ -305,6 +306,15 @@ function createFullStageRuntime() {
       registerAuthenticatedSetup()
       if (!authStore.isAuthenticated)
         await removeAuthenticationProviderConfiguration()
+
+      // The Alice Docker server of VITE_AIRI_SERVER_URL gives the first settings: providers on its
+      // proxies and the NeoAlice bridge. Saved settings stay.
+      const serverOrigin = serverDefaultsOrigin()
+      if (serverOrigin) {
+        void fetchServerDefaults(globalThis.location, globalThis.fetch, serverOrigin)
+          .then(applyServerDefaults)
+          .catch(error => console.error('Server defaults failed:', error))
+      }
 
       await displayModelsStore.loadDisplayModelsFromIndexedDB()
       await settingsStore.initializeStageModel()

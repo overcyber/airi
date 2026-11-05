@@ -15,6 +15,18 @@ Linux installers:
 
 The packages are in `apps/stage-tamagotchi/dist`.
 
+## Settings from an Alice server
+
+The desktop app can take its first settings from an Alice Docker server (`deploy/alice`): the providers on the proxies of the server, and the NeoAlice bridge. Before the build, write the server address in `apps/stage-tamagotchi/.env.local`:
+
+```env
+VITE_AIRI_SERVER_URL=http://192.0.2.10:4173
+```
+
+- Use the HTTP port of the server. The desktop app does not trust the local certificate of the HTTPS port.
+- The server must permit the origin of the desktop app: `AIRI_CORS_ORIGINS=null` in `deploy/alice/.env`. It is the default.
+- The app uses a server setting only where it has no setting of its own.
+
 ## Local model files
 
 Sherpaw downloads remote model files into the app user data directory. The main
