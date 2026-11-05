@@ -100,7 +100,10 @@ export async function requestServerDefaults(origin: string, fetchFile: typeof fe
  * Resolves `false` when there is no server, or it has no settings.
  */
 export async function loadServerDefaults(options: { overwrite?: boolean } = {}) {
-  const saved = useNeoAliceBrainStore().serverUrl.trim()
+  let saved = useNeoAliceBrainStore().serverUrl.trim()
+  // An HTTPS page cannot call http:// (mixed content). On the web app the page is the server, so use it.
+  if (saved && globalThis.location && isUnreachableFromPage(saved, globalThis.location))
+    saved = ''
   let serverOrigin: string | undefined
   if (saved) {
     try {
