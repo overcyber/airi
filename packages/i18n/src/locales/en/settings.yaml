@@ -2782,8 +2782,8 @@ voices: Voice
 vrm:
   motions:
     title: Motions
-    description: The character plays these motions when the LLM asks for one. The LLM reads each description to choose. Imported files stay on this device.
-    import: Import motion (.vrma)
+    description: The character plays these motions when the LLM or NeoAlice asks for one. The LLM reads each description to choose. FBX files from Mixamo or Ready Player Me are retargeted to the model. Imported files stay on this device.
+    import: Import motion (.vrma, .fbx)
     import-failed: The motion could not be imported.
     name: Name
     description-field: Description for the LLM

@@ -15,7 +15,7 @@
 | P3 | Máscaras por osso e mistura aditiva | Falta | — | V6 (gesto de braço sem parar o idle). |
 | P4 | Voz, face, prosódia, gaze, física, foot lock | Parcial | Rosto de humor permanente, aceno nos acentos da fala, lip-sync e spring bones do AIRI. | Marcações de tempo do TTS (Kokoro `/dev/captioned_speech`), foot lock, teste de 100 interrupções. |
 | P5 | Catálogo semântico e editor de camadas | Parcial | `MotionCatalog` (S03). Importação de VRMA com descrição e LLM escolhendo o emote (V2). | Editor de máscara e prévia por camada. |
-| P6 | Adaptador VRM | Parcial | O VRM virou a base (Planejamento 04). A Eva converte para VRM 1.0 (V4, `packages/alice-avatar-tools`) e roda no AIRI com a V1 a V3. | Retarget dos FBX Mixamo (V5). |
+| P6 | Adaptador VRM | Feito | O VRM virou a base (Planejamento 04). A Eva converte para VRM 1.0 (V4, `packages/alice-avatar-tools`) e roda no AIRI com a V1 a V3. Os FBX Mixamo e Ready Player Me tocam no VRM (V5). | Testar os ~20 FBX do TalkingHead na sua máquina. |
 | P7 | Gestos neurais (StreamTalk, ARDY) | Falta | — | S17. Depende das GPUs (D7). |
 | Seção 9 | Integração com serviços locais | Feito | Serviço `alice-companion` e ponte MQTT somente leitura no AIRI (S08, 05/11/2026). | Rodar contra o broker real (prompt do agente local). |
 | Seção 11 | Testes que bloqueiam merge | Parcial | Semente fixa, `walk + wave`, `walk + sit`, mesmo braço, um gesto em cada braço, interrupção e reconexão (S03, S04). | 100 trocas de personagem, FPS 30/60/120, 100 interrupções com física. |
@@ -113,7 +113,11 @@ Falta testar o app desktop. Lá, o chat e o palco podem rodar em janelas diferen
 
 ## 7. Próximos passos, na ordem do plano
 
-1. Rodar o kit `teste-app/` na sua máquina, e depois com o seu LLM e o Kokoro de verdade.
-2. Contratos v1 aprovados em 05/11/2026. S03 (director) e S04 (scheduler) em andamento.
-3. S08: ponte MQTT, para o AIRI receber os comandos e o humor da NeoAlice sem alterá-la.
-4. V3: respiração, pose e peso por humor, e contato visual (conceitos do TalkingHead).
+Concluídas em 05/11/2026: contratos v1 (ADR aprovado), S03 (director), S04 (scheduler), S08 (ponte MQTT), V3 (corpo por humor), V4 (Eva em VRM) e V5 (FBX no VRM).
+
+1. Rodar o kit `teste-app/` na sua máquina, com o seu LLM, o Kokoro e o broker de verdade (`PROMPT_AGENTE_LOCAL_TESTE_NOVO_AIRI.md`).
+2. Importar os FBX do TalkingHead na tela de movimentos e conferir cada um na Eva.
+3. V6: máscaras por osso e mistura aditiva no VRM (P3), para um gesto de braço não parar o idle.
+4. S09: marcações de tempo do TTS (Kokoro), prosódia e física.
+5. S10 a S14: painel do companion, memória, eventos, proatividade e editor do catálogo.
+6. S16: troca do avatar do espelho, só depois de o novo avatar estar aprovado. A NeoAlice não muda antes disso.

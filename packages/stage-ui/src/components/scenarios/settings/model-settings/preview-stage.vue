@@ -10,12 +10,13 @@ import { TachieScene } from '@proj-airi/stage-ui-tachie'
 import { ThreeScene, useModelStore } from '@proj-airi/stage-ui-three'
 import { useMouse } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 
 import { useLive2DStageMotionMagic } from '../../../../features/motions/live2d/use-live2d-stage-motion-magic'
 import { useSharedLive2DExpressionPreview } from '../../../../stores/live2d'
 import { useAiriCardStore } from '../../../../stores/modules/airi-card'
 import { useSettings } from '../../../../stores/settings'
+import { useVrmMotionsStore } from '../../../../stores/vrm-motions'
 import {
   createEmptyModelSettingsRuntimeSnapshot,
   resolveComponentStateToRuntimePhase,
@@ -39,7 +40,7 @@ const modelStore = useModelStore()
 const { activeCardId, selectedAvatarModelId } = storeToRefs(useAiriCardStore())
 useSharedLive2DExpressionPreview(props.live2dContext, activeCardId, selectedAvatarModelId)
 const live2dSceneRef = ref<{ canvasElement: () => HTMLCanvasElement | undefined }>()
-const vrmSceneRef = ref<{ canvasElement: () => HTMLCanvasElement | undefined }>()
+const vrmSceneRef = ref<{ canvasElement: () => HTMLCanvasElement | undefined, playMotion: (id: string) => Promise<boolean> }>()
 const spineSceneRef = ref<{ canvasElement: () => HTMLCanvasElement | undefined }>()
 const tachieSceneRef = ref<{ canvasElement: () => HTMLCanvasElement | undefined }>()
 const mmdSceneRef = ref<{ canvasElement: () => HTMLCanvasElement | undefined }>()
@@ -66,6 +67,14 @@ const {
 } = storeToRefs(settingsStore)
 const { sceneMutationLocked, scenePhase } = storeToRefs(modelStore)
 const { live2dMotionDriver } = storeToRefs(useSettingsLive2d())
+
+const vrmMotions = useVrmMotionsStore()
+// The Play buttons of the motion settings play on this preview. The main stage is not mounted on the settings page.
+const stopPlayRequests = vrmMotions.onPlayRequest((id) => {
+  if (stageModelRenderer.value === 'vrm')
+    void vrmSceneRef.value?.playMotion(id)
+}).off
+onUnmounted(stopPlayRequests)
 
 // The web settings route unmounts the main stage, so the preview runs its own driver.
 useLive2DStageMotionMagic({
@@ -232,7 +241,7 @@ const cursorPosition = computed(() => ({
   </template>
   <template v-if="stageModelRenderer === 'vrm'">
     <div :class="vrmSceneClassList">
-      <ThreeScene ref="vrmSceneRef" :cursor-position="cursorPosition" :model-id="stageModelSelected" :model-src="stageModelSelectedUrl" />
+      <ThreeScene ref="vrmSceneRef" :cursor-position="cursorPosition" :model-id="stageModelSelected" :model-src="stageModelSelectedUrl" :motion-library="vrmMotions.motionLibrary" />
     </div>
   </template>
   <template v-if="stageModelRenderer === 'spine'">

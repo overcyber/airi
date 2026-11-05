@@ -102,7 +102,7 @@ async function importNeptuna(page) {
 
 /** Imports a VRMA in the Motions section, writes its description, and plays it. */
 async function importMotion(page) {
-  const button = page.getByRole('button', { name: 'Import motion (.vrma)' })
+  const button = page.getByRole('button', { name: 'Import motion (.vrma, .fbx)' })
   await button.waitFor({ timeout: 120000 })
   await button.scrollIntoViewIfNeeded()
   const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 15000 }), button.click()])

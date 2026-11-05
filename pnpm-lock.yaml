@@ -4070,6 +4070,9 @@ importers:
       '@moeru/std':
         specifier: 'catalog:'
         version: 0.1.0-beta.17
+      '@proj-airi/alice-motion':
+        specifier: workspace:^
+        version: link:../alice-motion
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -5912,6 +5915,9 @@ importers:
       '@pixiv/three-vrm-core':
         specifier: 'catalog:'
         version: 3.5.5(@types/three@0.185.4)(three@0.185.1)
+      '@proj-airi/alice-motion':
+        specifier: workspace:^
+        version: link:../alice-motion
       '@proj-airi/model-driver-lipsync':
         specifier: workspace:*
         version: link:../model-driver-lipsync

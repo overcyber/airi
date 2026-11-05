@@ -1,6 +1,8 @@
 import type { Glb, GltfNode } from './glb'
 import type { Mat4, Quat, Vec3 } from './math'
 
+import { rpmHumanBones } from '@proj-airi/alice-motion'
+
 import { AccessorView } from './glb'
 import {
   fromTrs,
@@ -49,50 +51,6 @@ export interface ConvertReport {
   /** Blend shapes that a preset expression wanted but the avatar does not have. */
   missingBlendShapes: string[]
   vertices: number
-}
-
-/** VRM humanoid bone name to Ready Player Me (Mixamo style) node name. */
-export const rpmHumanBones: Record<string, string> = {
-  hips: 'Hips',
-  spine: 'Spine',
-  chest: 'Spine1',
-  upperChest: 'Spine2',
-  neck: 'Neck',
-  head: 'Head',
-  leftEye: 'LeftEye',
-  rightEye: 'RightEye',
-  leftUpperLeg: 'LeftUpLeg',
-  leftLowerLeg: 'LeftLeg',
-  leftFoot: 'LeftFoot',
-  leftToes: 'LeftToeBase',
-  rightUpperLeg: 'RightUpLeg',
-  rightLowerLeg: 'RightLeg',
-  rightFoot: 'RightFoot',
-  rightToes: 'RightToeBase',
-  leftShoulder: 'LeftShoulder',
-  leftUpperArm: 'LeftArm',
-  leftLowerArm: 'LeftForeArm',
-  leftHand: 'LeftHand',
-  rightShoulder: 'RightShoulder',
-  rightUpperArm: 'RightArm',
-  rightLowerArm: 'RightForeArm',
-  rightHand: 'RightHand',
-  ...fingerBones('left', 'Left'),
-  ...fingerBones('right', 'Right'),
-}
-
-function fingerBones(vrmSide: string, rpmSide: string) {
-  const bones: Record<string, string> = {
-    [`${vrmSide}ThumbMetacarpal`]: `${rpmSide}HandThumb1`,
-    [`${vrmSide}ThumbProximal`]: `${rpmSide}HandThumb2`,
-    [`${vrmSide}ThumbDistal`]: `${rpmSide}HandThumb3`,
-  }
-  for (const [vrmFinger, rpmFinger] of [['Index', 'Index'], ['Middle', 'Middle'], ['Ring', 'Ring'], ['Little', 'Pinky']]) {
-    bones[`${vrmSide}${vrmFinger}Proximal`] = `${rpmSide}Hand${rpmFinger}1`
-    bones[`${vrmSide}${vrmFinger}Intermediate`] = `${rpmSide}Hand${rpmFinger}2`
-    bones[`${vrmSide}${vrmFinger}Distal`] = `${rpmSide}Hand${rpmFinger}3`
-  }
-  return bones
 }
 
 const requiredHumanBones = ['hips', 'spine', 'head', 'leftUpperArm', 'leftLowerArm', 'leftHand', 'rightUpperArm', 'rightLowerArm', 'rightHand', 'leftUpperLeg', 'leftLowerLeg', 'leftFoot', 'rightUpperLeg', 'rightLowerLeg', 'rightFoot']

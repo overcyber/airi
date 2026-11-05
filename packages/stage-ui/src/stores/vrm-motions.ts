@@ -16,9 +16,11 @@ export interface VrmMotionDetails {
   description: string
 }
 
-/** The file name without the `.vrma` extension. */
+const motionFile = /\.(vrma|fbx)$/i
+
+/** The file name without the `.vrma` or `.fbx` extension. */
 function nameFromFile(file: File) {
-  return file.name.replace(/\.vrma$/i, '').trim() || 'Motion'
+  return file.name.replace(motionFile, '').trim() || 'Motion'
 }
 
 /**
@@ -49,6 +51,7 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
     name: record.name,
     description: record.description,
     url: urlOf(record),
+    format: record.format ?? 'vrma',
   })))
 
   const motionLibrary = computed<VrmMotionLibrary>(() => ({
@@ -66,14 +69,15 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
   }
 
   /**
-   * Stores a VRMA file as a new emote.
+   * Stores a VRMA or FBX file as a new emote. An FBX is a Mixamo or Ready Player Me animation (V5).
    *
-   * Before: a `.vrma` file and an optional name and description.
+   * Before: a `.vrma` or `.fbx` file and an optional name and description.
    * After: the emote is in `motionLibrary`, and the LLM prompt lists it.
    */
   async function importMotion(file: File, details: Partial<VrmMotionDetails> = {}) {
-    if (!/\.vrma$/i.test(file.name))
-      throw new Error(`Not a VRMA file: ${file.name}`)
+    const extension = motionFile.exec(file.name)?.[1].toLowerCase()
+    if (!extension)
+      throw new Error(`Not a VRMA or FBX file: ${file.name}`)
     await load()
     const name = details.name?.trim() || nameFromFile(file)
     const record: VrmMotionRecord = {
@@ -82,6 +86,7 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
       description: details.description?.trim() || name,
       file,
       importedAt: Date.now(),
+      format: extension === 'fbx' ? 'fbx' : 'vrma',
     }
     await vrmMotionsRepo.save(record)
     imported.value = [...imported.value, record]

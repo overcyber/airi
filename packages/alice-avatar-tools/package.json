@@ -25,7 +25,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@moeru/std": "catalog:"
+    "@moeru/std": "catalog:",
+    "@proj-airi/alice-motion": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "catalog:",

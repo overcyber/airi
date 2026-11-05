@@ -9,6 +9,8 @@ export interface VrmEmoteAnimation {
   /** Shown to the LLM so it can choose the emote. */
   description: string
   url: string
+  /** File format. A blob URL of an imported file has no extension, so the format comes from the import. Default: `vrma`. */
+  format?: 'vrma' | 'fbx'
 }
 
 /**

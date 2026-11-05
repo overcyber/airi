@@ -115,13 +115,20 @@ const animationAliases: Record<string, string> = { walking: 'walk', walk: 'walk'
  */
 export class NeoAliceTranslator {
   private readonly options: NeoAliceTranslatorOptions
+  private catalog: MotionCatalog
   private readonly companionSite: string
   private readonly recent = new Map<string, { payload: string, atMs: number }>()
   private sequence = 0
 
   constructor(options: NeoAliceTranslatorOptions) {
     this.options = options
+    this.catalog = options.catalog
     this.companionSite = options.companionSite ?? 'companion'
+  }
+
+  /** Replaces the catalog, for example after the user imports an FBX animation with the name of a NeoAlice file. */
+  setCatalog(catalog: MotionCatalog) {
+    this.catalog = catalog
   }
 
   translate(topic: string, payload: string, nowMs: number): NeoAliceBridgeEvent {
@@ -223,7 +230,8 @@ export class NeoAliceTranslator {
       }
       case 'cmd/avatar/animation': {
         const stem = normalizeName(command.url?.split(/[?#]/)[0].split('/').pop()?.replace(/\.[a-z0-9]+$/i, ''))
-        semanticAction = stem && (animationAliases[stem] ?? this.known(stem))
+        // An imported animation with the name of the file comes first, for example `wave_hello` for Wave_Hello.fbx.
+        semanticAction = stem && (this.known(stem) ?? animationAliases[stem])
         break
       }
       default:
@@ -245,7 +253,7 @@ export class NeoAliceTranslator {
       ...(durationMs !== undefined && durationMs > 0 && { requestedDurationMs: Math.min(60_000, durationMs) }),
       ...extra,
     }
-    const result = parseMotionIntent(candidate, { allowedActions: this.options.catalog.actions })
+    const result = parseMotionIntent(candidate, { allowedActions: this.catalog.actions })
     if (!result.ok)
       return ignored(topic, result.reason)
     return { type: 'intent', site, intent: result.value, ...(emoji && { emoji }) }
@@ -273,7 +281,7 @@ export class NeoAliceTranslator {
   }
 
   private known(semanticAction: string) {
-    return this.options.catalog.get(semanticAction) ? semanticAction : undefined
+    return this.catalog.get(semanticAction) ? semanticAction : undefined
   }
 }
 

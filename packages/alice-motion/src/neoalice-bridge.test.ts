@@ -79,6 +79,20 @@ describe('neoAliceTranslator', () => {
     expect(first.type === 'intent' && second.type === 'intent' && first.intent.id !== second.intent.id).toBe(true)
   })
 
+  it('plays an imported animation with the name of the NeoAlice file before the aliases', () => {
+    const bridge = translator()
+    const base = catalog.get('greeting')!
+    bridge.setCatalog(catalog.extend([
+      { ...base, semanticAction: 'wave_hello', clipId: 'vrm-motion-1' },
+      { ...base, semanticAction: 'walking', clipId: 'vrm-motion-2' },
+    ]))
+
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/animation', '{"url":"animations/Wave_Hello.fbx"}', 0))
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'wave_hello' } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/animation', '{"url":"animations/walking.fbx"}', 0))
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'walking' } })
+  })
+
   it('refuses an unknown animation URL or gesture with a reason', () => {
     const bridge = translator()
 

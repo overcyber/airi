@@ -17,7 +17,7 @@ const { imported } = storeToRefs(vrmMotions)
 const importError = ref('')
 const builtInEmotes = computed(() => defaultVrmMotionLibrary.emotes)
 
-const vrmaDialog = useFileDialog({ accept: '.vrma', multiple: true, reset: true })
+const vrmaDialog = useFileDialog({ accept: '.vrma,.fbx', multiple: true, reset: true })
 vrmaDialog.onChange(async (files) => {
   if (!files)
     return

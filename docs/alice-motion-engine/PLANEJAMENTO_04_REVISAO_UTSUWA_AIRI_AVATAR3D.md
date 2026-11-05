@@ -277,6 +277,30 @@ Validação:
 - No app, com o kit `teste-app/` e `VRM_FILE` apontando para a Eva: as 9 verificações passaram. Sequência do vídeo em `evidencias/V4/eva-no-app.png`: idles, pensando com a mão no queixo, cumprimento e fala.
 - 5 testes do conversor (avatar sintético em pose A) e 3 testes do `proceduralAxisSign`.
 
+## Estado da V5 (05/11/2026): animações FBX no VRM
+
+O plano previa converter os FBX para VRMA. A V5 faz outra coisa: o AIRI lê o FBX direto e faz o retarget ao carregar (`packages/stage-ui-three/src/composables/vrm/fbx-retarget.ts`). Assim os FBX ficam só na máquina, por causa da licença, e são importados na tela de movimentos como um VRMA.
+
+| Ponto | Como funciona |
+| --- | --- |
+| Fontes | Mixamo (ossos `mixamorig`) e Ready Player Me (as animações do servidor TalkingHead, sem prefixo). |
+| Pose de descanso | Mixamo: os ossos do próprio FBX. Ready Player Me: a tabela `rpmRestSkeleton` (`packages/alice-motion/src/rpm-skeleton.ts`), porque esses arquivos guardam o primeiro quadro no lugar da pose de descanso. |
+| Método | O exemplo Mixamo do three-vrm (MIT): `pai em repouso * local * repouso^-1`. Os braços da Ready Player Me descansam em pose A, então a rotação também passa da pose A para a pose T, como no conversor da V4. |
+| VRM 0.x | X e Z invertidos, como o three-vrm faz com um VRMA. |
+| Quadril | Altura escalada pela altura do quadril do VRM. |
+| Importação | A tela de movimentos aceita `.vrma` e `.fbx`. O nome do arquivo vira o nome do movimento, por exemplo `Wave_Hello`. |
+| Ponte NeoAlice | `cmd/avatar/animation` com `.../Wave_Hello.fbx` toca o movimento importado `wave_hello` antes dos apelidos (`walking.fbx` → `walk`). O catálogo da ponte acompanha as importações. |
+
+Defeito encontrado: na versão web, o botão Play da tela de movimentos não fazia nada desde a V2. A prévia da tela de modelo não escutava o pedido, só o palco principal, que não fica montado nas configurações. A prévia agora toca o movimento e recebe a biblioteca com os importados.
+
+Validação:
+
+- Teste isolado no three-vrm do AIRI: `Wave_Hello`, `walking`, `Thinking` e `Point_Forward` na Eva (VRM 1.0) e na Neptuna (VRM 0.x). Folha em `evidencias/V5/fbx-eva-neptuna.png`.
+- No app: o FBX importou com o nome `Wave_Hello`, o Play chegou à prévia, e o clipe saiu com 55 trilhas. As rotações do braço no app foram iguais às do teste isolado nos mesmos instantes. Neste contêiner, sem GPU, cada quadro leva segundos e o emote inteiro cabe num quadro. Por isso a pose foi conferida com o emote parado em 1 s: o braço levanta. Falta ver o movimento em tempo real na sua máquina.
+- Testes: 5 do retarget, 2 da tabela Ready Player Me, 2 da importação de FBX e 1 da ponte (nome do arquivo antes do apelido).
+
+Os FBX não entram no repositório: a licença do Mixamo para redistribuição não foi verificada.
+
 ## Nova ordem proposta (substitui S06, S07 e S15 do Planejamento 03)
 
 | Sprint | Entrega no `overcyber/airi` | Base |
@@ -285,7 +309,7 @@ Validação:
 | V2 (**concluída em 04/11/2026**, ver "Estado da V2") | Emotes pelo LLM: estender o token ACT (`stage-ui/src/composables/queues.ts:23-60`, `Stage.vue:294-346`) com `motion`. Importação de VRMA com descrição na tela de modelo. | Padrão do Utsuwa, implementação própria |
 | V3 (**concluída em 05/11/2026**) | Realismo procedural no VRM: respiração, troca de pose e peso por humor, cabeça e contato visual. O humor deixa de ser só rosto (`expression.ts`, reset de 3 s). | Conceitos do TalkingHead (MIT) |
 | V4 (**concluída em 05/11/2026**) | Eva GLB → VRM, mantendo ARKit 52 + visemas como expressões customizadas, e lip-sync mapeado | D1 / antiga S15 |
-| V5 | Conversão dos ~20 FBX Mixamo para VRMA (script de retarget e verificação visual) | `talkinghead-neoalice/animations_arkit` |
+| V5 (**concluída em 05/11/2026**, ver "Estado da V5") | FBX Mixamo e Ready Player Me no VRM, com retarget ao carregar e importação na tela de movimentos | Animações FBX do servidor TalkingHead |
 | V6 | Camadas no VRM: máscara por osso e mistura aditiva (gesto de braço sem parar o idle) | Plano 01 P3, agora no VRM |
 | — | S03 (director) e S04 (scheduler) **concluídas em 05/11/2026**. A S08 (ponte MQTT) **concluída em 05/11/2026**: liga a NeoAlice sem alterá-la. | Contratos v1 (`packages/alice-motion`) |
 

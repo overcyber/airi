@@ -48,6 +48,34 @@ function actionOf(emote: StageEmote) {
 }
 
 /**
+ * The default catalog plus one full body clip action for each emote that it does not know,
+ * for example imported VRMA and FBX files. The action is the emote name in lower snake case.
+ */
+export function catalogWithEmotes(emotes: readonly StageEmote[]): MotionCatalog {
+  const base = new MotionCatalog()
+  const extra: MotionCatalogEntry[] = []
+  for (const emote of emotes) {
+    const action = actionOf(emote)
+    if (!action || base.get(action) || extra.some(entry => entry.semanticAction === action))
+      continue
+    extra.push({
+      semanticAction: action,
+      clipId: emote.id,
+      channels: fullBodyChannels,
+      durationMs: 3000,
+      priority: 60,
+      interruptible: true,
+      fadeInMs: 200,
+      fadeOutMs: 300,
+      mode: 'normal',
+      maxWeight: 1,
+      description: emote.description.slice(0, 200),
+    })
+  }
+  return base.extend(extra)
+}
+
+/**
  * Motion runtime of the stage: the director (S03) and the scheduler (S04) on the stage clock.
  *
  * It receives conversation events and motion intents, for example from the NeoAlice bridge (S08),
@@ -66,27 +94,7 @@ export class StageMotionRuntime {
 
   /** Adds the emotes that the default catalog does not know, for example imported VRMA files. */
   setEmotes(emotes: readonly StageEmote[]) {
-    const base = new MotionCatalog()
-    const extra: MotionCatalogEntry[] = []
-    for (const emote of emotes) {
-      const action = actionOf(emote)
-      if (!action || base.get(action) || extra.some(entry => entry.semanticAction === action))
-        continue
-      extra.push({
-        semanticAction: action,
-        clipId: emote.id,
-        channels: fullBodyChannels,
-        durationMs: 3000,
-        priority: 60,
-        interruptible: true,
-        fadeInMs: 200,
-        fadeOutMs: 300,
-        mode: 'normal',
-        maxWeight: 1,
-        description: emote.description.slice(0, 200),
-      })
-    }
-    this.catalog = base.extend(extra)
+    this.catalog = catalogWithEmotes(emotes)
     this.director.setCatalog(this.catalog)
     this.scheduler.setCatalog(this.catalog)
   }

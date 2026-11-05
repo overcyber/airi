@@ -2,12 +2,15 @@ import type { NeoAliceBridgeEvent } from '@proj-airi/alice-motion'
 import type { MqttClient } from 'mqtt'
 
 import { errorMessageFrom } from '@moeru/std'
-import { MotionCatalog, neoAliceBridgeTopics, NeoAliceTranslator } from '@proj-airi/alice-motion'
+import { neoAliceBridgeTopics, NeoAliceTranslator } from '@proj-airi/alice-motion'
 import { useLocalStorageManualReset } from '@proj-airi/stage-shared/composables'
 import { createEventHook, watchDebounced } from '@vueuse/core'
 import { nanoid } from 'nanoid'
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+
+import { catalogWithEmotes } from '../../libs/alice-motion/stage-motion'
+import { useVrmMotionsStore } from '../vrm-motions'
 
 /** The one load of MQTT.js for the whole app. */
 let mqttConnectLoading: Promise<typeof import('mqtt')['connect']> | undefined
@@ -76,6 +79,12 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
 
   const configured = computed(() => brokerUrl.value.trim() !== '' && (acceptAnySite.value || site.value.trim() !== ''))
 
+  const vrmMotions = useVrmMotionsStore()
+  let activeTranslator: NeoAliceTranslator | undefined
+  watch(() => vrmMotions.motionLibrary, (library) => {
+    activeTranslator?.setCatalog(catalogWithEmotes(library.emotes))
+  })
+
   const eventHook = createEventHook<NeoAliceBridgeEvent>()
   const reconnectHook = createEventHook<void>()
   let client: MqttClient | undefined
@@ -91,7 +100,9 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     status.value = 'connecting'
     lastError.value = ''
     const options = { site: site.value.trim(), acceptAnySite: acceptAnySite.value, companionSite: companionSite.value.trim() || 'companion' }
-    const translator = new NeoAliceTranslator({ ...options, catalog: new MotionCatalog() })
+    // Imported VRMA and FBX motions are part of the catalog, so `cmd/avatar/animation` can name them.
+    const translator = new NeoAliceTranslator({ ...options, catalog: catalogWithEmotes(vrmMotions.motionLibrary.emotes) })
+    activeTranslator = translator
 
     let connectMqtt: typeof import('mqtt')['connect']
     try {

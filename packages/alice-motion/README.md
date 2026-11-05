@@ -70,12 +70,21 @@ A one-arm gesture owns only its arm channel, which includes the hand of that arm
 | `neoalice/v1/<site>/evt/mood`, `neoalice/v1/<site>/cmd/evt/mood` | `mood`, through `resolveMood` |
 | `neoalice/v1/<site>/cmd/avatar/gesture` | `intent` `gesture_<name>`. `wave` becomes `wave_right`. |
 | `neoalice/v1/<site>/cmd/avatar/pose` | `intent` `pose_<name>` on the `posture` channel |
-| `neoalice/v1/<site>/cmd/avatar/animation` | `intent` from the file name of the URL. `walking.fbx` becomes `walk`. An unknown file is ignored. |
+| `neoalice/v1/<site>/cmd/avatar/animation` | `intent` from the file name of the URL. A catalog action with the same name comes first, for example an imported `Wave_Hello.fbx` becomes `wave_hello`. Otherwise an alias applies: `walking.fbx` becomes `walk`. An unknown file is ignored. |
 | `neoalice/v1/<site>/cmd/avatar/emoji` | `intent` `emoji` on the `facial` channel |
 | `neoalice/v1/companion/evt/companion/state`, `.../affect` | `mood` from the companion service |
 
+- `setCatalog` replaces the catalog, for example after a motion import. The stage gives it the default catalog plus the imported motions.
 - Other sites, repeated payloads within 2 s, broken JSON, and unknown commands are `ignored` events with a reason. Nothing throws.
 - An avatar command above 4096 bytes is ignored, as the accepted ADR requires for motion messages. Speech audio can be up to 10 MB.
+
+## Ready Player Me skeleton
+
+`rpm-skeleton.ts` is the reference of the Ready Player Me rig, the rig of the Eva avatar.
+
+- `rpmHumanBones` maps each bone name to its VRM humanoid bone. The V4 converter (`packages/alice-avatar-tools`) uses it.
+- `vrmBoneOfRpmName` also accepts Mixamo names, with or without the `mixamorig` prefix.
+- `rpmRestSkeleton` gives the 54 rest rotations, parents first. The FBX animations of TalkingHead store no rest pose, so the FBX retarget of V5 (`packages/stage-ui-three`) reads the rest pose from this table.
 
 ## Test model
 

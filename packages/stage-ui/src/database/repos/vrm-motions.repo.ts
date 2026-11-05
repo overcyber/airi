@@ -1,12 +1,14 @@
 import localforage from 'localforage'
 
-/** A VRMA motion that the user imported, with the description that the LLM reads. */
+/** A VRMA or FBX motion that the user imported, with the description that the LLM reads. */
 export interface VrmMotionRecord {
   id: string
   name: string
   description: string
   file: File
   importedAt: number
+  /** `fbx` for a Mixamo or Ready Player Me FBX animation. Records without it are VRMA. */
+  format?: 'vrma' | 'fbx'
 }
 
 /** The part of localforage that the repository uses. */

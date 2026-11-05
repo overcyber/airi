@@ -81,6 +81,7 @@ import { AvatarAnimator } from '../../composables/vrm/avatar-animator'
 import { loadVrm } from '../../composables/vrm/core'
 import { findVrmEmote } from '../../composables/vrm/emote-cue'
 import { useVRMEmote } from '../../composables/vrm/expression'
+import { loadFbxClip } from '../../composables/vrm/fbx-retarget'
 import { createVrmInteractionColliders } from '../../composables/vrm/interaction'
 import { resolveInternalVrmHooks } from '../../composables/vrm/internal-hooks'
 import { useVRMLipSync } from '../../composables/vrm/lip-sync'
@@ -515,7 +516,7 @@ function clipCacheOf(targetVrm: VRM) {
  * Source: `composables/vrm/animation.ts`, comment of `reAnchorRootPositionTrack`.
  * Removal condition: the stage idle needs no re-anchor, or all clips share its root space.
  */
-function loadMotionClip(targetVrm: VRM, url: string): Promise<AnimationClip> {
+function loadMotionClip(targetVrm: VRM, url: string, format: 'vrma' | 'fbx' = /\.fbx(?:$|[?#])/i.test(url) ? 'fbx' : 'vrma'): Promise<AnimationClip> {
   const byUrl = clipCacheOf(targetVrm)
   const cached = byUrl.get(url)
   if (cached)
@@ -525,6 +526,9 @@ function loadMotionClip(targetVrm: VRM, url: string): Promise<AnimationClip> {
     // The thinking stance is built from the stage idle, so she keeps breathing while she thinks.
     if (url === proceduralThinkingMotion)
       return createThinkingClip(targetVrm, await loadMotionClip(targetVrm, idleAnimation.value))
+    // Mixamo and Ready Player Me FBX animations are retargeted to the VRM (V5).
+    if (format === 'fbx')
+      return loadFbxClip(targetVrm, url)
     const animation = await loadVRMAnimation(url)
     const clip = await clipFromVRMAnimation(targetVrm, animation)
     if (!clip)
@@ -1315,7 +1319,7 @@ defineExpose({
     if (!emote || !targetVrm || !animator)
       return false
     try {
-      const clip = await loadMotionClip(targetVrm, emote.url)
+      const clip = await loadMotionClip(targetVrm, emote.url, emote.format)
       // The model can change while the clip loads.
       if (vrm.value !== targetVrm || vrmAnimator.value !== animator)
         return false

@@ -46,10 +46,27 @@ describe('useVrmMotionsStore', () => {
     expect(records.has(record.id)).toBe(true)
   })
 
+  it('imports a Mixamo or Ready Player Me FBX as an FBX emote', async () => {
+    const store = useVrmMotionsStore()
+
+    const record = await store.importMotion(new File(['fbx'], 'Wave_Hello.fbx'), { description: 'Wave hello' })
+
+    expect(record).toMatchObject({ name: 'Wave_Hello', format: 'fbx' })
+    expect(store.motionLibrary.emotes.find(emote => emote.id === record.id)?.format).toBe('fbx')
+  })
+
+  it('treats an imported record without a format as VRMA', async () => {
+    records.set('vrm-motion-old', { id: 'vrm-motion-old', name: 'Bow', description: 'Bow', file: new File(['vrma'], 'bow.vrma'), importedAt: 1 })
+    const store = useVrmMotionsStore()
+    await store.load()
+
+    expect(store.motionLibrary.emotes.at(-1)?.format).toBe('vrma')
+  })
+
   it('rejects a file that is not VRMA', async () => {
     const store = useVrmMotionsStore()
 
-    await expect(store.importMotion(new File(['x'], 'model.vrm'))).rejects.toThrow('Not a VRMA file')
+    await expect(store.importMotion(new File(['x'], 'model.vrm'))).rejects.toThrow('Not a VRMA or FBX file')
   })
 
   it('keeps the name as the description when none is given, and updates both', async () => {
