@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { NeoAliceSpeechMode } from '../../stores/modules/neoalice-bridge'
 
-import { Alert, FieldCheckbox, FieldInput, FieldSelect, SettingsCard } from '@proj-airi/ui'
+import { errorMessageFrom } from '@moeru/std'
+import { Alert, Button, FieldCheckbox, FieldInput, FieldSelect, SettingsCard } from '@proj-airi/ui'
 import { storeToRefs } from 'pinia'
-import { computed, onScopeDispose } from 'vue'
+import { computed, onScopeDispose, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useNeoAliceBrainStore } from '../../stores/modules/neoalice-brain'
 import { useNeoAliceBridgeStore } from '../../stores/modules/neoalice-bridge'
+import { loadServerDefaults } from '../../stores/server-defaults'
 
 const { t } = useI18n()
 const bridge = useNeoAliceBridgeStore()
@@ -34,6 +37,28 @@ const {
   lastEvent,
 } = storeToRefs(bridge)
 
+const { brainMode, serverUrl } = storeToRefs(useNeoAliceBrainStore())
+
+const serverLoad = ref<{ tone: 'success' | 'danger', text: string }>()
+const serverLoading = ref(false)
+
+async function loadFromServer() {
+  serverLoading.value = true
+  serverLoad.value = undefined
+  try {
+    const loaded = await loadServerDefaults({ overwrite: true })
+    serverLoad.value = loaded
+      ? { tone: 'success', text: t('settings.pages.modules.neoalice-bridge.server.loaded') }
+      : { tone: 'danger', text: t('settings.pages.modules.neoalice-bridge.server.missing') }
+  }
+  catch (error) {
+    serverLoad.value = { tone: 'danger', text: errorMessageFrom(error) ?? t('settings.pages.modules.neoalice-bridge.server.missing') }
+  }
+  finally {
+    serverLoading.value = false
+  }
+}
+
 // The page keeps the connection open, so the status shows while the user edits the settings.
 onScopeDispose(bridge.hold())
 
@@ -53,6 +78,21 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
     <p :class="['text-sm', 'text-neutral-500 dark:text-neutral-400']">
       {{ t('settings.pages.modules.neoalice-bridge.intro') }}
     </p>
+
+    <FieldInput
+      v-model="serverUrl"
+      :label="t('settings.pages.modules.neoalice-bridge.server.url')"
+      :description="t('settings.pages.modules.neoalice-bridge.server.url-description')"
+      placeholder="http://192.0.2.10:4173"
+    />
+    <div :class="['flex', 'flex-col', 'gap-2']">
+      <Button :disabled="serverLoading" data-testid="neoalice-load-server" @click="loadFromServer">
+        {{ t('settings.pages.modules.neoalice-bridge.server.load') }}
+      </Button>
+      <Alert v-if="serverLoad" :tone="serverLoad.tone" data-testid="neoalice-load-server-result">
+        {{ serverLoad.text }}
+      </Alert>
+    </div>
 
     <FieldCheckbox
       v-model="enabled"
@@ -93,6 +133,12 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
       :options="speechModes"
       :label="t('settings.pages.modules.neoalice-bridge.speech-mode.title')"
       :description="t('settings.pages.modules.neoalice-bridge.speech-mode.description')"
+    />
+
+    <FieldCheckbox
+      v-model="brainMode"
+      :label="t('settings.pages.modules.neoalice-bridge.brain-mode')"
+      :description="t('settings.pages.modules.neoalice-bridge.brain-mode-description')"
     />
 
     <FieldCheckbox

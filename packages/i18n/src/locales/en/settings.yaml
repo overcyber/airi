@@ -1208,6 +1208,14 @@ pages:
       counters: '{received} messages received, {ignored} ignored'
       last-event: 'Last event: {event}'
       last-ignored: 'Last ignored message: {reason}'
+      server:
+        url: Alice server URL
+        url-description: The Alice Docker server that gives the settings of the services, for example http://192.0.2.10:4173. Empty uses the server of this page. The desktop app needs it.
+        load: Load settings from the server
+        loaded: The settings of the server are applied. The providers on its proxies and the NeoAlice bridge are set.
+        missing: The server did not send settings. Check the URL, and that the server permits this app (AIRI_CORS_ORIGINS).
+      brain-mode: NeoAlice answers the chat
+      brain-mode-description: AIRI is the face of NeoAlice, like the TalkingHead avatar. Typed text goes to NeoAlice as evt/stt/final on the site of the avatar, and the reply of NeoAlice is the reply of the chat. The LLM of AIRI does not answer. Set Speech to "Play the audio that NeoAlice sends".
       announce-state: Announce the avatar as a satellite
       announce-state-description: Publishes evt/state on the site every 30 seconds, so NeoAlice lists the avatar as an active satellite and sends it broadcasts, for example alarms
       voice:

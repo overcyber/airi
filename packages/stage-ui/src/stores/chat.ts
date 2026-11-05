@@ -62,6 +62,7 @@ import { useAiriCardStore } from './modules/airi-card'
 import { useAutonomousArtistryStore } from './modules/artistry-autonomous'
 import { useConsciousnessStore } from './modules/consciousness'
 import { useHearingStore } from './modules/hearing'
+import { useNeoAliceBrainStore } from './modules/neoalice-brain'
 import { useStickersStore } from './modules/stickers'
 import { useVisionStore } from './modules/vision'
 import { useWebSearchStore } from './modules/web-search'
@@ -279,6 +280,7 @@ export const useChatStore = defineStore('chat', () => {
   const artistryAutonomousStore = useAutonomousArtistryStore()
   const { activeProvider, activeModel } = storeToRefs(consciousnessStore)
   const chatSession = useChatSessionStore()
+  const neoAliceBrain = useNeoAliceBrainStore()
   const chatStream = useChatStreamStore()
   const chatContext = useChatContextStore()
   const cardStore = useAiriCardStore()
@@ -1454,8 +1456,23 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   /** Sends one serializable chat request through the elected leader. */
+  /**
+   * NeoAlice brain mode: the text goes to NeoAlice, and its spoken reply comes back over the bridge.
+   * The history keeps the user message here. The stage adds the reply when it arrives.
+   */
+  async function sendToNeoAlice(payload: ChatSendPayload): Promise<ChatSendResult> {
+    if (!await chatSession.loadSession(payload.sessionId))
+      throw new Error('Failed to load the target chat session')
+    const message = { role: 'user' as const, content: payload.text, id: nanoid(), createdAt: Date.now() }
+    await chatSession.storeMessage(payload.sessionId, message)
+    await neoAliceBrain.sendText(payload.text)
+    return { messages: [structuredClone(message)], sessionId: payload.sessionId }
+  }
+
   async function send(payload: ChatSendPayload): Promise<ChatSendResult> {
     try {
+      if (neoAliceBrain.brainMode)
+        return await sendToNeoAlice(payload)
       return await executeSend(payload)
     }
     catch (error) {

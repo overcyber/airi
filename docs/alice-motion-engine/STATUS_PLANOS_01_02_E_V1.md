@@ -113,6 +113,8 @@ Falta testar o app desktop. Lá, o chat e o palco podem rodar em janelas diferen
 
 ## 7. Próximos passos, na ordem do plano
 
+> Em 05/11/2026, a ordem abaixo foi substituída pelo `PLANEJAMENTO_06_AIRI_COMO_ROSTO_DA_NEOALICE.md`: o AIRI é o rosto da NeoAlice, e o cérebro é um só, o da NeoAlice.
+
 Concluídas em 05/11/2026: contratos v1 (ADR aprovado), S03 (director), S04 (scheduler), S08 (ponte MQTT), V3 (corpo por humor), V4 (Eva em VRM) e V5 (FBX no VRM).
 
 1. Subir o Docker (`deploy/alice/README.md`) e abrir `https://<ip>:4443`. O Docker resolve o acesso por IP, a Eva em VRM pela pasta `modelos/` e o NVIDIA NIM na versão Web (Planejamento 05, seção 15).

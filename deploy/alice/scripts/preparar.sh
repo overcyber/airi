@@ -101,6 +101,10 @@ if ! find "$here/modelos" -maxdepth 1 -iname '*.vrm' | grep -q .; then
   rm -rf "$source_dir"
 fi
 
+# Nginx in the container runs as another user. A model readable only by its owner answers 403.
+chmod a+rx "$here/modelos"
+find "$here/modelos" -maxdepth 1 -iname '*.vrm' -exec chmod a+r {} +
+
 models="$(find "$here/modelos" -maxdepth 1 -iname '*.vrm' -printf '%f ' 2>/dev/null || true)"
 if [ -n "$models" ]; then
   echo "preparar: models: $models"

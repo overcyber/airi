@@ -52,6 +52,10 @@ O app desktop não tem servidor próprio, então não lê este `.env`. Ele busca
 2. Mantenha `AIRI_CORS_ORIGINS=null` neste `.env`. É o padrão. Sem isso, o servidor recusa as chamadas do desktop, que abre as páginas por `file://`.
 3. Compile o desktop. Na primeira abertura, ele configura os provedores nos repasses deste servidor e a ponte NeoAlice em `ws://<ip-do-docker>:4173/mqtt`.
 
+## Modo cérebro NeoAlice
+
+Com "NeoAlice answers the chat" (`AIRI_DEFAULT_NEOALICE_BRAIN=true`), o AIRI é só o rosto da NeoAlice, como o TalkingHead. O texto digitado vai para a NeoAlice como `evt/stt/final` no site do avatar. A resposta dela aparece no chat e toca no avatar. O LLM do AIRI não responde, e nenhum provedor é necessário para o chat.
+
 ## Voz com a NeoAlice
 
 - **A fala da NeoAlice no avatar:** a ponte lê `cmd/tts/audio` do site. Com o modo de fala "Play the audio that NeoAlice sends" (`AIRI_DEFAULT_NEOALICE_SPEECH_MODE=neoalice-audio`), o avatar toca o áudio com lip sync. O modo padrão é `silent`, para o espelho e o avatar não falarem juntos.
@@ -202,6 +206,7 @@ O TalkingHead e a configuração do espelho não mudam com este Docker, então n
 | "Failed to fetch" ao validar um provedor | A URL do provedor é `http://` ou de outro endereço. Use `https://<ip>:4443/proxy/...`. |
 | O provedor de voz ou transcrição não aparece no seletor | O provedor não passou na validação. Preencha a chave da API com qualquer texto e confira a URL. |
 | NVIDIA NIM com "Failed to fetch" | Em "Advanced", a URL precisa ser `https://<ip>:4443/proxy/nvidia/v1/`. Uma URL salva antes, de `integrate.api.nvidia.com`, continua salva: troque à mão. |
+| Um modelo não carrega, e o console mostra 403 em `/models/...` | O arquivo não tem permissão de leitura para o Nginx. Rode `chmod a+r deploy/alice/modelos/*.vrm`, ou `preparar.sh` de novo. |
 | A `eva2` não aparece | O arquivo precisa terminar em `.vrm` e estar em `deploy/alice/modelos`. Recarregue a página. |
 | O companion reinicia sem parar | Veja `docker compose -f deploy/alice/compose.yaml logs alice-companion`. O broker precisa estar acessível em `ALICE_COMPANION_MQTT_URL`. |
 

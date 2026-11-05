@@ -105,7 +105,8 @@ cat > /etc/airi-runtime/airi-defaults.json <<JSON
     "speechMode": $(json "${AIRI_DEFAULT_NEOALICE_SPEECH_MODE:-silent}"),
     "voiceInput": $(bool "${AIRI_DEFAULT_NEOALICE_VOICE_INPUT:-false}"),
     "userId": $(json "${AIRI_DEFAULT_NEOALICE_USER_ID:-}"),
-    "announceState": $(bool "${AIRI_DEFAULT_NEOALICE_ANNOUNCE_STATE:-false}")
+    "announceState": $(bool "${AIRI_DEFAULT_NEOALICE_ANNOUNCE_STATE:-false}"),
+    "brainMode": $(bool "${AIRI_DEFAULT_NEOALICE_BRAIN:-false}")
   }
 }
 JSON

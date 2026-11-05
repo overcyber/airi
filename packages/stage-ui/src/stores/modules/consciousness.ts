@@ -7,6 +7,7 @@ import { computed, watch } from 'vue'
 
 import { useProviderStore } from '../providers/provider'
 import { useConsciousnessSettingsStore } from './consciousness-settings'
+import { useNeoAliceBrainStore } from './neoalice-brain'
 
 export const useConsciousnessStore = defineStore('consciousness', () => {
   const providersStore = useProviderStore()
@@ -147,8 +148,15 @@ export const useConsciousnessStore = defineStore('consciousness', () => {
     return !!activeProvider.value && !!activeModel.value
   })
 
-  /** Whether chat can send. The `prompt-api` provider runs without a selected model. */
+  const neoAliceBrain = useNeoAliceBrainStore()
+
+  /**
+   * Whether chat can send. The `prompt-api` provider runs without a selected model.
+   * In the NeoAlice brain mode, NeoAlice answers, so no provider is necessary.
+   */
   const chatReady = computed(() => {
+    if (neoAliceBrain.brainMode)
+      return true
     return !!activeProvider.value && (!!activeModel.value || activeProvider.value === 'prompt-api')
   })
 

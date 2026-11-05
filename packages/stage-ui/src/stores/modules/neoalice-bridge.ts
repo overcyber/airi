@@ -71,9 +71,9 @@ export function defaultNeoAliceBrokerUrl(page: Pick<Location, 'protocol' | 'host
  *
  * A read-only MQTT client over WebSocket. It subscribes to the topics of one NeoAlice site and of the
  * companion service, translates each message with `NeoAliceTranslator`, and hands the events to the stage.
- * It publishes only on its own site, and only two kinds of messages, like a NeoAlice satellite:
- * `evt/audio` with the microphone phrases (`voiceInput`), and the `evt/state` heartbeat (`announceState`).
- * Both are off by default. NeoAlice answers on the same site with `cmd/tts/audio`.
+ * It publishes only on its own site, like a NeoAlice satellite: `evt/audio` with the microphone phrases
+ * (`voiceInput`), `evt/stt/final` with typed text (brain mode), and the `evt/state` heartbeat
+ * (`announceState`). All are off by default. NeoAlice answers on the same site with `cmd/tts/audio`.
  *
  * The connection lives while at least one holder needs it: the stage and the settings page call `hold`.
  */
@@ -195,14 +195,14 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
 
   /**
    * Publishes a satellite message of the avatar. Resolves `false` when the bridge is not connected.
-   * Only `neoalice/v1/{site}/evt/audio` and `.../evt/state` of the configured site are permitted.
+   * Only `evt/audio`, `evt/state`, and `evt/stt/final` of the configured site are permitted.
    */
   async function publish(message: NeoAliceSatelliteMessage) {
     const current = client
     const ownSite = site.value.trim()
     if (!current || status.value !== 'connected' || !isPublishableSite(ownSite))
       return false
-    const permitted = [`neoalice/v1/${ownSite}/evt/audio`, `neoalice/v1/${ownSite}/evt/state`]
+    const permitted = ['evt/audio', 'evt/state', 'evt/stt/final'].map(action => `neoalice/v1/${ownSite}/${action}`)
     if (!permitted.includes(message.topic))
       throw new Error(`The bridge does not publish on ${message.topic}`)
     await current.publishAsync(message.topic, message.payload, { qos: message.qos })

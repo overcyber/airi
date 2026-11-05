@@ -54,6 +54,23 @@ export function neoAliceAudioEvent(input: NeoAliceAudioEventInput): NeoAliceSate
 }
 
 /**
+ * Typed text as `evt/stt/final`, QoS 1, as if a satellite had transcribed it. NeoAlice runs its
+ * brain on it and answers with `cmd/tts/audio` on the same site.
+ */
+export function neoAliceSttFinalEvent(input: { site: string, userId: string, sessionId: string, text: string, lang?: string, nowMs: number }): NeoAliceSatelliteMessage {
+  const payload = {
+    v: 1,
+    type: 'evt.stt.final',
+    ts: new Date(input.nowMs).toISOString(),
+    site_id: input.site,
+    ...(input.userId.trim() ? { user_id: input.userId.trim() } : {}),
+    session_id: input.sessionId,
+    stt: { text: input.text, lang: input.lang ?? 'pt' },
+  }
+  return { topic: `${topicRoot}/${input.site}/evt/stt/final`, payload: JSON.stringify(payload), qos: 1 }
+}
+
+/**
  * The state of the avatar as `evt/state`, QoS 0. NeoAlice counts a site as active while it sees
  * these messages (120 s by default), so a heartbeat every 30 s keeps the avatar in the broadcasts.
  */

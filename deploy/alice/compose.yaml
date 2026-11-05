@@ -48,6 +48,7 @@ services:
       AIRI_DEFAULT_NEOALICE_VOICE_INPUT: ${AIRI_DEFAULT_NEOALICE_VOICE_INPUT:-false}
       AIRI_DEFAULT_NEOALICE_USER_ID: ${AIRI_DEFAULT_NEOALICE_USER_ID:-}
       AIRI_DEFAULT_NEOALICE_ANNOUNCE_STATE: ${AIRI_DEFAULT_NEOALICE_ANNOUNCE_STATE:-false}
+      AIRI_DEFAULT_NEOALICE_BRAIN: ${AIRI_DEFAULT_NEOALICE_BRAIN:-false}
       # Origins that can call the proxies from another origin. "null" is the desktop app (file://).
       AIRI_CORS_ORIGINS: ${AIRI_CORS_ORIGINS-null}
     extra_hosts:

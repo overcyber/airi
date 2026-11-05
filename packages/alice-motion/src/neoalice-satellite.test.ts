@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isPublishableSite, neoAliceAudioEvent, neoAliceStateEvent } from './neoalice-satellite'
+import { isPublishableSite, neoAliceAudioEvent, neoAliceStateEvent, neoAliceSttFinalEvent } from './neoalice-satellite'
 
 describe('neoAliceAudioEvent', () => {
   it('builds the canonical v1 evt/audio message of a satellite', () => {
@@ -22,6 +22,15 @@ describe('neoAliceAudioEvent', () => {
   it('leaves out an empty user, so NeoAlice uses its default user', () => {
     const message = neoAliceAudioEvent({ site: 'airi-avatar', userId: '', sessionId: 's1', wavBase64: 'A', sampleRateHz: 16000, nowMs: 0 })
     expect(JSON.parse(message.payload)).not.toHaveProperty('user_id')
+  })
+})
+
+describe('neoAliceSttFinalEvent', () => {
+  it('builds the evt/stt/final message that NeoAlice answers on the same site', () => {
+    const message = neoAliceSttFinalEvent({ site: 'airi-avatar', userId: 'user-1', sessionId: 'chat-1', text: 'que horas sao', nowMs: 0 })
+
+    expect(message).toMatchObject({ topic: 'neoalice/v1/airi-avatar/evt/stt/final', qos: 1 })
+    expect(JSON.parse(message.payload)).toEqual({ v: 1, type: 'evt.stt.final', ts: '1970-01-01T00:00:00.000Z', site_id: 'airi-avatar', user_id: 'user-1', session_id: 'chat-1', stt: { text: 'que horas sao', lang: 'pt' } })
   })
 })
 

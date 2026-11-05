@@ -3,11 +3,13 @@ import type { NeoAliceBridgeEvent, SpeechSegment } from '@proj-airi/alice-motion
 import type { StageEmote } from '../libs/alice-motion/stage-motion'
 
 import { errorMessageFrom } from '@moeru/std'
-import { isPublishableSite, neoAliceAudioEvent, neoAliceStateEvent } from '@proj-airi/alice-motion'
+import { isPublishableSite, neoAliceAudioEvent, neoAliceStateEvent, neoAliceSttFinalEvent } from '@proj-airi/alice-motion'
 import { onScopeDispose, ref, watch } from 'vue'
 
 import { NeoAliceMicrophone, neoAliceVoiceSampleRate, segmentToWavBase64 } from '../libs/alice-motion/neoalice-voice'
 import { StageMotionRuntime } from '../libs/alice-motion/stage-motion'
+import { useChatSessionStore } from '../stores/chat/session-store'
+import { useNeoAliceBrainStore } from '../stores/modules/neoalice-brain'
 import { useNeoAliceBridgeStore } from '../stores/modules/neoalice-bridge'
 
 export interface NeoAliceStageBridgeOptions {
@@ -54,6 +56,8 @@ const mountedStages: symbol[] = []
  */
 export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   const bridge = useNeoAliceBridgeStore()
+  const brain = useNeoAliceBrainStore()
+  const chatSession = useChatSessionStore()
   const runtime = new StageMotionRuntime({
     playClip: options.playClip,
     log: message => console.info(`[neoalice-bridge] ${message}`),
@@ -123,6 +127,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     switch (event.type) {
       case 'speech-text': {
         stopWaiting()
+        recordReply(event.text)
         speechSequence++
         const sessionId = event.sessionId ?? `neoalice-${speechSequence}`
         if (bridge.speechMode !== 'airi-voice') {
@@ -137,6 +142,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
       }
       case 'speech-audio': {
         stopWaiting()
+        recordReply(event.text)
         speechSequence++
         const sessionId = event.sessionId ?? `neoalice-${speechSequence}`
         if (bridge.speechMode === 'silent') {
@@ -217,6 +223,36 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     }
   }
 
+  /** Sends typed text of the chat to NeoAlice (brain mode). It throws when it cannot send. */
+  async function sendTypedText(text: string) {
+    const site = bridge.site.trim()
+    if (bridge.acceptAnySite || !isPublishableSite(site))
+      throw new Error('Set one site for the avatar in the NeoAlice bridge, for example airi-avatar.')
+    const sessionId = `airi-chat-${Date.now()}-${++voiceSequence}`
+    const sent = await bridge.publish(neoAliceSttFinalEvent({ site, userId: bridge.userId, sessionId, text, nowMs: Date.now() }))
+    if (!sent)
+      throw new Error('The NeoAlice bridge is not connected to the broker.')
+    waitingSince = clock()
+    thinking.value = true
+    thinkingSinceMs = clock()
+    announce('thinking', sessionId)
+  }
+
+  /** In the brain mode, the reply of NeoAlice is the reply of the chat, so the history keeps it. */
+  function recordReply(text: string) {
+    const sessionId = chatSession.activeSessionId
+    if (!brain.brainMode || !text || !sessionId)
+      return
+    void chatSession.storeMessage(sessionId, {
+      role: 'assistant',
+      content: text,
+      slices: [{ type: 'text', text }],
+      tool_results: [],
+      id: `neoalice-${Date.now()}-${++voiceSequence}`,
+      createdAt: Date.now(),
+    }).catch(error => console.warn('[neoalice-bridge] the reply was not stored:', errorMessageFrom(error) ?? 'unknown error'))
+  }
+
   /** Ends the wait for a reply: the reply arrived, or it took too long. */
   function stopWaiting() {
     if (waitingSince === undefined)
@@ -269,6 +305,12 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     sessionsOfConnection.clear()
   })
   const release = bridge.hold()
+  // Only the first mounted stage sends typed text, like the playback of bridge events.
+  const disconnectTextSink = brain.connectTextSink(async (text) => {
+    if (mountedStages[0] !== token)
+      throw new Error('Another stage plays NeoAlice.')
+    await sendTypedText(text)
+  })
   let lastHeartbeatMs = Number.NEGATIVE_INFINITY
   const stopVoiceWatch = watch(() => bridge.voiceInput, () => void updateMicrophone(), { immediate: true })
   const timer = setInterval(() => {
@@ -297,6 +339,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     stopReconnect.off()
     synthesis?.abort()
     stopVoiceWatch()
+    disconnectTextSink()
     waitingSince = undefined
     void microphone.stop().then(() => {
       bridge.voiceStatus = 'off'

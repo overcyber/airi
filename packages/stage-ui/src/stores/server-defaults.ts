@@ -4,6 +4,7 @@ import * as v from 'valibot'
 
 import { useConsciousnessStore } from './modules/consciousness'
 import { useHearingStore } from './modules/hearing'
+import { useNeoAliceBrainStore } from './modules/neoalice-brain'
 import { defaultNeoAliceBrokerUrl, useNeoAliceBridgeStore } from './modules/neoalice-bridge'
 import { useSpeechStore } from './modules/speech'
 import { useProviderConfigStore } from './providers/config'
@@ -33,6 +34,8 @@ const ServerDefaultsSchema = v.object({
     announceState: v.optional(v.boolean(), false),
     /** WebSocket URL of the broker. Empty: the `/mqtt` path of the server. */
     brokerUrl: v.optional(v.string(), ''),
+    /** NeoAlice answers the chat. See `useNeoAliceBrainStore`. */
+    brainMode: v.optional(v.boolean(), false),
   })),
 })
 
@@ -69,6 +72,31 @@ export async function fetchServerDefaults(
     console.warn('[server-defaults] the server defaults did not load:', errorMessageFrom(error) ?? error)
     return undefined
   }
+}
+
+/**
+ * Loads the settings of the Alice server and applies them.
+ *
+ * The server is the saved server URL, or the server of the page. With `overwrite`, the server
+ * settings replace the saved ones: that is the "Load settings from the server" action.
+ * Resolves `false` when there is no server, or it has no settings.
+ */
+export async function loadServerDefaults(options: { overwrite?: boolean } = {}) {
+  const saved = useNeoAliceBrainStore().serverUrl.trim()
+  let serverOrigin: string | undefined
+  if (saved) {
+    try {
+      serverOrigin = new URL(saved).origin
+    }
+    catch {
+      throw new Error(`The Alice server URL is not a URL: ${saved}`)
+    }
+  }
+  const defaults = await fetchServerDefaults(globalThis.location, globalThis.fetch, serverOrigin)
+  if (!defaults)
+    return false
+  await applyServerDefaults(defaults, globalThis.location, options)
+  return true
 }
 
 /** Removes empty values, and makes each path in a `baseUrl` an absolute URL on `origin`. */
@@ -131,9 +159,16 @@ export function isUnreachableFromPage(baseUrl: unknown, page: Pick<Location, 'pr
  *
  * So the server sets the first state, and every setting stays editable in the app.
  */
-export async function applyServerDefaults(defaults: ServerDefaults | undefined, page: Pick<Location, 'protocol' | 'origin'> = globalThis.location) {
+export async function applyServerDefaults(
+  defaults: ServerDefaults | undefined,
+  page: Pick<Location, 'protocol' | 'origin'> = globalThis.location,
+  options: { overwrite?: boolean } = {},
+) {
   if (!defaults)
     return
+  // `overwrite` is the explicit "Load settings from the server" action: the server settings replace
+  // the saved ones. A saved API key stays when the server has none.
+  const overwrite = options.overwrite === true
 
   const providerStore = useProviderStore()
   const providerConfigStore = useProviderConfigStore()
@@ -145,6 +180,9 @@ export async function applyServerDefaults(defaults: ServerDefaults | undefined, 
     const stored = providerConfigStore.getProvider(providerId)
     if (!stored) {
       providerConfigStore.ensureProvider(providerId, providerId, { ...providerStore.getDefaultProviderConfig(providerId), ...config })
+    }
+    else if (overwrite) {
+      await providerConfigStore.updateProviderConfig(providerId, { ...stored.config, ...config }, 'unconfigured')
     }
     else if (config.baseUrl && isUnreachableFromPage(stored.config.baseUrl, page)) {
       console.info(`[server-defaults] ${providerId}: ${String(stored.config.baseUrl)} is not reachable from this page. It becomes ${config.baseUrl}.`)
@@ -163,23 +201,23 @@ export async function applyServerDefaults(defaults: ServerDefaults | undefined, 
 
   const { consciousness, speech, hearing } = defaults.modules
   const consciousnessStore = useConsciousnessStore()
-  if (consciousness?.provider && valid.has(consciousness.provider) && !consciousnessStore.activeProvider) {
+  if (consciousness?.provider && valid.has(consciousness.provider) && (overwrite || !consciousnessStore.activeProvider)) {
     consciousnessStore.activeProvider = consciousness.provider
     consciousnessStore.activeModel = consciousness.model
   }
 
   const speechStore = useSpeechStore()
-  if (speech?.provider && valid.has(speech.provider) && (!speechStore.activeSpeechProvider || speechStore.activeSpeechProvider === 'speech-noop'))
+  if (speech?.provider && valid.has(speech.provider) && (overwrite || !speechStore.activeSpeechProvider || speechStore.activeSpeechProvider === 'speech-noop'))
     await speechStore.selectProviderModel(speech.provider, speech.model, speech.voice || undefined)
 
   const hearingStore = useHearingStore()
-  if (hearing?.provider && valid.has(hearing.provider) && !hearingStore.activeTranscriptionProvider) {
+  if (hearing?.provider && valid.has(hearing.provider) && (overwrite || !hearingStore.activeTranscriptionProvider)) {
     hearingStore.activeTranscriptionProvider = hearing.provider
     hearingStore.activeTranscriptionModel = hearing.model
   }
 
   const bridge = useNeoAliceBridgeStore()
-  if (defaults.neoalice?.site && !bridge.site) {
+  if (defaults.neoalice?.site && (overwrite || !bridge.site)) {
     bridge.site = defaults.neoalice.site
     bridge.enabled = defaults.neoalice.enabled
     bridge.speechMode = defaults.neoalice.speechMode
@@ -188,5 +226,6 @@ export async function applyServerDefaults(defaults: ServerDefaults | undefined, 
     bridge.announceState = defaults.neoalice.announceState
     if (defaults.neoalice.brokerUrl)
       bridge.brokerUrl = defaults.neoalice.brokerUrl
+    useNeoAliceBrainStore().brainMode = defaults.neoalice.brainMode
   }
 }
