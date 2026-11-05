@@ -48,7 +48,7 @@ put_key AIRI_NEOALICE_AUTH X-API-Key "" "${NEOALICE_API_KEY:-}" NEOALICE_API_KEY
 # The default "null" is the desktop app (file://). The headers of the upstream are replaced.
 cors_map=/etc/nginx/airi-cors-origins.map
 : > "$cors_map"
-for origin in $(printf '%s' "${AIRI_CORS_ORIGINS-null}" | tr ',' ' '); do
+for origin in $(printf '%s' "${AIRI_CORS_ORIGINS-null,file://}" | tr ',' ' '); do
   case "$origin" in
     *[!A-Za-z0-9.:/_-]*)
       echo "airi-setup: WARNING the CORS origin $origin has characters that are not permitted. It is left out."
@@ -69,7 +69,7 @@ if ($request_method = OPTIONS) {
   return 204;
 }
 CORS
-echo "airi-setup: CORS for the origins: ${AIRI_CORS_ORIGINS-null}"
+echo "airi-setup: CORS for the origins: ${AIRI_CORS_ORIGINS-null,file://}"
 
 # JSON string: escapes the backslash and the double quote.
 json() {
