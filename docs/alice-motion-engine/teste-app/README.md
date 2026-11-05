@@ -25,9 +25,89 @@ Este kit testa o `stage-web` real com a Neptuna. Ele não precisa de LLM nem de 
 | A fala chamou o TTS | O servidor recebeu `/audio/speech` |
 | Sem erro de página | Sem `PAGEERROR` |
 
+## Correções após falha real em 05/11/2026
+
+O log do usuário apresentou:
+
+```text
+[plugin:hfup:spacecard-readme] context method emitFile() is not supported in serve mode
+[plugin:hfup:lfs-gitattributes] context method emitFile() is not supported in serve mode
+ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
+FAILED page.$eval: Execution context was destroyed, most likely because of a navigation
+```
+
+**Diagnóstico baseado em código:**
+
+1. Os dois plugins `hfup` foram registrados no modo dev, embora gerem artefatos de *build*. O `vite.config.ts` agora registra `LFS` e `SpaceCard` somente quando `command === 'build'`.
+2. O teste aguardava uma contagem de botões por uma chamada de avaliação de contexto; a navegação/HMR pode invalidar o contexto do Playwright. Além disso, uma versão do teste usava `$eval` em vez de `$eval` e tentava obter `length` de um único botão, o que é incorreto. O código agora aguarda diretamente o botão **Select model** por `locator.waitFor` e registra navegações.
+3. O executor encerrava o wrapper `pnpm recursive exec` no cleanup. Isso pode produzir `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL` **mesmo após Vite ter iniciado normalmente**. O executor passou a iniciar o CLI Vite diretamente com o Node, evitando mensagens artificiais por SIGTERM.
+4. `run-local.cjs v1v2` agora realiza `smoke` no Chromium **antes de importar o modelo**. Se o app não carregar, a falha será registrada em `smoke-result.json`; se a rota do seletor falhar, `failed.png` e `console.txt` mostram a situação.
+
+**Validação:** sintaxe dos quatro arquivos `.cjs` conferida. A execução completa com Vite/Chromium no computador do usuário ainda não foi efetuada por esta revisão; não considerar os cenários aprovados até executar os comandos abaixo.
+
+```bash
+cd /mnt/dockers/airi
+node docs/alice-motion-engine/teste-app/run-local.cjs smoke ./saida-smoke-corrigido
+node docs/alice-motion-engine/teste-app/run-local.cjs v1v2 ./saida-v1v2-corrigido
+```
+
+O script foi desenvolvido para não alterar o broker MQTT nem a NeoAlice. Se houve mudanças locais não commitadas, **não substitua arquivos cegamente ao trocar de branch**. Use um worktree isolado ou confira a diferença do PR antes de aplicar.
+
+---
+
+## Diagnóstico de inicialização (Vite vs. aplicativo vs. teste)
+
+O comando `pnpm -F @proj-airi/stage-web exec vite --port 5173 --host 0.0.0.0` **não termina sozinho**: quando mostra `VITE ready`, o servidor está escutando. Isso não confirma que o AIRI renderizou no navegador nem inicia o servidor falso de IA e o Playwright. As mensagens UnoCSS `unmatched utility` são avisos de estilo, não erros fatais do processo.
+
+Há três níveis independentes:
+1. **HTTP**: `curl -I http://127.0.0.1:5173/` precisa responder.
+2. **Aplicativo**: abrir a página no Chromium e verificar se o `#app` renderizou, sem `PAGEERROR`.
+3. **Fluxo de teste**: LLM/TTS simulados na porta 8091 + Playwright com Neptuna e VRMA.
+
+### Método recomendado: um comando, sem tocar na NeoAlice
+
+Execute **na raiz do repositório** (no seu caso, `/mnt/dockers/airi`), depois de instalar as dependências:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+
+# Apenas verifica se o AIRI realmente renderiza no Chromium.
+node docs/alice-motion-engine/teste-app/run-local.cjs smoke ./saida-smoke
+
+# Executa o servidor falso e os testes V1/V2 completos.
+node docs/alice-motion-engine/teste-app/run-local.cjs v1v2 ./saida-v1v2
+```
+
+`run-local.cjs` usa `127.0.0.1:5173` e **reutiliza o Vite se já estiver rodando**, sem encerrá-lo. Se a porta estiver livre, sobe o Vite, espera o HTML ficar pronto e o desliga no encerramento. No modo `v1v2`, inicia também o servidor falso OpenAI/TTS em `127.0.0.1:8091`, usando um arquivo novo de requisições por teste. Não publica MQTT e não modifica NeoAlice.
+
+Artefatos (de acordo com o diretório passado):
+- `smoke.png`, `smoke-result.json` para carregamento da SPA.
+- `playwright.log`, `steps.txt`, `console.txt`, `resultado-checks.json`, `failed.png` (quando houver erro) e capturas para o fluxo V1/V2.
+- `vite.log` e `fake.log` somente quando os respectivos processos foram iniciados pelo executor.
+
+Se a falha ocorrer em um seletor de interface, o erro fica registrado em `steps.txt`, e o navegador produz `failed.png`. **Não é possível afirmar que os nove checks passam nesta máquina sem executar o comando nela**. Falhas de WebGL, SDK e dependências nativas aparecem no diagnóstico do Chromium.
+
+### Comandos mínimos para investigar um resultado negativo
+
+```bash
+curl -sS -I http://127.0.0.1:5173/
+ss -lntp | grep -E ':5173|:8091'
+cat ./saida-smoke/smoke-result.json
+cat ./saida-v1v2/resultado-checks.json
+tail -n 60 ./saida-v1v2/playwright.log
+tail -n 60 ./saida-v1v2/steps.txt
+```
+
+Se o Playwright não tiver bibliotecas nativas do sistema, siga a mensagem da instalação do Chromium e, quando necessário e autorizado na máquina, use `pnpm exec playwright install-deps chromium`.
+
+**Atenção a rede:** ao abrir o Vite por `http://192.168.10.18:5173/` em **outro equipamento**, `127.0.0.1:8091` aponta para esse outro equipamento, e não ao host AIRI. O executor recomendado roda o Chromium no mesmo host do teste, evitando essa ambiguidade. Para execuções distribuídas, use `FAKE_OPENAI_BASE_URL` e configure deliberadamente o bind do mock (que, por padrão, aceita somente loopback). O servidor falso não deve ficar aberto à internet nem substitui um LLM/TTS real.
+
+---
+
 ## Como rodar
 
-Requisitos: o repositório instalado (`pnpm install`) e o Playwright com o Chromium (`npx playwright install chromium`, se a máquina ainda não tiver).
+Requisitos: o repositório instalado (`pnpm install`) e o Playwright com o Chromium (`pnpm exec playwright install chromium`, se a máquina ainda não tiver).
 
 1. Inicie o `stage-web`:
 
@@ -60,6 +140,9 @@ Variáveis opcionais:
 | `VRM_FILE` | A Neptuna | Outro VRM para testar, por exemplo a Eva convertida (V4) |
 | `VRMA_FILE` | Uma cópia de `emote-spin.vrma` | Outro VRMA para importar |
 | `FAKE_LOG` | `airi-fake-openai-requests.jsonl` na pasta temporária | Registro das requisições do servidor falso |
+| `FAKE_OPENAI_BASE_URL` | `http://127.0.0.1:8091/v1/` | API do mock alcançável pelo Chromium que executa o teste |
+| `FAKE_OPENAI_PORT` | `8091` | Porta alternativa para o processo do fake server e para `run-local.cjs` |
+| `AIRI_TEST_PORT` | `5173` | Porta do Vite para `run-local.cjs` |
 
 ## Limites
 

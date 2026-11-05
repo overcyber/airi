@@ -16,7 +16,23 @@ const NEPTUNA = process.env.VRM_FILE ?? path.join(AIRI_DIR, 'packages/alice-moti
 const VRMA = process.env.VRMA_FILE ?? path.join(OUT, 'Happy Spin.vrma')
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:5173'
 const FAKE_LOG = process.env.FAKE_LOG ?? path.join(os.tmpdir(), 'airi-fake-openai-requests.jsonl')
-const VIDEO = Boolean(process.env.VIDEO)
+const VIDEO = process.env.VIDEO === '1'
+const FAKE_OPENAI_BASE_URL = process.env.FAKE_OPENAI_BASE_URL ?? 'http://127.0.0.1:8091/v1/'
+
+async function requireFakeServer() {
+  let response
+  try {
+    response = await fetch(new URL('models', FAKE_OPENAI_BASE_URL), { signal: AbortSignal.timeout(5000) })
+  }
+  catch (error) {
+    throw new Error(`Fake OpenAI server unreachable at ${FAKE_OPENAI_BASE_URL}: ${error.message}. Run fake-openai-server.cjs or use run-local.cjs`)
+  }
+  if (!response.ok)
+    throw new Error(`Fake OpenAI server at ${FAKE_OPENAI_BASE_URL} returned HTTP ${response.status}`)
+  const body = await response.json()
+  if (!body.data?.some(model => model.id === 'fake-model'))
+    throw new Error(`Unexpected models from ${FAKE_OPENAI_BASE_URL}: this is not the AIRI test fake server`)
+}
 
 const startedAt = Date.now()
 const steps = []
@@ -39,11 +55,14 @@ async function capture(page, name, always = false) {
   note(`screenshot ${name}`)
 }
 
-async function waitForButtons(page, minimum) {
-  for (let i = 0; i < 80; i++) {
-    if (await page.$$eval('button', buttons => buttons.length) >= minimum)
-      return
-    await page.waitForTimeout(2000)
+/** Wait for the actual UI action; Playwright locators survive navigation/re-renders. */
+async function waitForModelSelector(page) {
+  try {
+    await page.getByRole('button', { name: 'Select model' })
+      .waitFor({ state: 'visible', timeout: 120_000 })
+  }
+  catch (error) {
+    throw new Error(`The model selector did not appear at ${page.url()}. Check failed.png, console.txt and HTTP errors. Cause: ${error.message}`)
   }
 }
 
@@ -51,8 +70,8 @@ async function waitForButtons(page, minimum) {
 async function configureProviders(page) {
   // The first load of the Vite dev server compiles the app and can take minutes.
   await page.goto(`${BASE}/`, { timeout: 300_000 })
-  await page.evaluate(() => {
-    const config = { apiKey: 'sk-test', baseUrl: 'http://127.0.0.1:8091/v1/' }
+  await page.evaluate((fakeBaseUrl) => {
+    const config = { apiKey: 'sk-test', baseUrl: fakeBaseUrl }
     const llm = { id: 'openai-compatible', definitionId: 'openai-compatible', config, status: 'configured', configuredBy: 'user' }
     const tts = { id: 'openai-compatible-audio-speech', definitionId: 'openai-compatible-audio-speech', config, status: 'configured', configuredBy: 'user' }
     localStorage.setItem('onboarding/completed', 'true')
@@ -64,12 +83,13 @@ async function configureProviders(page) {
     localStorage.setItem('settings/speech/active-provider', tts.id)
     localStorage.setItem('settings/speech/active-model', 'tts-1')
     localStorage.setItem('settings/speech/voice', 'alloy')
-  })
+  }, FAKE_OPENAI_BASE_URL)
 }
 
 async function importNeptuna(page) {
-  await page.goto(`${BASE}/settings/models`)
-  await waitForButtons(page, 4)
+  note('navigating to model settings')
+  await page.goto(`${BASE}/settings/models`, { waitUntil: 'domcontentloaded', timeout: 180_000 })
+  await waitForModelSelector(page)
   await page.getByRole('button', { name: 'Select model' }).click()
   const importButton = page.locator('[role=dialog] button', { hasText: 'Import' }).first()
   await importButton.waitFor({ timeout: 30000 })
@@ -184,6 +204,7 @@ function check() {
 
 async function main() {
   fs.mkdirSync(OUT, { recursive: true })
+  await requireFakeServer()
   // The test imports a copy of a bundled emote under a new name, so the LLM must find it by the new name.
   if (!process.env.VRMA_FILE)
     fs.copyFileSync(path.join(AIRI_DIR, 'packages/stage-ui-three/src/assets/vrm/animations/utsuwa/emote-spin.vrma'), VRMA)
@@ -201,10 +222,18 @@ async function main() {
   })
   const page = await context.newPage()
   state.page = page
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) consoleLines.push(`NAVIGATED ${frame.url()}`) })
   page.on('pageerror', error => consoleLines.push(`PAGEERROR ${error.message}`))
   page.on('console', message => consoleLines.push(`${message.type()} ${message.text().slice(0, 400)}`))
+  page.on('requestfailed', request => consoleLines.push(`NETWORK ${request.method()} ${request.url()} ${request.failure()?.errorText}`))
+  page.on('response', response => {
+    if (response.status() >= 400)
+      consoleLines.push(`HTTP ${response.status()} ${response.url()}`)
+  })
 
+  note('configuring fake LLM and TTS providers')
   await configureProviders(page)
+  note('starting Neptuna import')
   await importNeptuna(page)
   await page.waitForTimeout(15000)
   await importMotion(page)

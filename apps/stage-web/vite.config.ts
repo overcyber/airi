@@ -45,7 +45,7 @@ function hasFlagEnableMkcert(): boolean {
   return false
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   optimizeDeps: {
     exclude: [
       // Internal Packages
@@ -281,8 +281,9 @@ export default defineConfig({
     Download('https://dist.ayaka.moe/vrm-models/VRoid-Hub/AvatarSample-A/AvatarSample_A.vrm', 'AvatarSample_A.vrm', 'vrm/models/AvatarSample-A', { parentDir: stageUIAssetsRoot, cacheDir: sharedCacheDir }),
     Download('https://dist.ayaka.moe/vrm-models/VRoid-Hub/AvatarSample-B/AvatarSample_B.vrm', 'AvatarSample_B.vrm', 'vrm/models/AvatarSample-B', { parentDir: stageUIAssetsRoot, cacheDir: sharedCacheDir }),
 
-    // HuggingFace Spaces
-    LFS({ root: cwd(), extraGlobs: [
+    // HuggingFace Spaces: hfup uses emitFile(), which is unavailable in Vite serve mode.
+    // Register these plugins only during production builds.
+    ...(command === 'build' ? [LFS({ root: cwd(), extraGlobs: [
       // Scene & Models
       '*.vrm',
       '*.vrma',
@@ -314,7 +315,7 @@ export default defineConfig({
         'onnx-community/silero-vad',
       ],
       short_description: 'AI driven VTuber & Companion, supports Live2D and VRM.',
-    }),
+    })] : []),
 
     // For the following example assets:
     //
@@ -362,4 +363,4 @@ export default defineConfig({
           }),
         ]),
   ],
-})
+}));
