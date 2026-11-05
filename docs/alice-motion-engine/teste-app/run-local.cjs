@@ -1,7 +1,7 @@
 // Local AIRI smoke or V1/V2 integration test. No production MQTT connections.
 // node docs/alice-motion-engine/teste-app/run-local.cjs [smoke|v1v2] [output-directory]
 'use strict'
-const { spawn, spawnSync } = require('node:child_process')
+const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const net = require('node:net')
 const path = require('node:path')
@@ -30,10 +30,10 @@ async function get(url) {
   }
   catch { return { ok: false, text: '' } }
 }
-function start(name, cmd, args, env = {}) {
+function start(name, cmd, args, env = {}, processCwd = root) {
   const file = fs.createWriteStream(path.join(out, name + '.log'))
   const child = spawn(cmd, args, {
-    cwd: root, env: { ...process.env, ...env }, detached: process.platform !== 'win32',
+    cwd: processCwd, env: { ...process.env, ...env }, detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   child.stdout.pipe(file)
@@ -101,13 +101,19 @@ async function main() {
     say('Reutilizando Vite já aberto em ' + base)
   }
   else {
-    const pnpm = process.env.PNPM_EXECUTABLE || 'pnpm'
-    const found = spawnSync(pnpm, ['--version'], { timeout: 10000, encoding: 'utf8' })
-    if (found.error || found.status !== 0) throw new Error('pnpm não encontrado; instale pnpm 11.24.0')
-    const child = start('vite', pnpm, ['-F', '@proj-airi/stage-web', 'exec', 'vite', '--port', String(webPort), '--strictPort', '--host', '127.0.0.1'])
+    // Launch the Vite CLI directly. Stopping a pnpm recursive exec wrapper
+    // creates a misleading ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL on normal cleanup.
+    const viteBin = path.join(root, 'node_modules/vite/bin/vite.js')
+    if (!fs.existsSync(viteBin))
+      throw new Error('Vite CLI não encontrado: execute pnpm install --frozen-lockfile na raiz.')
+    const child = start('vite', process.execPath,
+      [viteBin, '--port', String(webPort), '--strictPort', '--host', '127.0.0.1'],
+      {}, path.join(root, 'apps/stage-web'))
     await ready(base, 'id="app"', 180000, child)
   }
   if (mode === 'smoke') { await smoke(chromium); return }
+  // Also verify UI renders before running selector-dependent integration tests.
+  await smoke(chromium)
   if (await isPortOpen(fakePort)) throw new Error('Porta ' + fakePort + ' ocupada; não sobrescrever outro servidor')
   const fakeLog = path.join(out, 'fake-requests.jsonl')
   const mock = start('fake', process.execPath, [path.join(__dirname, 'fake-openai-server.cjs')], {
