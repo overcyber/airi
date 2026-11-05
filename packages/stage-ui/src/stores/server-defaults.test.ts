@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchServerDefaults, isUnreachableFromPage, resolveServerDefaults } from './server-defaults'
+import { fetchServerDefaults, isUnreachableFromPage, requestServerDefaults, resolveServerDefaults } from './server-defaults'
 
 const page = { origin: 'https://192.0.2.10:4443', protocol: 'https:' }
 
@@ -43,7 +43,7 @@ describe('fetchServerDefaults', () => {
     expect(await fetchServerDefaults(page, html)).toBeUndefined()
     expect(await fetchServerDefaults(page, failing)).toBeUndefined()
     expect(await fetchServerDefaults({ origin: 'file://', protocol: 'file:' }, html)).toBeUndefined()
-    expect(warn).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledTimes(2)
     warn.mockRestore()
   })
 })
@@ -86,5 +86,19 @@ describe('isUnreachableFromPage', () => {
     expect(isUnreachableFromPage('https://llm.example.com/v1/', page)).toBe(false)
     expect(isUnreachableFromPage('http://192.0.2.18:11434/v1/', { protocol: 'http:', origin: 'http://localhost:4173' })).toBe(false)
     expect(isUnreachableFromPage('', page)).toBe(false)
+  })
+})
+
+describe('requestServerDefaults', () => {
+  it('names the cause of each failure', async () => {
+    const refused = vi.fn<typeof fetch>(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    const notFound = vi.fn<typeof fetch>(async () => new Response('', { status: 404 }))
+    const html = vi.fn<typeof fetch>(async () => new Response('<!doctype html>', { headers: { 'content-type': 'text/html' } }))
+
+    await expect(requestServerDefaults('http://192.0.2.10:4173', refused)).rejects.toThrow('did not answer')
+    await expect(requestServerDefaults('http://192.0.2.10:4173', notFound)).rejects.toThrow('answered 404')
+    await expect(requestServerDefaults('http://192.0.2.10:4173', html)).rejects.toThrow('did not answer JSON')
   })
 })

@@ -60,18 +60,36 @@ export async function fetchServerDefaults(
   if (!origin || typeof fetchFile !== 'function')
     return undefined
   try {
-    const response = await fetchFile(new URL('/airi-defaults.json', origin).href, { headers: { Accept: 'application/json' } })
-    if (!response.ok || !response.headers.get('content-type')?.includes('json'))
-      return undefined
-    const parsed = v.safeParse(ServerDefaultsSchema, await response.json())
-    if (!parsed.success)
-      return undefined
-    return resolveServerDefaults(parsed.output, origin)
+    return await requestServerDefaults(origin, fetchFile)
   }
   catch (error) {
     console.warn('[server-defaults] the server defaults did not load:', errorMessageFrom(error) ?? error)
     return undefined
   }
+}
+
+/**
+ * Reads `/airi-defaults.json` of `origin`. It throws an error that names the cause, for the
+ * "Load settings from the server" action: no connection, an HTTP status, or a server without the file.
+ */
+export async function requestServerDefaults(origin: string, fetchFile: typeof fetch = globalThis.fetch): Promise<ServerDefaults> {
+  const url = new URL('/airi-defaults.json', origin).href
+  let response: Response
+  try {
+    response = await fetchFile(url, { headers: { Accept: 'application/json' } })
+  }
+  catch {
+    // The browser gives no detail for a refused connection, a certificate it does not trust, or CORS.
+    throw new Error(`${url} did not answer. Check that airi-web runs and the address is right. The desktop app needs the HTTP port (4173), because it does not trust the local certificate, and AIRI_CORS_ORIGINS=null on the server.`)
+  }
+  if (!response.ok)
+    throw new Error(`${url} answered ${response.status}. Rebuild and restart airi-web: docker compose -f deploy/alice/compose.yaml up -d --build`)
+  if (!response.headers.get('content-type')?.includes('json'))
+    throw new Error(`${url} did not answer JSON. The server is not an Alice server, or its airi-web image is older than the server defaults. Rebuild it.`)
+  const parsed = v.safeParse(ServerDefaultsSchema, await response.json())
+  if (!parsed.success)
+    throw new Error(`${url} has settings that this app cannot read. Use the same version of the app and of airi-web.`)
+  return resolveServerDefaults(parsed.output, origin)
 }
 
 /**
@@ -91,6 +109,15 @@ export async function loadServerDefaults(options: { overwrite?: boolean } = {}) 
     catch {
       throw new Error(`The Alice server URL is not a URL: ${saved}`)
     }
+  }
+  if (options.overwrite) {
+    // The explicit action reports the cause of a failure.
+    const page = globalThis.location
+    const origin = serverOrigin ?? (page && /^https?:$/.test(page.protocol) ? page.origin : undefined)
+    if (!origin)
+      throw new Error('Set the Alice server URL, for example http://192.0.2.10:4173.')
+    await applyServerDefaults(await requestServerDefaults(origin), page, options)
+    return true
   }
   const defaults = await fetchServerDefaults(globalThis.location, globalThis.fetch, serverOrigin)
   if (!defaults)

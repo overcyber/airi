@@ -130,7 +130,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         recordReply(event.text)
         speechSequence++
         const sessionId = event.sessionId ?? `neoalice-${speechSequence}`
-        if (bridge.speechMode !== 'airi-voice') {
+        if (speechMode() !== 'airi-voice') {
           options.showCaption(event.text)
           return
         }
@@ -145,7 +145,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         recordReply(event.text)
         speechSequence++
         const sessionId = event.sessionId ?? `neoalice-${speechSequence}`
-        if (bridge.speechMode === 'silent') {
+        if (speechMode() === 'silent') {
           if (event.text)
             options.showCaption(event.text)
           return
@@ -188,7 +188,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     if (waitingSince !== undefined)
       return
     const site = bridge.site.trim()
-    if (bridge.acceptAnySite || !isPublishableSite(site)) {
+    if (followsAnySite() || !isPublishableSite(site)) {
       bridge.voiceStatus = 'error'
       bridge.voiceError = 'Set one site for the avatar, for example airi-avatar. The microphone does not publish with "Follow every site".'
       return
@@ -223,11 +223,24 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     }
   }
 
+  /**
+   * The speech mode in effect. In the brain mode, AIRI is the face of NeoAlice, so it always speaks:
+   * the silent mode plays the audio of NeoAlice there.
+   */
+  function speechMode() {
+    return brain.brainMode && bridge.speechMode === 'silent' ? 'neoalice-audio' : bridge.speechMode
+  }
+
+  /** Publishing needs one site. The brain mode ignores "Follow every site". */
+  function followsAnySite() {
+    return bridge.acceptAnySite && !brain.brainMode
+  }
+
   /** Sends typed text of the chat to NeoAlice (brain mode). It throws when it cannot send. */
   async function sendTypedText(text: string) {
     const site = bridge.site.trim()
-    if (bridge.acceptAnySite || !isPublishableSite(site))
-      throw new Error('Set one site for the avatar in the NeoAlice bridge, for example airi-avatar.')
+    if (!isPublishableSite(site))
+      throw new Error('Set the Site of the avatar in the NeoAlice bridge settings, for example airi-avatar. Use a site of its own, not the site of the mirror.')
     const sessionId = `airi-chat-${Date.now()}-${++voiceSequence}`
     const sent = await bridge.publish(neoAliceSttFinalEvent({ site, userId: bridge.userId, sessionId, text, nowMs: Date.now() }))
     if (!sent)
@@ -264,7 +277,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
 
   function announce(state: 'idle' | 'listening' | 'thinking' | 'speaking', sessionId?: string) {
     const site = bridge.site.trim()
-    if (!bridge.announceState || bridge.acceptAnySite || !isPublishableSite(site) || mountedStages[0] !== token)
+    if (!bridge.announceState || followsAnySite() || !isPublishableSite(site) || mountedStages[0] !== token)
       return
     const detail = state === 'idle' ? 'hb' : state
     void bridge.publish(neoAliceStateEvent({ site, state, detail, sessionId, nowMs: Date.now() }))

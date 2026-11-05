@@ -11,6 +11,7 @@ import { computed, ref, watch } from 'vue'
 
 import { catalogWithEmotes } from '../../libs/alice-motion/stage-motion'
 import { useVrmMotionsStore } from '../vrm-motions'
+import { useNeoAliceBrainStore } from './neoalice-brain'
 
 /** The one load of MQTT.js for the whole app. */
 let mqttConnectLoading: Promise<typeof import('mqtt')['connect']> | undefined
@@ -105,7 +106,8 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
   const lastIgnored = ref('')
   const lastEvent = ref('')
 
-  const configured = computed(() => brokerUrl.value.trim() !== '' && (acceptAnySite.value || site.value.trim() !== ''))
+  const brain = useNeoAliceBrainStore()
+  const configured = computed(() => brokerUrl.value.trim() !== '' && ((acceptAnySite.value && !brain.brainMode) || site.value.trim() !== ''))
 
   const vrmMotions = useVrmMotionsStore()
   let activeTranslator: NeoAliceTranslator | undefined
@@ -127,7 +129,10 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     const current = ++generation
     status.value = 'connecting'
     lastError.value = ''
-    const options = { site: site.value.trim(), acceptAnySite: acceptAnySite.value, companionSite: companionSite.value.trim() || 'companion' }
+    // In the brain mode, AIRI is one satellite: it follows its own site only. Every site would bring the
+    // broadcasts of the other satellites, so the same reply arrives once for each site.
+    const followAnySite = acceptAnySite.value && !brain.brainMode
+    const options = { site: site.value.trim(), acceptAnySite: followAnySite, companionSite: companionSite.value.trim() || 'companion' }
     // Imported VRMA and FBX motions are part of the catalog, so `cmd/avatar/animation` can name them.
     const translator = new NeoAliceTranslator({ ...options, catalog: catalogWithEmotes(vrmMotions.motionLibrary.emotes) })
     activeTranslator = translator
@@ -234,7 +239,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
 
   // Typing in a settings field changes these values on each key. The bridge reconnects once, after a pause.
   // A manual reset ref triggers on every assignment, even with the same value. The key changes only with a real change.
-  const connectionKey = computed(() => JSON.stringify([enabled.value, brokerUrl.value, site.value, acceptAnySite.value, companionSite.value, username.value, password.value]))
+  const connectionKey = computed(() => JSON.stringify([enabled.value, brokerUrl.value, site.value, acceptAnySite.value, brain.brainMode, companionSite.value, username.value, password.value]))
   watchDebounced(connectionKey, () => {
     if (holders > 0)
       void connect()
