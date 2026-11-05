@@ -5,6 +5,7 @@
 #   /mqtt         WebSocket MQTT broker     (AIRI_MQTT_WS_UPSTREAM, host:port)
 #   /proxy/llm/   OpenAI compatible LLM     (AIRI_LLM_UPSTREAM, URL)
 #   /proxy/tts/   OpenAI compatible TTS     (AIRI_TTS_UPSTREAM, URL)
+#   /proxy/stt/   Speech to text            (AIRI_STT_UPSTREAM, URL, and AIRI_STT_TRANSCRIBE_PATH)
 #   /proxy/nvidia/ NVIDIA NIM cloud API     (integrate.api.nvidia.com)
 #   /models/      VRM files of deploy/alice/modelos, with a JSON list at /models/
 
@@ -31,6 +32,12 @@ server {
 
   # Imported models and speech audio can be large.
   client_max_body_size 200m;
+
+  # The app bundle is about 24 MB of JavaScript, CSS, and JSON. Compression makes the first load faster.
+  gzip on;
+  gzip_comp_level 5;
+  gzip_min_length 1024;
+  gzip_types text/css application/javascript application/json image/svg+xml application/wasm;
 
   location = /healthz {
     access_log off;
@@ -62,6 +69,9 @@ server {
     proxy_pass $airi_llm;
     proxy_http_version 1.1;
     proxy_set_header Host $proxy_host;
+    # Ollama refuses a request with an Origin that is not in OLLAMA_ORIGINS (403).
+    # The upstream sees this server, not the browser, so the Origin goes away.
+    proxy_set_header Origin "";
     # Streaming responses go to the browser as they arrive.
     proxy_buffering off;
     proxy_read_timeout 600s;
@@ -73,7 +83,31 @@ server {
     proxy_pass $airi_tts;
     proxy_http_version 1.1;
     proxy_set_header Host $proxy_host;
+    proxy_set_header Origin "";
     proxy_buffering off;
+    proxy_read_timeout 300s;
+  }
+
+  # AIRI sends the audio to <base URL>audio/transcriptions, as the OpenAI API does.
+  # AIRI_STT_TRANSCRIBE_PATH is the path of the upstream for that call, for example /inference
+  # for a Whisper server without the OpenAI API. Other paths go to the upstream as they are.
+  location = /proxy/stt/v1/audio/transcriptions {
+    set $airi_stt "${AIRI_STT_UPSTREAM}";
+    rewrite ^ ${AIRI_STT_TRANSCRIBE_PATH} break;
+    proxy_pass $airi_stt;
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header Origin "";
+    proxy_read_timeout 300s;
+  }
+
+  location /proxy/stt/ {
+    set $airi_stt "${AIRI_STT_UPSTREAM}";
+    rewrite ^/proxy/stt/(.*)$ /$1 break;
+    proxy_pass $airi_stt;
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header Origin "";
     proxy_read_timeout 300s;
   }
 
@@ -85,6 +119,7 @@ server {
     proxy_http_version 1.1;
     proxy_ssl_server_name on;
     proxy_set_header Host integrate.api.nvidia.com;
+    proxy_set_header Origin "";
     proxy_buffering off;
     proxy_read_timeout 600s;
   }

@@ -6,6 +6,10 @@
 # Profile `broker`: a test Mosquitto, only for a machine without the NeoAlice broker.
 #   docker compose -f deploy/alice/compose.yaml --profile broker up -d --build
 #
+# Profile `bridge`: a read-only copy of the NeoAlice broker with a WebSocket listener, for a
+# NeoAlice broker that has no WebSocket listener. Set NEOALICE_MQTT_HOST in .env.
+#   docker compose -f deploy/alice/compose.yaml --profile bridge up -d --build
+#
 # The TalkingHead server (port 8081) and the NeoAlice services do not change.
 
 name: alice-airi
@@ -26,6 +30,8 @@ services:
       AIRI_MQTT_WS_UPSTREAM: ${AIRI_MQTT_WS_UPSTREAM:-host.docker.internal:9001}
       AIRI_LLM_UPSTREAM: ${AIRI_LLM_UPSTREAM:-http://host.docker.internal:11434}
       AIRI_TTS_UPSTREAM: ${AIRI_TTS_UPSTREAM:-http://host.docker.internal:8880}
+      AIRI_STT_UPSTREAM: ${AIRI_STT_UPSTREAM:-http://host.docker.internal:9100}
+      AIRI_STT_TRANSCRIBE_PATH: ${AIRI_STT_TRANSCRIBE_PATH:-/v1/audio/transcriptions}
     extra_hosts:
       - host.docker.internal:host-gateway
     volumes:
@@ -79,6 +85,22 @@ services:
       - 127.0.0.1:${TEST_MQTT_WS_PORT:-19001}:9001
     volumes:
       - ./mqtt-test/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  # Read-only copy of the NeoAlice topics, with the WebSocket listener that the browser needs.
+  # With it, set AIRI_MQTT_WS_UPSTREAM=mqtt-bridge:9001 in .env.
+  mqtt-bridge:
+    profiles: [bridge]
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    entrypoint: [/bin/sh, /bridge/start.sh]
+    environment:
+      NEOALICE_MQTT_HOST: ${NEOALICE_MQTT_HOST:-}
+      NEOALICE_MQTT_PORT: ${NEOALICE_MQTT_PORT:-1883}
+      NEOALICE_MQTT_USERNAME: ${NEOALICE_MQTT_USERNAME:-}
+      NEOALICE_MQTT_PASSWORD: ${NEOALICE_MQTT_PASSWORD:-}
+      NEOALICE_MQTT_TOPICS: ${NEOALICE_MQTT_TOPICS:-neoalice/#}
+    volumes:
+      - ./mqtt-bridge/start.sh:/bridge/start.sh:ro
 
 volumes:
   alice-companion-data:

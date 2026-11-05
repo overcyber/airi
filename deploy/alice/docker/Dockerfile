@@ -42,7 +42,7 @@ FROM workspace AS web-build
 ARG VITE_AIRI_OFFLINE=true
 ARG VITE_ENABLE_ANALYTICS=false
 ENV VITE_AIRI_OFFLINE=${VITE_AIRI_OFFLINE}
-# The Nginx of the `web` image forwards /proxy/nvidia/, /proxy/llm/, /proxy/tts/, and /mqtt.
+# The Nginx of the `web` image forwards /proxy/nvidia/, /proxy/llm/, /proxy/tts/, /proxy/stt/, and /mqtt.
 ENV VITE_AIRI_PROXY=true
 ENV VITE_ENABLE_ANALYTICS=${VITE_ENABLE_ANALYTICS}
 ENV NODE_OPTIONS=--max-old-space-size=8192
@@ -82,6 +82,8 @@ COPY --chmod=755 deploy/alice/docker/nginx/40-airi-setup.sh /docker-entrypoint.d
 ENV AIRI_MQTT_WS_UPSTREAM=host.docker.internal:9001
 ENV AIRI_LLM_UPSTREAM=http://host.docker.internal:11434
 ENV AIRI_TTS_UPSTREAM=http://host.docker.internal:8880
+ENV AIRI_STT_UPSTREAM=http://host.docker.internal:9100
+ENV AIRI_STT_TRANSCRIBE_PATH=/v1/audio/transcriptions
 
 EXPOSE 80 443
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
