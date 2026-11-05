@@ -19,6 +19,7 @@
     "./composables/vrm": "./src/composables/vrm/index.ts",
     "./trace": "./src/trace/index.ts",
     "./utils/vrm-preview": "./src/utils/vrm-preview.ts",
+    "./utils/webgl": "./src/utils/webgl.ts",
     ".": "./src/index.ts"
   },
   "scripts": {

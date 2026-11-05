@@ -12,5 +12,6 @@ airi-docs
 
 # Private files of the Alice deployment: models and secrets never go into an image.
 deploy/alice/modelos
+deploy/alice/animacoes
 deploy/alice/.env
 deploy/alice/tls

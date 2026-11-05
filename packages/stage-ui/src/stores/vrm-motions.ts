@@ -2,13 +2,17 @@ import type { VrmEmoteAnimation, VrmMotionLibrary } from '@proj-airi/stage-ui-th
 
 import type { VrmMotionRecord } from '../database/repos/vrm-motions.repo'
 
+import { errorMessageFrom } from '@moeru/std'
 import { defaultVrmMotionLibrary } from '@proj-airi/stage-ui-three/assets/vrm'
 import { createEventHook } from '@vueuse/core'
 import { nanoid } from 'nanoid'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 
+import * as v from 'valibot'
+
 import { vrmMotionPrefix, vrmMotionsRepo } from '../database/repos/vrm-motions.repo'
+import { useNeoAliceBrainStore } from './modules/neoalice-brain'
 
 /** Name and description of an imported motion. The LLM reads the description to choose it. */
 export interface VrmMotionDetails {
@@ -23,6 +27,59 @@ function nameFromFile(file: File) {
   return file.name.replace(motionFile, '').trim() || 'Motion'
 }
 
+const ServerMotionListSchema = v.array(v.object({ name: v.string(), type: v.string() }))
+
+/**
+ * Motions that an Alice server lists at `/animations/`: the FBX and VRMA files of `deploy/alice/animacoes`.
+ *
+ * The list is the JSON autoindex of Nginx. Each file becomes an emote with a URL. Its name comes from the
+ * file name, for example `Wave_Hello.fbx` becomes "Wave Hello", so NeoAlice can ask for it by name.
+ * Returns an empty list when there is no server, or it has no such list.
+ */
+export async function fetchServerMotions(origin: string | undefined, fetchList: typeof fetch = globalThis.fetch): Promise<VrmEmoteAnimation[]> {
+  if (!origin || typeof fetchList !== 'function')
+    return []
+  try {
+    const response = await fetchList(new URL('/animations/', origin).href, { headers: { Accept: 'application/json' } })
+    if (!response.ok || !response.headers.get('content-type')?.includes('json'))
+      return []
+    const parsed = v.safeParse(ServerMotionListSchema, await response.json())
+    if (!parsed.success)
+      return []
+    return parsed.output
+      .filter(entry => entry.type === 'file' && motionFile.test(entry.name))
+      .map((entry) => {
+        const name = entry.name.replace(motionFile, '').replace(/[_-]+/g, ' ').trim()
+        return {
+          id: `server-motion-${entry.name}`,
+          name,
+          description: name,
+          url: new URL(`/animations/${encodeURIComponent(entry.name)}`, origin).href,
+          format: /\.fbx$/i.test(entry.name) ? 'fbx' as const : 'vrma' as const,
+        }
+      })
+  }
+  catch (error) {
+    console.warn('[vrm-motions] the server motion list did not load:', errorMessageFrom(error) ?? error)
+    return []
+  }
+}
+
+/** Origin of the Alice server: the saved server URL, or the page when it is served over HTTP. */
+function serverOrigin() {
+  const saved = useNeoAliceBrainStore().serverUrl.trim()
+  if (saved) {
+    try {
+      return new URL(saved).origin
+    }
+    catch {
+      return undefined
+    }
+  }
+  const page = globalThis.location
+  return page && /^https?:$/.test(page.protocol) ? page.origin : undefined
+}
+
 /**
  * VRM motion library of the stage: the bundled Utsuwa motions plus the VRMA files that the user imported.
  *
@@ -31,6 +88,8 @@ function nameFromFile(file: File) {
  */
 export const useVrmMotionsStore = defineStore('vrm-motions', () => {
   const imported = shallowRef<VrmMotionRecord[]>([])
+  /** Motions of the Alice server (`/animations/`). They are not stored on this device. */
+  const serverEmotes = shallowRef<VrmEmoteAnimation[]>([])
   const loaded = ref(false)
   let loading: Promise<void> | undefined
   /** One object URL per imported file, revoked when the motion is removed. */
@@ -56,13 +115,17 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
 
   const motionLibrary = computed<VrmMotionLibrary>(() => ({
     ...defaultVrmMotionLibrary,
-    emotes: [...defaultVrmMotionLibrary.emotes, ...importedEmotes.value],
+    emotes: [...defaultVrmMotionLibrary.emotes, ...serverEmotes.value, ...importedEmotes.value],
   }))
 
   /** Reads the imported motions once. Later calls wait for the same read. */
   function load() {
-    loading ??= vrmMotionsRepo.list().then((records) => {
+    loading ??= Promise.all([
+      vrmMotionsRepo.list(),
+      fetchServerMotions(serverOrigin()),
+    ]).then(([records, server]) => {
       imported.value = records
+      serverEmotes.value = server
       loaded.value = true
     })
     return loading
@@ -120,6 +183,7 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
 
   return {
     imported,
+    serverEmotes,
     loaded,
     motionLibrary,
     load,

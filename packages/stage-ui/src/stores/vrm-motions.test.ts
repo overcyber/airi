@@ -3,7 +3,7 @@ import type { VrmMotionRecord } from '../database/repos/vrm-motions.repo'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useVrmMotionsStore } from './vrm-motions'
+import { fetchServerMotions, useVrmMotionsStore } from './vrm-motions'
 
 const records = vi.hoisted(() => new Map<string, VrmMotionRecord>())
 
@@ -108,5 +108,30 @@ describe('useVrmMotionsStore', () => {
     store.requestPlay('greeting')
 
     expect(listener).toHaveBeenCalledWith('greeting')
+  })
+})
+
+describe('fetchServerMotions', () => {
+  it('lists the FBX and VRMA files of the server as emotes with readable names', async () => {
+    const fetchList = vi.fn<typeof fetch>(async () => new Response(JSON.stringify([
+      { name: 'Wave_Hello.fbx', type: 'file' },
+      { name: 'happy-spin.vrma', type: 'file' },
+      { name: 'README.md', type: 'file' },
+      { name: 'old', type: 'directory' },
+    ]), { headers: { 'content-type': 'application/json' } }))
+
+    const emotes = await fetchServerMotions('https://192.0.2.10:4443', fetchList)
+
+    expect(fetchList).toHaveBeenCalledWith('https://192.0.2.10:4443/animations/', expect.anything())
+    expect(emotes).toEqual([
+      { id: 'server-motion-Wave_Hello.fbx', name: 'Wave Hello', description: 'Wave Hello', url: 'https://192.0.2.10:4443/animations/Wave_Hello.fbx', format: 'fbx' },
+      { id: 'server-motion-happy-spin.vrma', name: 'happy spin', description: 'happy spin', url: 'https://192.0.2.10:4443/animations/happy-spin.vrma', format: 'vrma' },
+    ])
+  })
+
+  it('returns no motion without a server, or for the HTML page of a dev server', async () => {
+    const html = vi.fn<typeof fetch>(async () => new Response('<!doctype html>', { headers: { 'content-type': 'text/html' } }))
+    expect(await fetchServerMotions(undefined, html)).toEqual([])
+    expect(await fetchServerMotions('https://192.0.2.10:4443', html)).toEqual([])
   })
 })

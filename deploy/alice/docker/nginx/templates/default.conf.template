@@ -10,6 +10,7 @@
 #   /proxy/neoalice/ NeoAlice API            (NEOALICE_API_UPSTREAM, URL, and NEOALICE_API_KEY)
 #   /airi-defaults.json first settings of AIRI, written by 40-airi-setup.sh from the environment
 #   /models/      VRM files of deploy/alice/modelos, with a JSON list at /models/
+#   /animations/  FBX and VRMA motions of deploy/alice/animacoes, with a JSON list at /animations/
 
 # CORS for the desktop app, which loads its pages from file:// (origin "null"). Only the origins of
 # AIRI_CORS_ORIGINS get the header. 40-airi-setup.sh writes them to airi-cors-origins.map.
@@ -162,6 +163,14 @@ server {
   location /models/ {
     include /etc/nginx/airi-cors.inc;
     alias /usr/share/nginx/models/;
+    autoindex on;
+    autoindex_format json;
+    add_header Cache-Control "no-cache";
+  }
+
+  location /animations/ {
+    include /etc/nginx/airi-cors.inc;
+    alias /usr/share/nginx/animations/;
     autoindex on;
     autoindex_format json;
     add_header Cache-Control "no-cache";

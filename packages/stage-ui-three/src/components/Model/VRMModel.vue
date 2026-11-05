@@ -87,6 +87,7 @@ import { resolveInternalVrmHooks } from '../../composables/vrm/internal-hooks'
 import { useVRMLipSync } from '../../composables/vrm/lip-sync'
 import { MoodBody } from '../../composables/vrm/mood-body'
 import { MoodFace } from '../../composables/vrm/mood-face'
+import { emoteLayerBones, inferEmoteLayering } from '../../composables/vrm/motion-layers'
 import { PerformanceDirector } from '../../composables/vrm/performance-director'
 import { createThinkingClip } from '../../composables/vrm/thinking-pose'
 import {
@@ -1323,7 +1324,15 @@ defineExpose({
       // The model can change while the clip loads.
       if (vrm.value !== targetVrm || vrmAnimator.value !== animator)
         return false
-      animator.playEmote(clip)
+      // V6: a gesture of the arms or the head plays only on those bones, or adds to the pose,
+      // so the idle and the speech go on for the rest of the body.
+      const layering = inferEmoteLayering(emote)
+      const nodes = layering.layer === 'full'
+        ? undefined
+        : new Set(emoteLayerBones[layering.layer]
+            .map(bone => targetVrm.humanoid?.getNormalizedBoneNode(bone)?.name)
+            .filter((name): name is string => !!name))
+      animator.playEmote(clip, undefined, { nodes, additive: layering.additive })
       return true
     }
     catch (error) {

@@ -31,6 +31,7 @@ import { computed, nextTick, onUnmounted, ref, shallowRef, watch } from 'vue'
 
 import StageAvatarModelMissing from './stage-avatar-model-missing.vue'
 import StageRenderError from './stage-render-error.vue'
+import WebglUnavailable from './webgl-unavailable.vue'
 
 import { useNeoAliceStageBridge } from '../../composables/use-neoalice-stage-bridge'
 // import { useDuckDb } from '../../composables/use-duck-db'
@@ -179,6 +180,11 @@ const live2dStore = useLive2dParams()
 const showStage = ref(true)
 const stageRenderError = shallowRef<Error>()
 const viewUpdateCleanups: Array<() => void> = []
+
+/** Pixi and three report a refused WebGL context with these messages. The stage then shows the WebGL help. */
+function isWebGLFailure(error: Error) {
+  return /WebGL/i.test(error.message)
+}
 
 function handleStageRenderError(error: Error) {
   stageRenderError.value = error
@@ -828,7 +834,11 @@ defineExpose({
         :motion-library="vrmMotions.motionLibrary"
         @error="reportStageRenderError"
         @vrm-interact="onVRMInteract"
-      />
+      >
+        <template #webgl-unavailable="{ retry }">
+          <WebglUnavailable @retry="retry" />
+        </template>
+      </ThreeScene>
       <SpineScene
         v-if="stageModelRenderer === 'spine' && showStage"
         ref="spineSceneRef"
@@ -903,8 +913,12 @@ defineExpose({
         :name="activeCard?.name ?? ''"
         @select="emit('selectAvatarModel')"
       />
+      <WebglUnavailable
+        v-if="stageRenderError && isWebGLFailure(stageRenderError)"
+        @retry="retryStageRenderer"
+      />
       <StageRenderError
-        v-if="stageRenderError"
+        v-else-if="stageRenderError"
         :error="stageRenderError"
         :renderer="stageModelRenderer === 'live2d' ? 'Live2D' : stageModelRenderer ?? 'Model'"
         :model-id="stageModelSelected"

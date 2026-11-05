@@ -101,6 +101,22 @@ if ! find "$here/modelos" -maxdepth 1 -iname '*.vrm' | grep -q .; then
   rm -rf "$source_dir"
 fi
 
+# The motions of the TalkingHead (Mixamo FBX). They stay out of Git: animacoes/ is ignored.
+# Source: ANIMATIONS_DIR, or ../talkinghead-neoalice/animations next to this repository.
+mkdir -p "$here/animacoes"
+if ! find "$here/animacoes" -maxdepth 1 \( -iname '*.fbx' -o -iname '*.vrma' \) | grep -q .; then
+  repo_root="$(cd "$here/../.." && pwd)"
+  for candidate in "${ANIMATIONS_DIR:-}" "$repo_root/../talkinghead-neoalice/animations"; do
+    if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+      find "$candidate" -maxdepth 1 \( -iname '*.fbx' -o -iname '*.vrma' \) -exec cp {} "$here/animacoes/" \;
+      echo "preparar: copied the motions of $candidate to animacoes/"
+      break
+    fi
+  done
+fi
+chmod a+rx "$here/animacoes"
+find "$here/animacoes" -maxdepth 1 \( -iname '*.fbx' -o -iname '*.vrma' \) -exec chmod a+r {} +
+
 # Nginx in the container runs as another user. A model readable only by its owner answers 403.
 chmod a+rx "$here/modelos"
 find "$here/modelos" -maxdepth 1 -iname '*.vrm' -exec chmod a+r {} +

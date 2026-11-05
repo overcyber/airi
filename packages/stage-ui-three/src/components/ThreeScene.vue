@@ -16,6 +16,7 @@ import type { VrmMotionLibrary } from '../assets/vrm/animations'
 import type { VrmInteractionTarget } from '../composables/vrm/interaction'
 import type { SceneBootstrap, ScenePhase, Vec3 } from '../stores/model-store'
 import type { VrmLifecycleReason } from '../trace'
+import type { WebGLState } from '../utils/webgl'
 
 import { coverRect, presenceBubbleIdle } from '@proj-airi/stage-shared'
 import { Screen } from '@proj-airi/ui'
@@ -36,7 +37,7 @@ import {
   Vector2,
   Vector3,
 } from 'three'
-import { computed, nextTick, onMounted, onUnmounted, provide, ref, shallowRef, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, provide, ref, shallowRef, useTemplateRef, watch } from 'vue'
 
 import PresenceBubble from './presence-bubble.vue'
 
@@ -56,6 +57,7 @@ import {
   stageThreeTraceThreeSceneSubtreeEvent,
   stageThreeTraceThreeSceneTransactionEvent,
 } from '../trace'
+import { canCreateWebGLContext, isWebGLContextError } from '../utils/webgl'
 import { OrbitControls } from './Controls'
 import { SkyBox } from './Environment'
 import { VRMModel } from './Model'
@@ -114,7 +116,9 @@ const emit = defineEmits<{
   (e: 'loadModelProgress', value: number): void
   (e: 'error', value: unknown): void
   (e: 'vrmInteract', value: VrmInteractionTarget): void
+  (e: 'webglState', value: WebGLState): void
 }>()
+
 /**
  * Colours for the presence bubble, read from elements carrying the project's own
  * utilities.
@@ -539,6 +543,51 @@ const isCompletingBinding = ref(false)
 
 //  === VRMModel ===
 const canvasReady = ref(false)
+
+// WebGL guard. The browser can refuse a context (GPU blocked for the site after GPU errors) or lose
+// it later. The scene then shows the `webgl-unavailable` slot in place of a crashed page.
+const webglState = ref<WebGLState>(canCreateWebGLContext() ? 'ok' : 'unavailable')
+/** A new key mounts a new canvas, so a retry gets a new context. */
+const canvasKey = ref(0)
+let restoreTimer: ReturnType<typeof setTimeout> | undefined
+watch(webglState, state => emit('webglState', state), { immediate: true })
+
+function retryWebGL() {
+  if (!canCreateWebGLContext()) {
+    webglState.value = 'unavailable'
+    return
+  }
+  tresContextRef.value = undefined
+  canvasReady.value = false
+  canvasKey.value++
+  webglState.value = 'ok'
+}
+
+function onContextLost(event: Event) {
+  // Without preventDefault, the browser never restores the context.
+  event.preventDefault()
+  webglState.value = 'lost'
+  clearTimeout(restoreTimer)
+  // three restores the context itself on `webglcontextrestored`. Without it, a new canvas is tried.
+  restoreTimer = setTimeout(() => {
+    if (webglState.value === 'lost')
+      retryWebGL()
+  }, 5000)
+}
+
+function onContextRestored() {
+  clearTimeout(restoreTimer)
+  webglState.value = 'ok'
+}
+
+onErrorCaptured((error) => {
+  if (!isWebGLContextError(error))
+    return
+  webglState.value = 'unavailable'
+  console.warn('[ThreeScene] WebGL is not available:', error)
+  // The error is handled here: the page stays, and the slot shows the message.
+  return false
+})
 const modelPhase = ref<ModelPhase>(props.modelSrc ? 'loading' : 'no-model')
 
 function beginSceneBindingCycle(reason: SceneTraceTransactionReason) {
@@ -715,6 +764,8 @@ function onTresReady(context: TresContext) {
   rendererHeight = 0
   void syncBackground()
   canvasReady.value = true
+  context.renderer.instance.domElement.addEventListener('webglcontextlost', onContextLost)
+  context.renderer.instance.domElement.addEventListener('webglcontextrestored', onContextRestored)
   context.renderer.instance.domElement.addEventListener('pointerdown', onCanvasPointerDown)
   context.renderer.instance.domElement.addEventListener('pointerup', onCanvasPointerUp)
   context.renderer.instance.domElement.addEventListener('pointercancel', onCanvasPointerCancel)
@@ -800,7 +851,10 @@ onUnmounted(() => {
     canvas.removeEventListener('pointerdown', onCanvasPointerDown)
     canvas.removeEventListener('pointerup', onCanvasPointerUp)
     canvas.removeEventListener('pointercancel', onCanvasPointerCancel)
+    canvas.removeEventListener('webglcontextlost', onContextLost)
+    canvas.removeEventListener('webglcontextrestored', onContextRestored)
   }
+  clearTimeout(restoreTimer)
   activePointer = undefined
 
   invalidateBindingRevision()
@@ -1035,7 +1089,10 @@ defineExpose({
       <div ref="presenceBadgeProbe" :class="['bg-primary-500 dark:bg-primary-400']" />
       <div ref="presenceBadgeInkProbe" :class="['bg-neutral-50 dark:bg-neutral-900']" />
     </div>
+    <slot v-if="webglState === 'unavailable'" name="webgl-unavailable" :retry="retryWebGL" />
     <TresCanvas
+      v-else
+      :key="canvasKey"
       :width="width"
       :height="height"
       :camera="camera"

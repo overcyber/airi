@@ -5,7 +5,19 @@
 
 import type { AnimationAction, AnimationClip, Object3D } from 'three'
 
-import { AnimationMixer, LoopOnce, LoopRepeat } from 'three'
+import { AdditiveAnimationBlendMode, AnimationMixer, LoopOnce, LoopRepeat } from 'three'
+
+import { additiveClip, maskClip } from './motion-layers'
+
+/**
+ * How an emote mixes with the body (V6).
+ * - `nodes`: only these nodes play the emote. The base clip keeps every other node.
+ * - `additive`: the emote adds to the current pose. Nothing else stops.
+ */
+export interface EmotePlayOptions {
+  nodes?: ReadonlySet<string>
+  additive?: boolean
+}
 
 export interface AvatarAnimatorHooks {
   /** Loads and retargets a VRMA clip for the model of this animator. */
@@ -46,6 +58,10 @@ export class AvatarAnimator {
   thinking: AnimationAction | null = null
   emote: AnimationAction | null = null
   emotePlaying = false
+  /** The base clip without the nodes of a masked emote, while that emote plays. */
+  rest: AnimationAction | null = null
+  /** Additive emotes that play now. They do not hold the stage. */
+  readonly overlays = new Set<AnimationAction>()
 
   private talkingClip: AnimationClip | null = null
   private thinkingClip: { url: string, clip: AnimationClip } | null = null
@@ -163,8 +179,22 @@ export class AvatarAnimator {
       this.idle?.reset().fadeIn(fadeSeconds.talkOrThink).play()
   }
 
-  /** Plays a clip once at 1.5x, then returns to the idle. `onFinished` runs when it ends. */
-  playEmote(clip: AnimationClip, onFinished?: () => void) {
+  /**
+   * Plays a clip once at 1.5x, then returns to the idle. `onFinished` runs when it ends.
+   *
+   * With `options.additive`, the clip adds to the current pose: the idle and the speech go on.
+   * With `options.nodes`, only those nodes play the clip: the base clip goes on for the others.
+   * Without options, the whole body plays the clip, as before V6.
+   */
+  playEmote(clip: AnimationClip, onFinished?: () => void, options: EmotePlayOptions = {}) {
+    if (options.additive) {
+      this.playAdditive(clip, onFinished)
+      return
+    }
+    if (options.nodes && options.nodes.size > 0) {
+      this.playMasked(clip, options.nodes, onFinished)
+      return
+    }
     if (this.emote) {
       this.emote.fadeOut(fadeSeconds.emoteIn)
       this.emote = null
@@ -195,6 +225,86 @@ export class AvatarAnimator {
         this.talking.reset().fadeIn(fadeSeconds.emoteOut).play()
       else
         idle?.reset().fadeIn(fadeSeconds.emoteOut).play()
+      onFinished?.()
+    }
+    this.mixer.addEventListener('finished', onDone)
+  }
+
+  /** The action that holds the body when no emote plays: talking, or the idle. */
+  private baseAction() {
+    return this.hooks.isTalking() && this.talking ? this.talking : this.idle
+  }
+
+  private playAdditive(clip: AnimationClip, onFinished?: () => void) {
+    const action = this.mixer.clipAction(additiveClip(clip))
+    action.blendMode = AdditiveAnimationBlendMode
+    action.setLoop(LoopOnce, 1)
+    action.clampWhenFinished = false
+    action.timeScale = emoteTimeScale
+    action.reset().fadeIn(fadeSeconds.emoteIn).play()
+    this.overlays.add(action)
+    const onDone = (event: { action: AnimationAction }) => {
+      if (event.action !== action)
+        return
+      this.mixer.removeEventListener('finished', onDone)
+      this.overlays.delete(action)
+      action.fadeOut(fadeSeconds.emoteOut)
+      onFinished?.()
+    }
+    this.mixer.addEventListener('finished', onDone)
+  }
+
+  /**
+   * The emote plays on `nodes`. The base clip moves to a copy without those nodes, at the same time,
+   * so the rest of the body keeps breathing and shifting weight. The base comes back at the end.
+   */
+  private playMasked(clip: AnimationClip, nodes: ReadonlySet<string>, onFinished?: () => void) {
+    if (this.emote) {
+      this.emote.fadeOut(fadeSeconds.emoteIn)
+      this.emote = null
+    }
+    const base = this.baseAction()
+    let rest: AnimationAction | null = null
+    if (base) {
+      rest = this.mixer.clipAction(maskClip(base.getClip(), nodes, 'drop'))
+      if (rest !== this.rest) {
+        this.rest?.fadeOut(fadeSeconds.emoteIn)
+        rest.reset()
+        rest.time = base.time
+        rest.setEffectiveWeight(1).play()
+      }
+      base.fadeOut(fadeSeconds.emoteIn)
+    }
+    this.rest = rest
+    const action = this.mixer.clipAction(maskClip(clip, nodes, 'keep'))
+    action.setLoop(LoopOnce, 1)
+    action.clampWhenFinished = true
+    action.timeScale = emoteTimeScale
+    action.reset().fadeIn(fadeSeconds.emoteIn).play()
+    this.emote = action
+    this.emotePlaying = true
+
+    const onDone = (event: { action: AnimationAction }) => {
+      if (event.action !== action)
+        return
+      this.mixer.removeEventListener('finished', onDone)
+      if (this.emote === action) {
+        this.emotePlaying = false
+        this.emote = null
+      }
+      action.fadeOut(fadeSeconds.emoteOut)
+      const resting = this.rest
+      this.rest = null
+      // The base clip continues from the time of its copy, so the body does not jump.
+      const next = this.baseAction()
+      if (next) {
+        // A finished fade-out disables the action. It must run again before it can fade in.
+        next.enabled = true
+        if (resting && resting.getClip().name === `${next.getClip().name}:drop`)
+          next.time = resting.time
+        next.fadeIn(fadeSeconds.emoteOut).play()
+      }
+      resting?.fadeOut(fadeSeconds.emoteOut)
       onFinished?.()
     }
     this.mixer.addEventListener('finished', onDone)

@@ -57,6 +57,8 @@ services:
       # Certificates of scripts/preparar.sh. Without them, airi-web serves HTTP only.
       - ./tls:/etc/airi/tls:ro
       - ./modelos:/usr/share/nginx/models:ro
+      # FBX and VRMA motions. AIRI lists them in the motion library, without an import.
+      - ./animacoes:/usr/share/nginx/animations:ro
 
   alice-companion:
     build:

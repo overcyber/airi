@@ -256,6 +256,13 @@ avatar-model-missing:
   unavailable-title: This model is not on this device
   description: Select a model to show {name} on the Stage.
   select: Select model
+webgl-unavailable:
+  title: The browser does not give WebGL to this page
+  description: The 3D stage needs WebGL. The browser refused it, or lost it. Chrome and Brave block WebGL for a site after the graphics process fails a few times.
+  step-tabs: Close other tabs and windows with 3D content, then click Try again.
+  step-restart: If it fails again, close the browser completely and open it again. The block lasts until a restart.
+  step-gpu: If it still fails, open chrome://gpu and check the WebGL line and the Problems Detected section.
+  retry: Try again
 render-error:
   title: '{renderer} could not render this model'
   description: The model is selected, but the Stage could not display it.

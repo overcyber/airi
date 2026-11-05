@@ -2,7 +2,7 @@ import type { AnimationClip } from 'three'
 
 import type { AvatarAnimatorHooks } from './avatar-animator'
 
-import { AnimationClip as Clip, NumberKeyframeTrack, Object3D } from 'three'
+import { AdditiveAnimationBlendMode, AnimationClip as Clip, NumberKeyframeTrack, Object3D, QuaternionKeyframeTrack } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AvatarAnimator } from './avatar-animator'
@@ -171,5 +171,69 @@ describe('avatarAnimator', () => {
     animator.update(1.1)
 
     expect(hooks.loadClip).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('avatarAnimator layers (V6)', () => {
+  /** A clip with one rotation track for each node, so a mask has tracks to keep and to drop. */
+  function bodyClip(name: string, durationSeconds: number) {
+    return new Clip(name, durationSeconds, ['hips', 'leftHand', 'head'].map(node =>
+      new QuaternionKeyframeTrack(`${node}.quaternion`, [0, durationSeconds], [0, 0, 0, 1, 0, 0.1, 0, 0.995])))
+  }
+
+  function bodyAnimator() {
+    const root = new Object3D()
+    for (const name of ['hips', 'leftHand', 'head']) {
+      const node = new Object3D()
+      node.name = name
+      root.add(node)
+    }
+    const hooks: AvatarAnimatorHooks = {
+      loadClip: vi.fn(),
+      pickIdleUrl: () => null,
+      isTalking: () => false,
+      isThinking: () => false,
+    }
+    return new AvatarAnimator(root, hooks, () => 0)
+  }
+
+  it('plays a masked emote on its nodes while a copy of the idle keeps the other nodes', () => {
+    const animator = bodyAnimator()
+    animator.start(bodyClip('idle', 4))
+    animator.update(1)
+    const idleTime = animator.idle!.time
+
+    animator.playEmote(bodyClip('wave', 1), undefined, { nodes: new Set(['leftHand']) })
+
+    expect(animator.emote!.getClip().tracks.map(track => track.name)).toEqual(['leftHand.quaternion'])
+    expect(animator.rest!.getClip().tracks.map(track => track.name)).toEqual(['hips.quaternion', 'head.quaternion'])
+    expect(animator.rest!.time).toBeCloseTo(idleTime)
+    expect(animator.emotePlaying).toBe(true)
+
+    // The emote ends (1 s at 1.5x), and the idle comes back from the time of its copy.
+    animator.update(1)
+    animator.update(0.5)
+    expect(animator.emotePlaying).toBe(false)
+    expect(animator.rest).toBeNull()
+    expect(animator.idle!.enabled).toBe(true)
+    expect(animator.idle!.isRunning()).toBe(true)
+  })
+
+  it('plays an additive emote over the idle without stopping it', () => {
+    const animator = bodyAnimator()
+    animator.start(bodyClip('idle', 4))
+    animator.update(0.5)
+
+    animator.playEmote(bodyClip('nod', 1), undefined, { additive: true })
+
+    expect(animator.overlays.size).toBe(1)
+    const [overlay] = animator.overlays
+    expect(overlay.blendMode).toBe(AdditiveAnimationBlendMode)
+    expect(animator.emotePlaying).toBe(false)
+    animator.update(0.3)
+    expect(animator.idle!.getEffectiveWeight()).toBe(1)
+
+    animator.update(1)
+    expect(animator.overlays.size).toBe(0)
   })
 })
