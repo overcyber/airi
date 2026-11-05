@@ -328,7 +328,9 @@ Implementado em `deploy/alice/` (guia em `deploy/alice/README.md`). Cobre D02, D
 
 ### Validação
 
-Neste ambiente de nuvem, os passos de build que baixam pacotes não alcançam a internet. Por isso as imagens de teste usaram os estágios finais do Dockerfile com o app e o companion compilados fora do Docker. Na sua máquina, `docker compose up --build` roda o Dockerfile inteiro.
+Primeira versão (commit `1b6de52d`): só os estágios finais foram testados, com o app compilado fora do Docker. O build completo falhou na máquina do responsável: as imagens do Node 26 não têm `corepack` (`corepack: not found`).
+
+Correção (05/11/2026): o pnpm 11.24.0 é instalado pelo `npm`, e o estágio de build usa `node:26-trixie`, que já tem gcc, make, python3 e git (sem `apt-get`). Depois disso, o Dockerfile **inteiro** rodou neste ambiente, para as imagens `web`, `companion` e `tools`. A única diferença foi uma imagem base com o certificado do proxy deste ambiente, passada em `BUILD_IMAGE`. A conversão da Eva também rodou no contêiner `tools`, e gerou o mesmo arquivo (MD5 `2d1f91a343f55667adaa073228f7b4f7`).
 
 | Teste | Resultado |
 | --- | --- |

@@ -7,16 +7,20 @@
 #
 # Build with Compose: `docker compose -f deploy/alice/compose.yaml build`.
 
+# The build image has gcc, make, python3, and git for native modules. The runtime image is small.
+ARG BUILD_IMAGE=node:26-trixie
 ARG NODE_IMAGE=node:26-trixie-slim
 ARG NGINX_IMAGE=nginx:1.30-alpine
 
 # Workspace with the dependencies of the lockfile.
-FROM ${NODE_IMAGE} AS workspace
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential ca-certificates git python3 \
-  && rm -rf /var/lib/apt/lists/*
-RUN corepack enable
+FROM ${BUILD_IMAGE} AS workspace
+# NOTICE:
+# The Node 25 and later images have no corepack, so `corepack enable` fails with "not found".
+# Source: node:26-trixie has /usr/local/bin/npm and no corepack.
+# The version below must match `packageManager` in the root package.json.
+# Removal condition: none while the base image has no corepack.
+ARG PNPM_VERSION=11.24.0
+RUN npm install -g pnpm@${PNPM_VERSION}
 
 WORKDIR /app
 ENV pnpm_config_store_dir=/root/.pnpm-store
@@ -51,9 +55,17 @@ FROM workspace AS companion-build
 RUN pnpm --filter @proj-airi/alice-companion deploy --prod --legacy /out
 
 # Avatar tools: converts the Eva GLB of TalkingHead to VRM (scripts/preparar.sh runs it).
-FROM workspace AS tools
+# Only the converter and tsx, which is a dev dependency, so the deploy keeps dev dependencies.
+FROM workspace AS tools-build
 
-ENTRYPOINT ["pnpm", "-F", "@proj-airi/alice-avatar-tools", "convert"]
+RUN pnpm --filter @proj-airi/alice-avatar-tools deploy --legacy /out
+
+FROM ${NODE_IMAGE} AS tools
+
+WORKDIR /app
+COPY --from=tools-build /out ./
+USER node
+ENTRYPOINT ["node_modules/.bin/tsx", "src/cli.ts"]
 
 FROM ${NGINX_IMAGE} AS web
 

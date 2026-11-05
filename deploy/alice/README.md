@@ -35,14 +35,14 @@ O navegador só libera algumas funções em contexto seguro: HTTPS, ou `http://l
 
 - Docker com Compose v2 (`docker compose version`).
 - `openssl` no host, para os certificados.
-- Internet no primeiro build: o build baixa as dependências e o SDK do Live2D. Depois, o app roda sem internet.
+- Internet no primeiro build: o build baixa as imagens base, o pnpm, as dependências e o SDK do Live2D. Depois, o app roda sem internet.
 - Memória: o build do app usa até 8 GB.
 
 ## Passo a passo
 
 Rode na raiz do repositório.
 
-1. Deixe o repositório `talkinghead-neoalice` ao lado do `airi` (por exemplo `~/talkinghead-neoalice` e `~/airi`), ou o TalkingHead rodando na porta 8081.
+1. Tenha o arquivo `eva2.glb`: o repositório `talkinghead-neoalice` ao lado do `airi` (por exemplo `~/talkinghead-neoalice` e `~/airi`), ou o caminho do arquivo em `EVA_GLB`. Nenhum servidor é necessário.
 2. Rode o script. Ele cria o `.env` com os IPs da máquina (`hostname -I`), os certificados, e a Eva em VRM: se `modelos/` não tem nenhum `.vrm`, ele pega o `avatars/eva2.glb` e converte sozinho em `modelos/eva2.vrm`. Na primeira vez, isso constrói a imagem de ferramentas e leva alguns minutos. Com o GLB em outro lugar: `EVA_GLB=/caminho/eva2.glb deploy/alice/scripts/preparar.sh`.
 
    ```bash
@@ -118,7 +118,7 @@ O TalkingHead e a configuração do espelho não mudam com este Docker, então n
 | --- | --- |
 | `compose.yaml` | Serviços, portas e volumes |
 | `.env.example` | Modelo do `.env` |
-| `docker/Dockerfile` | Imagens `web` e `companion` |
+| `docker/Dockerfile` | Imagens `web`, `companion` e `tools` (conversor da Eva) |
 | `docker/nginx/templates/default.conf.template` | Nginx: SPA, HTTPS, proxies e modelos |
 | `docker/nginx/40-airi-setup.sh` | Ajustes do Nginx na partida |
 | `docker/companion-entrypoint.sh` | Partida do companion |
