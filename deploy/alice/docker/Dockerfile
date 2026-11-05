@@ -17,9 +17,9 @@ FROM ${BUILD_IMAGE} AS workspace
 # NOTICE:
 # The Node 25 and later images have no corepack, so `corepack enable` fails with "not found".
 # Source: node:26-trixie has /usr/local/bin/npm and no corepack.
-# The version below must match `packageManager` in the root package.json.
 # Removal condition: none while the base image has no corepack.
-ARG PNPM_VERSION=11.24.0
+# The build passed with pnpm 12.16.1 and with 11.24.0 (`packageManager` of the root package.json).
+ARG PNPM_VERSION=12.16.1
 RUN npm install -g pnpm@${PNPM_VERSION}
 
 WORKDIR /app
@@ -52,13 +52,18 @@ RUN pnpm -F @proj-airi/stage-web run build
 # Companion with its production dependencies only.
 FROM workspace AS companion-build
 
-RUN pnpm --filter @proj-airi/alice-companion deploy --prod --legacy /out
+# NOTICE:
+# A deploy installs one package, so the workspace patches of other packages are unused, and
+# pnpm stops with ERR_PNPM_UNUSED_PATCH. Source: patchedDependencies in pnpm-workspace.yaml.
+# Removal condition: pnpm deploy ignores patches of packages outside the deployed package.
+
+RUN pnpm --config.allow-unused-patches=true --filter @proj-airi/alice-companion deploy --prod --legacy /out
 
 # Avatar tools: converts the Eva GLB of TalkingHead to VRM (scripts/preparar.sh runs it).
 # Only the converter and tsx, which is a dev dependency, so the deploy keeps dev dependencies.
 FROM workspace AS tools-build
 
-RUN pnpm --filter @proj-airi/alice-avatar-tools deploy --legacy /out
+RUN pnpm --config.allow-unused-patches=true --filter @proj-airi/alice-avatar-tools deploy --legacy /out
 
 FROM ${NODE_IMAGE} AS tools
 
