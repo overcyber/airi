@@ -25,6 +25,36 @@ Este kit testa o `stage-web` real com a Neptuna. Ele não precisa de LLM nem de 
 | A fala chamou o TTS | O servidor recebeu `/audio/speech` |
 | Sem erro de página | Sem `PAGEERROR` |
 
+## Correções após falha real em 05/11/2026
+
+O log do usuário apresentou:
+
+```text
+[plugin:hfup:spacecard-readme] context method emitFile() is not supported in serve mode
+[plugin:hfup:lfs-gitattributes] context method emitFile() is not supported in serve mode
+ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL
+FAILED page.$eval: Execution context was destroyed, most likely because of a navigation
+```
+
+**Diagnóstico baseado em código:**
+
+1. Os dois plugins `hfup` foram registrados no modo dev, embora gerem artefatos de *build*. O `vite.config.ts` agora registra `LFS` e `SpaceCard` somente quando `command === 'build'`.
+2. O teste aguardava uma contagem de botões por uma chamada de avaliação de contexto; a navegação/HMR pode invalidar o contexto do Playwright. Além disso, uma versão do teste usava `$eval` em vez de `$eval` e tentava obter `length` de um único botão, o que é incorreto. O código agora aguarda diretamente o botão **Select model** por `locator.waitFor` e registra navegações.
+3. O executor encerrava o wrapper `pnpm recursive exec` no cleanup. Isso pode produzir `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL` **mesmo após Vite ter iniciado normalmente**. O executor passou a iniciar o CLI Vite diretamente com o Node, evitando mensagens artificiais por SIGTERM.
+4. `run-local.cjs v1v2` agora realiza `smoke` no Chromium **antes de importar o modelo**. Se o app não carregar, a falha será registrada em `smoke-result.json`; se a rota do seletor falhar, `failed.png` e `console.txt` mostram a situação.
+
+**Validação:** sintaxe dos quatro arquivos `.cjs` conferida. A execução completa com Vite/Chromium no computador do usuário ainda não foi efetuada por esta revisão; não considerar os cenários aprovados até executar os comandos abaixo.
+
+```bash
+cd /mnt/dockers/airi
+node docs/alice-motion-engine/teste-app/run-local.cjs smoke ./saida-smoke-corrigido
+node docs/alice-motion-engine/teste-app/run-local.cjs v1v2 ./saida-v1v2-corrigido
+```
+
+O script foi desenvolvido para não alterar o broker MQTT nem a NeoAlice. Se houve mudanças locais não commitadas, **não substitua arquivos cegamente ao trocar de branch**. Use um worktree isolado ou confira a diferença do PR antes de aplicar.
+
+---
+
 ## Diagnóstico de inicialização (Vite vs. aplicativo vs. teste)
 
 O comando `pnpm -F @proj-airi/stage-web exec vite --port 5173 --host 0.0.0.0` **não termina sozinho**: quando mostra `VITE ready`, o servidor está escutando. Isso não confirma que o AIRI renderizou no navegador nem inicia o servidor falso de IA e o Playwright. As mensagens UnoCSS `unmatched utility` são avisos de estilo, não erros fatais do processo.
