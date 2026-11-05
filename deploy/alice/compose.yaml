@@ -106,7 +106,8 @@ services:
   mqtt-bridge:
     profiles: [bridge]
     image: eclipse-mosquitto:2
-    restart: unless-stopped
+    # A configuration error, for example an empty NEOALICE_MQTT_HOST, stops the bridge after 3 tries.
+    restart: on-failure:3
     entrypoint: [/bin/sh, /bridge/start.sh]
     environment:
       NEOALICE_MQTT_HOST: ${NEOALICE_MQTT_HOST:-}

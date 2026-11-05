@@ -69,9 +69,15 @@ ALICE_COMPANION_MQTT_URL=mqtt://mqtt-bridge:1883
 
 - `AIRI_STT_TRANSCRIBE_PATH=/inference`: um servidor Whisper sem a API da OpenAI recebe o áudio em `/inference`. O AIRI envia o campo `file` e lê o campo `text` da resposta, os mesmos desse servidor.
 - Um broker com listener WebSocket (o Mosquitto da NeoAlice costuma ter um na porta 1884) não precisa da ponte: use `AIRI_MQTT_WS_UPSTREAM=192.0.2.14:1884`.
-- O perfil `bridge` é para um broker da NeoAlice sem listener WebSocket. Ele só lê os tópicos `neoalice/#`. Nada que o AIRI ou o companion publicam chega ao broker da NeoAlice.
+- O perfil `bridge` é só para um broker da NeoAlice sem listener WebSocket. Ele exige `NEOALICE_MQTT_HOST` no `.env`. Com a porta 1884, suba sem `--profile bridge`. Ele só lê os tópicos `neoalice/#`. Nada que o AIRI ou o companion publicam chega ao broker da NeoAlice.
 
-Depois de mudar o `.env`:
+Depois de mudar o `.env`, com o WebSocket do broker (porta 1884):
+
+```bash
+docker compose -f deploy/alice/compose.yaml up -d --build
+```
+
+Sem WebSocket no broker, com `NEOALICE_MQTT_HOST` e `AIRI_MQTT_WS_UPSTREAM=mqtt-bridge:9001`:
 
 ```bash
 docker compose -f deploy/alice/compose.yaml --profile bridge up -d --build
