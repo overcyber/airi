@@ -1,0 +1,109 @@
+# airi-web: the AIRI stage-web build, with same-origin proxies for the services that the browser calls.
+#
+# The browser blocks http:// and ws:// calls from an https:// page (mixed content), and other origins
+# need CORS. So the broker, the LLM, and the TTS are reached through this server, on the same address:
+#   /mqtt         WebSocket MQTT broker     (AIRI_MQTT_WS_UPSTREAM, host:port)
+#   /proxy/llm/   OpenAI compatible LLM     (AIRI_LLM_UPSTREAM, URL)
+#   /proxy/tts/   OpenAI compatible TTS     (AIRI_TTS_UPSTREAM, URL)
+#   /proxy/nvidia/ NVIDIA NIM cloud API     (integrate.api.nvidia.com)
+#   /models/      VRM files of deploy/alice/modelos, with a JSON list at /models/
+
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+server {
+  listen 80;
+  listen 443 ssl;
+  http2 on;
+
+  ssl_certificate     /etc/airi/tls/server.crt;
+  ssl_certificate_key /etc/airi/tls/server.key;
+  ssl_protocols       TLSv1.2 TLSv1.3;
+
+  # Upstream names resolve at request time, so Nginx starts while a service is down.
+  # 127.0.0.11 is the DNS of Docker. 40-airi-setup.sh replaces host.docker.internal with its IP.
+  resolver 127.0.0.11 valid=30s ipv6=off;
+
+  root  /usr/share/nginx/html;
+  index index.html;
+
+  # Imported models and speech audio can be large.
+  client_max_body_size 200m;
+
+  location = /healthz {
+    access_log off;
+    default_type text/plain;
+    return 200 'ok';
+  }
+
+  # The local CA of scripts/preparar.sh. Install it on a client device to trust the HTTPS address.
+  location = /airi-local-ca.crt {
+    default_type application/x-x509-ca-cert;
+    alias /etc/airi/tls/ca.crt;
+  }
+
+  location /mqtt {
+    set $airi_mqtt "${AIRI_MQTT_WS_UPSTREAM}";
+    proxy_pass http://$airi_mqtt;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_read_timeout 1h;
+    proxy_send_timeout 1h;
+  }
+
+  # The upstream URLs have no path: the path after /proxy/llm/ goes to the upstream as it is.
+  location /proxy/llm/ {
+    set $airi_llm "${AIRI_LLM_UPSTREAM}";
+    rewrite ^/proxy/llm/(.*)$ /$1 break;
+    proxy_pass $airi_llm;
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    # Streaming responses go to the browser as they arrive.
+    proxy_buffering off;
+    proxy_read_timeout 600s;
+  }
+
+  location /proxy/tts/ {
+    set $airi_tts "${AIRI_TTS_UPSTREAM}";
+    rewrite ^/proxy/tts/(.*)$ /$1 break;
+    proxy_pass $airi_tts;
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    proxy_buffering off;
+    proxy_read_timeout 300s;
+  }
+
+  # NVIDIA NIM (build.nvidia.com). It needs internet only when a request uses it.
+  location /proxy/nvidia/ {
+    set $nvidia_upstream https://integrate.api.nvidia.com;
+    rewrite ^/proxy/nvidia/(.*)$ /$1 break;
+    proxy_pass $nvidia_upstream;
+    proxy_http_version 1.1;
+    proxy_ssl_server_name on;
+    proxy_set_header Host integrate.api.nvidia.com;
+    proxy_buffering off;
+    proxy_read_timeout 600s;
+  }
+
+  location /models/ {
+    alias /usr/share/nginx/models/;
+    autoindex on;
+    autoindex_format json;
+    add_header Cache-Control "no-cache";
+  }
+
+  location /assets/ {
+    try_files $uri =404;
+    add_header Cache-Control "public, max-age=31536000, immutable";
+  }
+
+  # Single page app: every other path loads index.html. index.html itself is never cached.
+  location / {
+    try_files $uri $uri/ /index.html;
+    add_header Cache-Control "no-cache";
+  }
+}

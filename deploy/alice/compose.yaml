@@ -1,0 +1,73 @@
+# Alice deployment of AIRI (Plan 05). Run from the root of the repository:
+#
+#   deploy/alice/scripts/preparar.sh
+#   docker compose -f deploy/alice/compose.yaml up -d --build
+#
+# Profile `broker`: a test Mosquitto, only for a machine without the NeoAlice broker.
+#   docker compose -f deploy/alice/compose.yaml --profile broker up -d --build
+#
+# The TalkingHead server (port 8081) and the NeoAlice services do not change.
+
+name: alice-airi
+
+services:
+  airi-web:
+    build:
+      context: ../..
+      dockerfile: deploy/alice/docker/Dockerfile
+      target: web
+    image: alice/airi-web:local
+    restart: unless-stopped
+    ports:
+      # All addresses of the host, so any IP of the machine opens the app.
+      - ${AIRI_HTTP_PORT:-4173}:80
+      - ${AIRI_HTTPS_PORT:-4443}:443
+    environment:
+      AIRI_MQTT_WS_UPSTREAM: ${AIRI_MQTT_WS_UPSTREAM:-host.docker.internal:9001}
+      AIRI_LLM_UPSTREAM: ${AIRI_LLM_UPSTREAM:-http://host.docker.internal:11434}
+      AIRI_TTS_UPSTREAM: ${AIRI_TTS_UPSTREAM:-http://host.docker.internal:8880}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      # Certificates of scripts/preparar.sh. Without them, airi-web serves HTTP only.
+      - ./tls:/etc/airi/tls:ro
+      - ./modelos:/usr/share/nginx/models:ro
+
+  alice-companion:
+    build:
+      context: ../..
+      dockerfile: deploy/alice/docker/Dockerfile
+      target: companion
+    image: alice/alice-companion:local
+    restart: unless-stopped
+    init: true
+    # One instance per data volume: two would split the authority of the state.
+    deploy:
+      replicas: 1
+    environment:
+      ALICE_COMPANION_MQTT_URL: ${ALICE_COMPANION_MQTT_URL:-mqtt://host.docker.internal:1883}
+      ALICE_COMPANION_MQTT_USERNAME: ${ALICE_COMPANION_MQTT_USERNAME:-}
+      ALICE_COMPANION_MQTT_PASSWORD: ${ALICE_COMPANION_MQTT_PASSWORD:-}
+      ALICE_COMPANION_INPUT_SITES: ${ALICE_COMPANION_INPUT_SITES:-}
+      ALICE_COMPANION_PUBLISH_SITE: ${ALICE_COMPANION_PUBLISH_SITE:-companion}
+      ALICE_COMPANION_PERSONA_ID: ${ALICE_COMPANION_PERSONA_ID:-alice}
+      ALICE_COMPANION_OWNER_PROFILE_ID: ${ALICE_COMPANION_OWNER_PROFILE_ID:-default}
+      ALICE_COMPANION_TIME_ZONE: ${ALICE_COMPANION_TIME_ZONE:-America/Sao_Paulo}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - alice-companion-data:/data
+
+  mosquitto:
+    profiles: [broker]
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      # Anonymous test broker: only this machine reaches it directly. Browsers use /mqtt of airi-web.
+      - 127.0.0.1:${TEST_MQTT_PORT:-11883}:1883
+      - 127.0.0.1:${TEST_MQTT_WS_PORT:-19001}:9001
+    volumes:
+      - ./mqtt-test/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+volumes:
+  alice-companion-data:

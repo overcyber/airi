@@ -15,6 +15,8 @@ const AIRI_DIR = process.env.AIRI_DIR ?? path.resolve(__dirname, '..', '..', '..
 const NEPTUNA = process.env.VRM_FILE ?? path.join(AIRI_DIR, 'packages/alice-motion/fixtures/vrm/neptuna/neptuna.vrm')
 const VRMA = process.env.VRMA_FILE ?? path.join(OUT, 'Happy Spin.vrma')
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:5173'
+// The browser calls this URL, so it must work from the browser, not only from this process.
+const FAKE_BASE_URL = process.env.FAKE_OPENAI_BASE_URL ?? 'http://127.0.0.1:8091/v1/'
 const FAKE_LOG = process.env.FAKE_LOG ?? path.join(os.tmpdir(), 'airi-fake-openai-requests.jsonl')
 const VIDEO = Boolean(process.env.VIDEO)
 
@@ -51,8 +53,8 @@ async function waitForButtons(page, minimum) {
 async function configureProviders(page) {
   // The first load of the Vite dev server compiles the app and can take minutes.
   await page.goto(`${BASE}/`, { timeout: 300_000 })
-  await page.evaluate(() => {
-    const config = { apiKey: 'sk-test', baseUrl: 'http://127.0.0.1:8091/v1/' }
+  await page.evaluate((baseUrl) => {
+    const config = { apiKey: 'sk-test', baseUrl }
     const llm = { id: 'openai-compatible', definitionId: 'openai-compatible', config, status: 'configured', configuredBy: 'user' }
     const tts = { id: 'openai-compatible-audio-speech', definitionId: 'openai-compatible-audio-speech', config, status: 'configured', configuredBy: 'user' }
     localStorage.setItem('onboarding/completed', 'true')
@@ -64,7 +66,7 @@ async function configureProviders(page) {
     localStorage.setItem('settings/speech/active-provider', tts.id)
     localStorage.setItem('settings/speech/active-model', 'tts-1')
     localStorage.setItem('settings/speech/voice', 'alloy')
-  })
+  }, FAKE_BASE_URL)
 }
 
 async function importNeptuna(page) {

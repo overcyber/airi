@@ -9,7 +9,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
-import { useNeoAliceBridgeStore } from './neoalice-bridge'
+import { defaultNeoAliceBrokerUrl, useNeoAliceBridgeStore } from './neoalice-bridge'
 
 /** A stand-in MQTT client. `publish` exists only so the test can prove that the bridge never calls it. */
 class FakeClient extends EventEmitter {
@@ -54,6 +54,17 @@ async function connectedBridge() {
   client.emit('connect')
   return { bridge, release, client }
 }
+
+describe('defaultNeoAliceBrokerUrl', () => {
+  it('uses the /mqtt path of the page address, with wss on an HTTPS page', () => {
+    expect(defaultNeoAliceBrokerUrl({ protocol: 'https:', host: '192.0.2.10:4443' })).toBe('wss://192.0.2.10:4443/mqtt')
+    expect(defaultNeoAliceBrokerUrl({ protocol: 'http:', host: 'localhost:4173' })).toBe('ws://localhost:4173/mqtt')
+  })
+
+  it('falls back to a broker on this machine outside a web page', () => {
+    expect(defaultNeoAliceBrokerUrl({ protocol: 'file:', host: '' })).toBe('ws://localhost:9001')
+  })
+})
 
 describe('useNeoAliceBridgeStore', () => {
   beforeEach(() => {

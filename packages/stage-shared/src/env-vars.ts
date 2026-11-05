@@ -20,6 +20,18 @@ export function isOfflineBuild(): boolean {
   return isEnvTruthy(import.meta.env.VITE_AIRI_OFFLINE)
 }
 
+/**
+ * True when the server of the page forwards the provider paths, with `VITE_AIRI_PROXY=true`
+ * or in the dev server.
+ *
+ * The Alice deployment (`deploy/alice`) and the Vite dev server forward `/proxy/nvidia/`,
+ * `/proxy/llm/`, `/proxy/tts/`, and `/mqtt`. So the web app can use providers that block
+ * browser calls (CORS), for example NVIDIA NIM.
+ */
+export function hasSameOriginProxy(): boolean {
+  return isEnvTruthy(import.meta.env.VITE_AIRI_PROXY) || import.meta.env.DEV === true
+}
+
 export function isFluxPurchaseDisabled(): boolean {
   return isEnvTruthy(import.meta.env.VITE_DISABLE_FLUX_PURCHASE)
 }

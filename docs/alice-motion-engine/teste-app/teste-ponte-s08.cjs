@@ -19,6 +19,8 @@ const BRIDGE_WS_URL = process.env.BRIDGE_WS_URL ?? 'ws://127.0.0.1:9001'
 const PUBLISH_URL = process.env.PUBLISH_URL ?? 'mqtt://127.0.0.1:1883'
 /** A test site, so a real NeoAlice and a real mirror on the same broker ignore these messages. */
 const SITE = process.env.BRIDGE_SITE ?? 'airi-test'
+// The browser calls this URL, so it must work from the browser, not only from this process.
+const FAKE_BASE_URL = process.env.FAKE_OPENAI_BASE_URL ?? 'http://127.0.0.1:8091/v1/'
 const FAKE_LOG = process.env.FAKE_LOG ?? path.join(os.tmpdir(), 'airi-fake-openai-requests.jsonl')
 const VIDEO = Boolean(process.env.VIDEO)
 // The mqtt package of the alice-companion service, so the kit needs no extra install.
@@ -72,8 +74,8 @@ function toneWavBase64(seconds) {
 async function configure(page) {
   // The first load of the Vite dev server compiles the app and can take minutes.
   await page.goto(`${BASE}/`, { timeout: 300_000 })
-  await page.evaluate(({ wsUrl, site }) => {
-    const config = { apiKey: 'sk-test', baseUrl: 'http://127.0.0.1:8091/v1/' }
+  await page.evaluate(({ wsUrl, site, baseUrl }) => {
+    const config = { apiKey: 'sk-test', baseUrl }
     const llm = { id: 'openai-compatible', definitionId: 'openai-compatible', config, status: 'configured', configuredBy: 'user' }
     const tts = { id: 'openai-compatible-audio-speech', definitionId: 'openai-compatible-audio-speech', config, status: 'configured', configuredBy: 'user' }
     localStorage.setItem('onboarding/completed', 'true')
@@ -89,7 +91,7 @@ async function configure(page) {
     localStorage.setItem('settings/neoalice-bridge/broker-url', wsUrl)
     localStorage.setItem('settings/neoalice-bridge/site', site)
     localStorage.setItem('settings/neoalice-bridge/speech-mode', 'airi-voice')
-  }, { wsUrl: BRIDGE_WS_URL, site: SITE })
+  }, { wsUrl: BRIDGE_WS_URL, site: SITE, baseUrl: FAKE_BASE_URL })
 }
 
 async function importNeptuna(page) {

@@ -1183,7 +1183,7 @@ pages:
       enable: Enable the NeoAlice bridge
       enable-description: Connect to the broker while the stage is open
       broker-url: Broker WebSocket URL
-      broker-url-description: The broker needs a WebSocket listener, for example Mosquitto with "listener 9001" and "protocol websockets"
+      broker-url-description: The default is the /mqtt path of this page, which the Alice Docker server and the dev server forward to the broker. A broker URL needs a WebSocket listener, for example Mosquitto with "listener 9001" and "protocol websockets"
       site: Site
       site-description: The NeoAlice site to follow. It is the third part of the topic, for example mirror in neoalice/v1/mirror/cmd/tts/say
       accept-any-site: Follow every site

@@ -115,9 +115,10 @@ Falta testar o app desktop. Lá, o chat e o palco podem rodar em janelas diferen
 
 Concluídas em 05/11/2026: contratos v1 (ADR aprovado), S03 (director), S04 (scheduler), S08 (ponte MQTT), V3 (corpo por humor), V4 (Eva em VRM) e V5 (FBX no VRM).
 
-1. Rodar o kit `teste-app/` na sua máquina, com o seu LLM, o Kokoro e o broker de verdade (`PROMPT_AGENTE_LOCAL_TESTE_NOVO_AIRI.md`).
-2. Importar os FBX do TalkingHead na tela de movimentos e conferir cada um na Eva.
-3. V6: máscaras por osso e mistura aditiva no VRM (P3), para um gesto de braço não parar o idle.
-4. S09: marcações de tempo do TTS (Kokoro), prosódia e física.
-5. S10 a S14: painel do companion, memória, eventos, proatividade e editor do catálogo.
-6. S16: troca do avatar do espelho, só depois de o novo avatar estar aprovado. A NeoAlice não muda antes disso.
+1. Subir o Docker (`deploy/alice/README.md`) e abrir `https://<ip>:4443`. O Docker resolve o acesso por IP, a Eva em VRM pela pasta `modelos/` e o NVIDIA NIM na versão Web (Planejamento 05, seção 15).
+2. Rodar o kit `teste-app/` contra o Docker, e depois com o seu LLM, o Kokoro e o broker de verdade.
+3. Importar os FBX do TalkingHead na tela de movimentos e conferir cada um na Eva.
+4. V6: máscaras por osso e mistura aditiva no VRM (P3), para um gesto de braço não parar o idle.
+5. S09: marcações de tempo do TTS (Kokoro), prosódia e física.
+6. S10 a S14: painel do companion, memória, eventos, proatividade e editor do catálogo.
+7. S16: troca do avatar do espelho, só depois de o novo avatar estar aprovado. A NeoAlice não muda antes disso.

@@ -9,3 +9,8 @@ airi-docs
 .worktrees
 **/.turbo
 .vishot
+
+# Private files of the Alice deployment: models and secrets never go into an image.
+deploy/alice/modelos
+deploy/alice/.env
+deploy/alice/tls

@@ -51,6 +51,20 @@ export type NeoAliceSpeechMode = 'airi-voice' | 'neoalice-audio' | 'silent'
 export type NeoAliceBridgeStatus = 'off' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
 /**
+ * Default broker URL: the `/mqtt` path of the page address.
+ *
+ * The Alice deployment (`airi-web` in `deploy/alice`) and the Vite dev server forward `/mqtt` to the
+ * WebSocket listener of the broker. So the bridge works on any address of the machine, and an HTTPS
+ * page uses `wss`, which the browser requires. Outside a web page, for example in Electron, the
+ * default is a broker on this machine.
+ */
+export function defaultNeoAliceBrokerUrl(page: Pick<Location, 'protocol' | 'host'> | undefined = globalThis.location) {
+  if (!page || !/^https?:$/.test(page.protocol) || !page.host)
+    return 'ws://localhost:9001'
+  return `${page.protocol === 'https:' ? 'wss' : 'ws'}://${page.host}/mqtt`
+}
+
+/**
  * NeoAlice bridge, sprint S08.
  *
  * A read-only MQTT client over WebSocket. It subscribes to the topics of one NeoAlice site and of the
@@ -62,7 +76,7 @@ export type NeoAliceBridgeStatus = 'off' | 'connecting' | 'connected' | 'reconne
 export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
   const enabled = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/enabled', false)
   /** WebSocket URL of the broker, for example `ws://192.0.2.10:9001`. Mosquitto needs a `websockets` listener. */
-  const brokerUrl = useLocalStorageManualReset<string>('settings/neoalice-bridge/broker-url', 'ws://localhost:9001')
+  const brokerUrl = useLocalStorageManualReset<string>('settings/neoalice-bridge/broker-url', defaultNeoAliceBrokerUrl())
   const site = useLocalStorageManualReset<string>('settings/neoalice-bridge/site', '')
   const acceptAnySite = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/accept-any-site', false)
   const companionSite = useLocalStorageManualReset<string>('settings/neoalice-bridge/companion-site', 'companion')

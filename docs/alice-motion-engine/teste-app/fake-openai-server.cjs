@@ -1,7 +1,8 @@
 // Fake OpenAI-compatible server for the in-app test of V1 and V2.
 // It streams chat replies with ACT tokens and answers TTS requests with a tone.
 // Usage: node fake-openai-server.cjs
-// It listens on 127.0.0.1:8091 and logs each request to FAKE_LOG or to the temp folder.
+// It listens on FAKE_HOST:FAKE_PORT (default 127.0.0.1:8091) and logs each request to FAKE_LOG or to the temp folder.
+// Use FAKE_HOST=0.0.0.0 only on a test network: the server has no authentication.
 const { Buffer } = require('node:buffer')
 const fs = require('node:fs')
 const http = require('node:http')
@@ -115,6 +116,8 @@ const server = http.createServer((req, res) => {
   })
 })
 
-server.listen(8091, '127.0.0.1', () => {
-  console.info(`fake OpenAI server on 127.0.0.1:8091, log: ${logFile}`)
+const host = process.env.FAKE_HOST ?? '127.0.0.1'
+const port = Number(process.env.FAKE_PORT ?? 8091)
+server.listen(port, host, () => {
+  console.info(`fake OpenAI server on ${host}:${port}, log: ${logFile}`)
 })

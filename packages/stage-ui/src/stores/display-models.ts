@@ -6,6 +6,8 @@ import { nanoid } from 'nanoid'
 import { defineStore, getActivePinia } from 'pinia'
 import { computed, getCurrentScope, ref, watch } from 'vue'
 
+import * as v from 'valibot'
+
 import { displayModelsRepo } from '../database/repos/display-models.repo'
 import { downloadVerified } from '../libs/file-transfer/transfer'
 import { requestDisplayModelDownload } from '../services/display-model-sync'
@@ -70,6 +72,52 @@ const displayModelsPresets: DisplayModel[] = [
   { id: 'preset-vrm-2', format: DisplayModelFormat.VRM, type: 'url', url: presetVrmAvatarBUrl, name: 'AvatarSample_B', previewImage: presetVrmAvatarBPreview, importedAt: 1733113886840 },
 ]
 
+const ServerModelListSchema = v.array(v.object({
+  name: v.string(),
+  type: v.string(),
+  mtime: v.optional(v.string()),
+}))
+
+/**
+ * VRM models that the server of the page lists at `/models/`.
+ *
+ * The Alice deployment (`deploy/alice`) serves its models folder there, with the JSON list of
+ * the Nginx autoindex. Each `.vrm` file becomes a URL model, like the presets. So every browser,
+ * on every address, sees the same models without an import.
+ *
+ * Returns an empty list when the page is not served over HTTP, or the server has no such list.
+ * The Vite dev server answers `/models/` with the HTML of the app, which is not a list.
+ */
+export async function fetchServerDisplayModels(
+  page: Pick<Location, 'origin' | 'protocol'> | undefined = globalThis.location,
+  fetchList: typeof fetch = globalThis.fetch,
+): Promise<DisplayModelURL[]> {
+  if (!page || !/^https?:$/.test(page.protocol) || typeof fetchList !== 'function')
+    return []
+  try {
+    const response = await fetchList(new URL('/models/', page.origin).href, { headers: { Accept: 'application/json' } })
+    if (!response.ok || !response.headers.get('content-type')?.includes('json'))
+      return []
+    const parsed = v.safeParse(ServerModelListSchema, await response.json())
+    if (!parsed.success)
+      return []
+    return parsed.output
+      .filter(entry => entry.type === 'file' && /\.vrm$/i.test(entry.name))
+      .map(entry => ({
+        id: `server-vrm-${entry.name}`,
+        format: DisplayModelFormat.VRM,
+        type: 'url' as const,
+        url: new URL(`/models/${encodeURIComponent(entry.name)}`, page.origin).href,
+        name: entry.name.replace(/\.vrm$/i, ''),
+        importedAt: Date.parse(entry.mtime ?? '') || 0,
+      }))
+  }
+  catch (error) {
+    console.warn('[display-models] the server model list did not load:', errorMessageFrom(error) ?? error)
+    return []
+  }
+}
+
 export const useDisplayModelsStore = defineStore('display-models', () => {
   const displayModels = ref<DisplayModel[]>([])
 
@@ -112,7 +160,7 @@ export const useDisplayModelsStore = defineStore('display-models', () => {
         await until(displayModelsFromIndexedDBLoading).toBe(false)
 
         displayModelsFromIndexedDBLoading.value = true
-        const models = [...displayModelsPresets]
+        const models = [...displayModelsPresets, ...await fetchServerDisplayModels()]
 
         try {
           for (const model of await displayModelsRepo.list()) {

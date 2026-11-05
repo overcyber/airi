@@ -1,6 +1,6 @@
 import type { ChatRequestOptions } from '../../types'
 
-import { isStageTamagotchi } from '@proj-airi/stage-shared'
+import { hasSameOriginProxy, isStageTamagotchi } from '@proj-airi/stage-shared'
 import { createOpenAI } from '@xsai-ext/providers/create'
 import { z } from 'zod'
 
@@ -8,13 +8,25 @@ import { ProviderValidationCheck } from '../../types'
 import { createOpenAICompatibleValidators } from '../../validators'
 import { defineProvider } from '../registry'
 
+/**
+ * The web app reaches NVIDIA through `/proxy/nvidia/` of its own server, because the NVIDIA API
+ * blocks browser calls (CORS). The desktop app calls the API directly.
+ */
+function usesSameOriginProxy() {
+  return !isStageTamagotchi() && hasSameOriginProxy() && /^https?:$/.test(globalThis.location?.protocol ?? '')
+}
+
+const nvidiaDefaultBaseUrl = usesSameOriginProxy()
+  ? new URL('/proxy/nvidia/v1/', globalThis.location.origin).href
+  : 'https://integrate.api.nvidia.com/v1/'
+
 const nvidiaConfigSchema = z.object({
   apiKey: z
     .string('API Key'),
   baseUrl: z
     .string('Base URL')
     .optional()
-    .default('https://integrate.api.nvidia.com/v1/'),
+    .default(nvidiaDefaultBaseUrl),
 })
 
 type NvidiaConfig = z.input<typeof nvidiaConfigSchema>
@@ -28,7 +40,7 @@ export const providerNvidia = defineProvider<NvidiaConfig, 'nvidia'>({
   tasks: ['chat'],
   capabilities: { chat: { reasoning: { modes: ['enabled', 'disabled'] } } },
   icon: 'i-simple-icons:nvidia',
-  isAvailableBy: isStageTamagotchi,
+  isAvailableBy: () => isStageTamagotchi() || usesSameOriginProxy(),
 
   createProviderConfig: ({ t }) => nvidiaConfigSchema.extend({
     apiKey: nvidiaConfigSchema.shape.apiKey.meta({

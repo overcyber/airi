@@ -1,0 +1,4 @@
+# Private models stay on the machine (license of the avatar). Only this file and the README are in git.
+*
+!.gitignore
+!README.md

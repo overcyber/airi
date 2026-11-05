@@ -97,6 +97,14 @@ export default defineConfig({
         `${resolve(join(import.meta.dirname, '..', '..', 'packages', 'stage-pages', 'src'))}/*.vue`,
       ],
     },
+    // The same paths as `airi-web` of `deploy/alice`, so a page on any address of the dev server
+    // reaches the broker, the LLM, and the TTS without mixed content or CORS.
+    proxy: {
+      '/mqtt': { target: env.AIRI_MQTT_WS_TARGET ?? 'ws://127.0.0.1:9001', ws: true },
+      '/proxy/llm': { target: env.AIRI_LLM_TARGET ?? 'http://127.0.0.1:11434', changeOrigin: true, rewrite: path => path.replace(/^\/proxy\/llm/, '') },
+      '/proxy/tts': { target: env.AIRI_TTS_TARGET ?? 'http://127.0.0.1:8880', changeOrigin: true, rewrite: path => path.replace(/^\/proxy\/tts/, '') },
+      '/proxy/nvidia': { target: 'https://integrate.api.nvidia.com', changeOrigin: true, rewrite: path => path.replace(/^\/proxy\/nvidia/, '') },
+    },
   },
   build: {
     manifest: true,

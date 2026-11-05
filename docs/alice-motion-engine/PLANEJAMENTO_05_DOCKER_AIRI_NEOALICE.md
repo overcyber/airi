@@ -1,9 +1,9 @@
 # Plano 05: Docker completo do AIRI/NeoAlice
 
-**Repositório:** overcyber/airi  
-**Data:** 2026-11-05  
-**Natureza:** auditoria e projeto de implantação; nenhum container executado nesta revisão.  
-**Condição:** criar arquivo independente, preservando planos 01 a 04, códigos atuais, backend NeoAlice e produção TalkingHead.  
+**Repositório:** overcyber/airi
+**Data:** 2026-11-05
+**Natureza:** auditoria e projeto de implantação; nenhum container executado nesta revisão.
+**Condição:** criar arquivo independente, preservando planos 01 a 04, códigos atuais, backend NeoAlice e produção TalkingHead.
 **Referência:** https://github.com/overcyber/talkinghead-neoalice/blob/main/README-Docker.md
 
 ## 1. Auditoria cruzada dos planos
@@ -121,14 +121,14 @@ services:
       context: ../..
       dockerfile: deploy/alice/docker/Dockerfile.web
       args:
-        VITE_AIRI_OFFLINE: "true"
-        VITE_ENABLE_ANALYTICS: "false"
+        VITE_AIRI_OFFLINE: 'true'
+        VITE_ENABLE_ANALYTICS: 'false'
     image: neoalice/airi-web:planned
     restart: unless-stopped
     ports:
-      - "127.0.0.1:4173:80"
+      - '127.0.0.1:4173:80'
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1/healthz || exit 1']
       interval: 30s
       timeout: 5s
       retries: 3
@@ -146,7 +146,7 @@ services:
       - path: ./.env.private
         required: false
     environment:
-      ALICE_COMPANION_MQTT_URL: "mqtt://HOST_DO_BROKER:1883"
+      ALICE_COMPANION_MQTT_URL: 'mqtt://HOST_DO_BROKER:1883'
       ALICE_COMPANION_DATA_DIR: /data
       ALICE_COMPANION_PERSONA_ID: alice
       ALICE_COMPANION_OWNER_PROFILE_ID: default
@@ -310,3 +310,34 @@ Isso alcança a mesma facilidade operacional do Docker TalkingHead, com isolamen
 - https://github.com/overcyber/talkinghead-neoalice/blob/main/docker-compose.yml
 - https://docs.docker.com/compose/how-tos/gpu-support/
 - https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia
+
+## 15. Estado da implementação (05/11/2026)
+
+Implementado em `deploy/alice/` (guia em `deploy/alice/README.md`). Cobre D02, D03, D04 e parte da D05.
+
+### Diagnóstico que orientou a implementação
+
+| Problema | Causa | Correção |
+| --- | --- | --- |
+| O app não inicia aberto por IP | Fora de `localhost`, `http://` não é contexto seguro. O navegador desliga `navigator.locks`, `crypto.randomUUID`, OPFS e o microfone, e o app quebra na partida (`Cannot read properties of undefined (reading 'request')`). Também acontece no AIRI original. | HTTPS na porta 4443, com certificado de uma autoridade local que cobre todos os IPs do host (`scripts/preparar.sh`). Na própria máquina, `http://localhost:4173` continua seguro. |
+| Broker, LLM e TTS bloqueados numa página HTTPS | Conteúdo misto (`ws://`, `http://`) e CORS | O Nginx repassa `/mqtt`, `/proxy/llm/`, `/proxy/tts/` e `/proxy/nvidia/` no mesmo endereço. O endereço padrão da ponte NeoAlice passou a ser `/mqtt` da página. |
+| NVIDIA NIM ausente na versão Web | O PR moeru-ai/airi#1196 criou o provedor, e o commit `04f35290` o limitou ao Desktop por causa do CORS | O provedor aparece no Web quando o servidor tem os proxies (`VITE_AIRI_PROXY=true` no Docker, e no servidor de desenvolvimento). A URL padrão é `/proxy/nvidia/v1/`. |
+| A Eva em VRM não aparecia em outra máquina | O AIRI guarda modelos importados no navegador, separados por endereço. O `eva2.vrm` nunca chegou à máquina de produção. | A pasta `deploy/alice/modelos/` é servida em `/models/`. O AIRI lista cada `.vrm` dali como modelo pronto, em qualquer navegador. |
+| O kit de teste só funcionava em `127.0.0.1` | Endereços fixos no kit e no servidor falso | `FAKE_OPENAI_BASE_URL`, `FAKE_HOST`, `FAKE_PORT`, e a seção "Rodar contra o Docker" no README do kit. |
+| O companion não voltaria depois de uma queda | O lock guarda só o PID, que se repete num contêiner novo | O entrypoint remove o lock velho. O Compose roda uma instância por volume. |
+
+### Validação
+
+Neste ambiente de nuvem, os passos de build que baixam pacotes não alcançam a internet. Por isso as imagens de teste usaram os estágios finais do Dockerfile com o app e o companion compilados fora do Docker. Na sua máquina, `docker compose up --build` roda o Dockerfile inteiro.
+
+| Teste | Resultado |
+| --- | --- |
+| Compose com o perfil `broker` | Os três serviços no ar, `airi-web` com healthcheck OK |
+| Pelo IP de rede, HTTP e HTTPS | `/healthz` 200, rota direta da SPA 200, certificado válido para o IP (`Verify return code: 0`) |
+| `/models/` | Lista JSON com `eva2.vrm`, e o arquivo baixa inteiro |
+| MQTT por `wss://<ip>:4443/mqtt` | Publicação e recebimento OK, e o estado do companion chega pelo mesmo caminho |
+| Queda do companion (SIGKILL) | O entrypoint removeu o lock velho e o serviço voltou sem loop de reinício |
+| Navegador em `https://<ip>:4443` | Contexto seguro, NVIDIA NIM na lista, ponte em `wss://<ip>:4443/mqtt`, `eva2` no seletor e a Eva no palco (`evidencias/D02/`) |
+| Kit V1/V2 contra o Docker | 9 de 9 (`evidencias/D02/verificacoes-kit-docker.json`) |
+
+Falta: o build completo na sua máquina (amd64 ou arm64), os testes com o broker, o LLM e o Kokoro reais (D06), e o MagicMirror apontando para o Docker (D08).

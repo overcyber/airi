@@ -27,13 +27,21 @@ Este kit testa o `stage-web` real com a Neptuna. Ele não precisa de LLM nem de 
 
 ## Como rodar
 
-Requisitos: o repositório instalado (`pnpm install`) e o Playwright com o Chromium (`npx playwright install chromium`, se a máquina ainda não tiver).
+Requisitos:
+
+- Node 26.12 e pnpm 11.24, as versões de `.tool-versions`. Com outra versão, o `pnpm install` falha. O jeito simples é o `mise`: `mise install`, depois cada comando com `mise exec --`.
+- O repositório instalado: `mise exec -- pnpm install`.
+- O Chromium do Playwright: `mise exec -- pnpm exec playwright install chromium`.
+
+O jeito mais simples é rodar o kit contra o Docker (seção "Rodar contra o Docker" abaixo). Assim não é preciso o servidor de desenvolvimento.
 
 1. Inicie o `stage-web`:
 
    ```bash
-   pnpm -F @proj-airi/stage-web exec vite --port 5173 --host 127.0.0.1
+   pnpm -F @proj-airi/stage-web exec vite --port 5173 --host 0.0.0.0
    ```
+
+   `--host 0.0.0.0` aceita conexões de qualquer IP da máquina. Num navegador de outra máquina, use HTTPS: pelo IP, `http://` não é contexto seguro e o app não inicia.
 
 2. Em outro terminal, inicie o servidor falso:
 
@@ -60,6 +68,33 @@ Variáveis opcionais:
 | `VRM_FILE` | A Neptuna | Outro VRM para testar, por exemplo a Eva convertida (V4) |
 | `VRMA_FILE` | Uma cópia de `emote-spin.vrma` | Outro VRMA, ou um FBX do Mixamo ou do Ready Player Me (V5), para importar |
 | `FAKE_LOG` | `airi-fake-openai-requests.jsonl` na pasta temporária | Registro das requisições do servidor falso |
+| `FAKE_OPENAI_BASE_URL` | `http://127.0.0.1:8091/v1/` | URL do servidor falso que o navegador chama. Contra o Docker: `http://127.0.0.1:4173/proxy/llm/v1/` |
+| `FAKE_HOST`, `FAKE_PORT` | `127.0.0.1`, `8091` | Onde o servidor falso escuta. Contra o Docker: `FAKE_HOST=0.0.0.0`, só numa rede de teste |
+
+## Rodar contra o Docker
+
+O kit também testa o build do Docker (`deploy/alice`). O LLM e o TTS falsos passam pelo `/proxy/llm/` do Nginx.
+
+1. No `deploy/alice/.env`, aponte o LLM e o TTS para o servidor falso e suba o Docker (`deploy/alice/README.md`):
+
+   ```bash
+   AIRI_LLM_UPSTREAM=http://host.docker.internal:8091
+   AIRI_TTS_UPSTREAM=http://host.docker.internal:8091
+   ```
+
+2. Inicie o servidor falso em todos os IPs:
+
+   ```bash
+   FAKE_HOST=0.0.0.0 node docs/alice-motion-engine/teste-app/fake-openai-server.cjs
+   ```
+
+3. Rode o kit:
+
+   ```bash
+   BASE_URL=http://127.0.0.1:4173 FAKE_OPENAI_BASE_URL=http://127.0.0.1:4173/proxy/llm/v1/ node docs/alice-motion-engine/teste-app/teste-app-v1-v2.cjs ./saida-teste-docker
+   ```
+
+Depois do teste, volte o LLM e o TTS do `.env` para os serviços reais.
 
 ## Limites
 
