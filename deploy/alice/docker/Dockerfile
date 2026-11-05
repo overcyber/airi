@@ -50,6 +50,11 @@ FROM workspace AS companion-build
 
 RUN pnpm --filter @proj-airi/alice-companion deploy --prod --legacy /out
 
+# Avatar tools: converts the Eva GLB of TalkingHead to VRM (scripts/preparar.sh runs it).
+FROM workspace AS tools
+
+ENTRYPOINT ["pnpm", "-F", "@proj-airi/alice-avatar-tools", "convert"]
+
 FROM ${NGINX_IMAGE} AS web
 
 COPY --from=web-build /app/apps/stage-web/dist /usr/share/nginx/html

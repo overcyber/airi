@@ -58,6 +58,17 @@ services:
     volumes:
       - alice-companion-data:/data
 
+  # Converts the Eva GLB to VRM. scripts/preparar.sh runs it once, when modelos/ has no VRM.
+  eva-convert:
+    profiles: [tools]
+    build:
+      context: ../..
+      dockerfile: deploy/alice/docker/Dockerfile
+      target: tools
+    image: alice/airi-tools:local
+    volumes:
+      - ./modelos:/modelos
+
   mosquitto:
     profiles: [broker]
     image: eclipse-mosquitto:2

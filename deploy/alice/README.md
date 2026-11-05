@@ -42,8 +42,8 @@ O navegador só libera algumas funções em contexto seguro: HTTPS, ou `http://l
 
 Rode na raiz do repositório.
 
-1. Coloque a Eva em VRM em `deploy/alice/modelos/eva2.vrm` (veja `modelos/README.md`).
-2. Prepare o `.env` e os certificados. O script lê os IPs da máquina com `hostname -I`.
+1. Deixe o repositório `talkinghead-neoalice` ao lado do `airi` (por exemplo `~/talkinghead-neoalice` e `~/airi`), ou o TalkingHead rodando na porta 8081.
+2. Rode o script. Ele cria o `.env` com os IPs da máquina (`hostname -I`), os certificados, e a Eva em VRM: se `modelos/` não tem nenhum `.vrm`, ele pega o `avatars/eva2.glb` e converte sozinho em `modelos/eva2.vrm`. Na primeira vez, isso constrói a imagem de ferramentas e leva alguns minutos. Com o GLB em outro lugar: `EVA_GLB=/caminho/eva2.glb deploy/alice/scripts/preparar.sh`.
 
    ```bash
    deploy/alice/scripts/preparar.sh

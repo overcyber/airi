@@ -70,7 +70,39 @@ chmod 600 "$tls_dir/ca.key"
 # Nginx in the container reads the server key.
 chmod 644 "$tls_dir/server.key" "$tls_dir/server.crt" "$tls_dir/ca.crt"
 
+# The Eva in VRM. When modelos/ has no VRM, the script gets eva2.glb and converts it.
+# Sources, in order: EVA_GLB (a path), ../talkinghead-neoalice/avatars/eva2.glb next to this
+# repository, then the running TalkingHead server (EVA_GLB_URL, default http://localhost:8081/avatars/eva2.glb).
 mkdir -p "$here/modelos"
+if ! find "$here/modelos" -maxdepth 1 -iname '*.vrm' | grep -q .; then
+  repo_root="$(cd "$here/../.." && pwd)"
+  source_dir="$here/modelos/.fonte"
+  mkdir -p "$source_dir"
+  glb=""
+  for candidate in "${EVA_GLB:-}" "$repo_root/../talkinghead-neoalice/avatars/eva2.glb"; do
+    if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+      cp "$candidate" "$source_dir/eva2.glb"
+      glb="$candidate"
+      break
+    fi
+  done
+  if [ -z "$glb" ]; then
+    url="${EVA_GLB_URL:-http://localhost:8081/avatars/eva2.glb}"
+    if curl -fsSL -o "$source_dir/eva2.glb" "$url"; then
+      glb="$url"
+    fi
+  fi
+  if [ -z "$glb" ]; then
+    rm -rf "$source_dir"
+    echo "preparar: ERROR eva2.glb not found. Set EVA_GLB=/path/to/eva2.glb, or start TalkingHead on port 8081." >&2
+    exit 1
+  fi
+  echo "preparar: converting $glb to modelos/eva2.vrm (the first run builds the tools image)"
+  docker compose -f "$here/compose.yaml" --profile tools run --rm --build eva-convert \
+    /modelos/.fonte/eva2.glb /modelos/eva2.vrm Eva Alice
+  rm -rf "$source_dir"
+fi
+
 models="$(find "$here/modelos" -maxdepth 1 -iname '*.vrm' -printf '%f ' 2>/dev/null || true)"
 if [ -n "$models" ]; then
   echo "preparar: models: $models"
