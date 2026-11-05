@@ -1208,6 +1208,25 @@ pages:
       counters: '{received} messages received, {ignored} ignored'
       last-event: 'Last event: {event}'
       last-ignored: 'Last ignored message: {reason}'
+      voice:
+        enable: Send the microphone to NeoAlice
+        enable-description: AIRI sends each spoken phrase to the /audio route of the NeoAlice API, and plays the reply with lip sync. Turn off Hearing, so AIRI does not answer the same phrase.
+        api-url: NeoAlice API URL
+        api-url-description: The default is the /proxy/neoalice/ path of this page. The Alice Docker server forwards it and adds the API key.
+        user-id: NeoAlice user ID
+        user-id-description: The user_id that NeoAlice expects, for example the ID of your NeoAlice profile
+        reply:
+          title: Spoken reply
+          description: Use MQTT when NeoAlice also sends the reply to this site as cmd/tts/audio, so the reply plays one time
+          http: In the response of the API
+          mqtt: Over MQTT, as cmd/tts/audio
+        status:
+          'off': The microphone is off. It listens only while the stage page is open.
+          starting: Starting the microphone...
+          listening: Listening
+          sending: Sending the phrase to NeoAlice...
+          error: Voice error
+        last-reply: 'Last reply: {text}'
     messaging-discord:
       description: Chat & voice chat over Discord
       title: Discord

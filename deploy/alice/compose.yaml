@@ -32,6 +32,21 @@ services:
       AIRI_TTS_UPSTREAM: ${AIRI_TTS_UPSTREAM:-http://host.docker.internal:8880}
       AIRI_STT_UPSTREAM: ${AIRI_STT_UPSTREAM:-http://host.docker.internal:9100}
       AIRI_STT_TRANSCRIBE_PATH: ${AIRI_STT_TRANSCRIBE_PATH:-/v1/audio/transcriptions}
+      NEOALICE_API_UPSTREAM: ${NEOALICE_API_UPSTREAM:-http://host.docker.internal:8080}
+      # Keys stay in the proxy configuration of the container. The browser never gets them.
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      NEOALICE_API_KEY: ${NEOALICE_API_KEY:-}
+      # First settings of AIRI, in /airi-defaults.json. Settings saved in the browser stay.
+      AIRI_DEFAULT_CHAT_PROVIDER: ${AIRI_DEFAULT_CHAT_PROVIDER:-ollama}
+      AIRI_DEFAULT_CHAT_MODEL: ${AIRI_DEFAULT_CHAT_MODEL:-}
+      AIRI_DEFAULT_TTS_MODEL: ${AIRI_DEFAULT_TTS_MODEL:-kokoro}
+      AIRI_DEFAULT_TTS_VOICE: ${AIRI_DEFAULT_TTS_VOICE:-}
+      AIRI_DEFAULT_STT_MODEL: ${AIRI_DEFAULT_STT_MODEL:-whisper-1}
+      AIRI_DEFAULT_NEOALICE_SITE: ${AIRI_DEFAULT_NEOALICE_SITE:-}
+      AIRI_DEFAULT_NEOALICE_ENABLED: ${AIRI_DEFAULT_NEOALICE_ENABLED:-false}
+      AIRI_DEFAULT_NEOALICE_SPEECH_MODE: ${AIRI_DEFAULT_NEOALICE_SPEECH_MODE:-silent}
+      AIRI_DEFAULT_NEOALICE_VOICE_INPUT: ${AIRI_DEFAULT_NEOALICE_VOICE_INPUT:-false}
+      AIRI_DEFAULT_NEOALICE_USER_ID: ${AIRI_DEFAULT_NEOALICE_USER_ID:-}
     extra_hosts:
       - host.docker.internal:host-gateway
     volumes:

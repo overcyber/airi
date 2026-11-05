@@ -17,6 +17,7 @@ import { useHearingStore } from '@proj-airi/stage-ui/stores/modules/hearing'
 import { useSpeechStore } from '@proj-airi/stage-ui/stores/modules/speech'
 import { useVisionStore } from '@proj-airi/stage-ui/stores/modules/vision'
 import { useOnboardingStore } from '@proj-airi/stage-ui/stores/onboarding'
+import { applyServerDefaults, fetchServerDefaults } from '@proj-airi/stage-ui/stores/server-defaults'
 import { useSettings, useSettingsAudioDevice } from '@proj-airi/stage-ui/stores/settings'
 import { useSettingsStageModel } from '@proj-airi/stage-ui/stores/settings/stage-model'
 import { useStartupResourcesStore } from '@proj-airi/stage-ui/stores/startup-resources'
@@ -150,6 +151,10 @@ async function loadStartup() {
       void serverChannelStore.initialize({ possibleEvents: ['ui:configure'] }).catch(error => console.error('Mods server initialization failed:', error))
       contextBridgeStore.initialize()
       characterOrchestratorStore.initialize(syncedPinia)
+      // The Alice deployment offers its local services as first settings. Saved settings stay.
+      void fetchServerDefaults()
+        .then(applyServerDefaults)
+        .catch(error => console.error('Server defaults failed:', error))
     })
     await startup.run('modelData', () => displayModelsStore.loadDisplayModelsFromIndexedDB())
     await startup.run('modelSelection', () => settingsStore.initializeStageModel())

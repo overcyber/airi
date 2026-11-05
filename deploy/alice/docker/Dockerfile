@@ -84,6 +84,7 @@ ENV AIRI_LLM_UPSTREAM=http://host.docker.internal:11434
 ENV AIRI_TTS_UPSTREAM=http://host.docker.internal:8880
 ENV AIRI_STT_UPSTREAM=http://host.docker.internal:9100
 ENV AIRI_STT_TRANSCRIBE_PATH=/v1/audio/transcriptions
+ENV NEOALICE_API_UPSTREAM=http://host.docker.internal:8080
 
 EXPOSE 80 443
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

@@ -50,6 +50,21 @@ export type NeoAliceSpeechMode = 'airi-voice' | 'neoalice-audio' | 'silent'
 
 export type NeoAliceBridgeStatus = 'off' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
+/** Where the spoken reply to the microphone comes from: the HTTP response, or `cmd/tts/audio` over MQTT. */
+export type NeoAliceVoiceReply = 'http' | 'mqtt'
+
+export type NeoAliceVoiceStatus = 'off' | 'starting' | 'listening' | 'sending' | 'error'
+
+/**
+ * Default base URL of the NeoAlice API: the `/proxy/neoalice/` path of the page.
+ * The Alice Docker server forwards it to the NeoAlice API and adds the API key.
+ */
+export function defaultNeoAliceApiUrl(page: Pick<Location, 'protocol' | 'origin'> | undefined = globalThis.location) {
+  if (!page || !/^https?:$/.test(page.protocol))
+    return 'http://localhost:8080/'
+  return new URL('/proxy/neoalice/', page.origin).href
+}
+
 /**
  * Default broker URL: the `/mqtt` path of the page address.
  *
@@ -69,7 +84,8 @@ export function defaultNeoAliceBrokerUrl(page: Pick<Location, 'protocol' | 'host
  *
  * A read-only MQTT client over WebSocket. It subscribes to the topics of one NeoAlice site and of the
  * companion service, translates each message with `NeoAliceTranslator`, and hands the events to the stage.
- * It has no publish call, so it cannot change NeoAlice or the mirror.
+ * It has no publish call, so it cannot change NeoAlice or the mirror. The microphone of the avatar
+ * talks to NeoAlice through its HTTP API (`voiceInput`), not through MQTT.
  *
  * The connection lives while at least one holder needs it: the stage and the settings page call `hold`.
  */
@@ -83,6 +99,16 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
   const username = useLocalStorageManualReset<string>('settings/neoalice-bridge/username', '')
   const password = useLocalStorageManualReset<string>('settings/neoalice-bridge/password', '')
   const speechMode = useLocalStorageManualReset<NeoAliceSpeechMode>('settings/neoalice-bridge/speech-mode', 'silent')
+  /** Sends what the avatar microphone hears to the `/audio` route of the NeoAlice API. */
+  const voiceInput = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/voice-input', false)
+  const apiUrl = useLocalStorageManualReset<string>('settings/neoalice-bridge/api-url', defaultNeoAliceApiUrl())
+  /** The `user_id` of the NeoAlice API. */
+  const userId = useLocalStorageManualReset<string>('settings/neoalice-bridge/user-id', '')
+  const voiceReply = useLocalStorageManualReset<NeoAliceVoiceReply>('settings/neoalice-bridge/voice-reply', 'http')
+  const voiceStatus = ref<NeoAliceVoiceStatus>('off')
+  const voiceError = ref('')
+  /** Text that NeoAlice understood from the last phrase, and its reply. */
+  const lastHeard = ref('')
 
   const status = ref<NeoAliceBridgeStatus>('off')
   const lastError = ref('')
@@ -219,6 +245,10 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     username.reset()
     password.reset()
     speechMode.reset()
+    voiceInput.reset()
+    apiUrl.reset()
+    userId.reset()
+    voiceReply.reset()
   }
 
   return {
@@ -230,6 +260,13 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     username,
     password,
     speechMode,
+    voiceInput,
+    apiUrl,
+    userId,
+    voiceReply,
+    voiceStatus,
+    voiceError,
+    lastHeard,
     configured,
     status,
     lastError,

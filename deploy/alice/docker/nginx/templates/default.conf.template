@@ -6,7 +6,9 @@
 #   /proxy/llm/   OpenAI compatible LLM     (AIRI_LLM_UPSTREAM, URL)
 #   /proxy/tts/   OpenAI compatible TTS     (AIRI_TTS_UPSTREAM, URL)
 #   /proxy/stt/   Speech to text            (AIRI_STT_UPSTREAM, URL, and AIRI_STT_TRANSCRIBE_PATH)
-#   /proxy/nvidia/ NVIDIA NIM cloud API     (integrate.api.nvidia.com)
+#   /proxy/nvidia/ NVIDIA NIM cloud API     (integrate.api.nvidia.com, NVIDIA_API_KEY)
+#   /proxy/neoalice/ NeoAlice API            (NEOALICE_API_UPSTREAM, URL, and NEOALICE_API_KEY)
+#   /airi-defaults.json first settings of AIRI, written by 40-airi-setup.sh from the environment
 #   /models/      VRM files of deploy/alice/modelos, with a JSON list at /models/
 
 map $http_upgrade $connection_upgrade {
@@ -120,8 +122,27 @@ server {
     proxy_ssl_server_name on;
     proxy_set_header Host integrate.api.nvidia.com;
     proxy_set_header Origin "";
+    # AIRI_NVIDIA_AUTH: 40-airi-setup.sh puts the key of NVIDIA_API_KEY here, when it is set.
     proxy_buffering off;
     proxy_read_timeout 600s;
+  }
+
+  # The NeoAlice API. The key stays on this server: the browser never sees it.
+  location /proxy/neoalice/ {
+    set $airi_neoalice "${NEOALICE_API_UPSTREAM}";
+    rewrite ^/proxy/neoalice/(.*)$ /$1 break;
+    proxy_pass $airi_neoalice;
+    proxy_http_version 1.1;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header Origin "";
+    # AIRI_NEOALICE_AUTH: 40-airi-setup.sh puts the key of NEOALICE_API_KEY here, when it is set.
+    proxy_read_timeout 300s;
+  }
+
+  location = /airi-defaults.json {
+    alias /etc/airi-runtime/airi-defaults.json;
+    default_type application/json;
+    add_header Cache-Control "no-cache";
   }
 
   location /models/ {
