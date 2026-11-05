@@ -110,8 +110,7 @@ async function configure(page) {
 
 async function importNeptuna(page) {
   await page.goto(`${BASE}/settings/models`)
-  for (let i = 0; i < 80 && await page.$$eval('button', buttons => buttons.length) < 4; i++)
-    await page.waitForTimeout(2000)
+  await page.getByRole('button', { name: 'Select model' }).waitFor({ state: 'visible', timeout: 120_000 })
   await page.getByRole('button', { name: 'Select model' }).click()
   const importButton = page.locator('[role=dialog] button', { hasText: 'Import' }).first()
   await importButton.waitFor({ timeout: 30000 })
@@ -171,6 +170,7 @@ async function main() {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, recordVideo: VIDEO ? { dir: OUT, size: { width: 1280, height: 800 } } : undefined })
   const page = await context.newPage()
   state.page = page
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) consoleLines.push(`NAVIGATED ${frame.url()}`) })
   page.on('pageerror', error => consoleLines.push(`PAGEERROR ${error.message}`))
   page.on('console', message => consoleLines.push(`${message.type()} ${message.text().slice(0, 400)}`))
   page.on('requestfailed', request => consoleLines.push(`NETWORK ${request.method()} ${request.url()} ${request.failure()?.errorText}`))
