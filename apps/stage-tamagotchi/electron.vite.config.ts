@@ -125,6 +125,9 @@ export default defineConfig({
 
   preload: {
     build: {
+      // Sandboxed Electron preload entrypoints cannot require shared chunks.
+      isolatedEntries: true,
+      externalizeDeps: false,
       lib: {
         entry: {
           'index': resolve(join(import.meta.dirname, 'src', 'preload', 'index.ts')),
