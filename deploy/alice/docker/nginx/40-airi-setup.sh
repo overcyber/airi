@@ -65,7 +65,7 @@ cat > /etc/airi-runtime/airi-defaults.json <<JSON
     "ollama": { "baseUrl": "/proxy/llm/v1/" },
     "openai-compatible-audio-speech": { "apiKey": "local", "baseUrl": "/proxy/tts/v1/", "model": $(json "${AIRI_DEFAULT_TTS_MODEL:-kokoro}"), "voice": $(json "${AIRI_DEFAULT_TTS_VOICE:-}") },
     "openai-compatible-audio-transcription": { "apiKey": "local", "baseUrl": "/proxy/stt/v1/", "model": $(json "${AIRI_DEFAULT_STT_MODEL:-whisper-1}") },
-    "nvidia": { "apiKey": $(json "$nvidia_key"), "baseUrl": $(json "${nvidia_key:+/proxy/nvidia/v1/}") }
+    "nvidia": { "apiKey": $(json "$nvidia_key"), "baseUrl": "/proxy/nvidia/v1/" }
   },
   "modules": {
     "consciousness": { "provider": $(json "${AIRI_DEFAULT_CHAT_PROVIDER:-ollama}"), "model": $(json "${AIRI_DEFAULT_CHAT_MODEL:-}") },

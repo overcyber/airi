@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchServerDefaults, resolveServerDefaults } from './server-defaults'
+import { fetchServerDefaults, isUnreachableFromPage, resolveServerDefaults } from './server-defaults'
 
 const page = { origin: 'https://192.0.2.10:4443', protocol: 'https:' }
 
@@ -56,5 +56,20 @@ describe('resolveServerDefaults', () => {
     }, page.origin)
 
     expect(defaults.providers.ollama).toEqual({ baseUrl: 'http://192.0.2.18:11434/v1/' })
+  })
+})
+
+describe('isUnreachableFromPage', () => {
+  it('finds the base URLs that an HTTPS page can never call', () => {
+    expect(isUnreachableFromPage('http://192.0.2.18:11434/v1/', page)).toBe(true)
+    expect(isUnreachableFromPage('https://integrate.api.nvidia.com/v1/', page)).toBe(true)
+  })
+
+  it('keeps the proxy, localhost, HTTPS services, and a page on HTTP', () => {
+    expect(isUnreachableFromPage('https://192.0.2.10:4443/proxy/llm/v1/', page)).toBe(false)
+    expect(isUnreachableFromPage('http://localhost:11434/v1/', page)).toBe(false)
+    expect(isUnreachableFromPage('https://llm.example.com/v1/', page)).toBe(false)
+    expect(isUnreachableFromPage('http://192.0.2.18:11434/v1/', { protocol: 'http:', origin: 'http://localhost:4173' })).toBe(false)
+    expect(isUnreachableFromPage('', page)).toBe(false)
   })
 })

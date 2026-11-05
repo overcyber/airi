@@ -40,7 +40,7 @@ O `airi-web` publica `/airi-defaults.json`, montado a partir do `.env`. Na prime
 - escolher o chat, a voz e a transcrição (`AIRI_DEFAULT_CHAT_*`, `AIRI_DEFAULT_TTS_*`, `AIRI_DEFAULT_STT_MODEL`);
 - preencher a ponte NeoAlice: site, modo de fala, microfone e usuário (`AIRI_DEFAULT_NEOALICE_*`).
 
-O AIRI só usa um padrão onde o navegador ainda não tem uma configuração própria. Tudo continua editável no app. Para voltar aos padrões num navegador, apague os dados do site (Configurações do navegador, Privacidade, Dados do site).
+O AIRI só usa um padrão onde o navegador ainda não tem uma configuração própria. A exceção é uma URL salva que a página nunca alcança: `http://` de outra máquina numa página HTTPS, ou `integrate.api.nvidia.com` (CORS). Essa URL vira a do repasse. A chave da API salva fica. Tudo continua editável no app. Para voltar aos padrões num navegador, apague os dados do site (Configurações do navegador, Privacidade, Dados do site).
 
 As chaves `NVIDIA_API_KEY` e `NEOALICE_API_KEY` ficam no contêiner. O repasse as acrescenta, e o navegador nunca as recebe.
 

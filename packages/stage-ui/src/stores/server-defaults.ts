@@ -78,17 +78,50 @@ export function resolveServerDefaults(defaults: ServerDefaults, origin: string):
   return { ...defaults, providers }
 }
 
+/** Hosts that refuse calls from a browser page (CORS). The server proxy reaches them. */
+const browserBlockedHosts = new Set(['integrate.api.nvidia.com'])
+
+/**
+ * Tells if a page can never reach a base URL, so the call ends in "Failed to fetch".
+ *
+ * - An HTTPS page cannot call `http://` on another host (mixed content). `localhost` is an exception.
+ * - Some APIs refuse every browser origin (CORS), for example the NVIDIA NIM cloud API.
+ *
+ * @example
+ * isUnreachableFromPage('http://192.0.2.18:11434/v1/', { protocol: 'https:', origin: 'https://192.0.2.10:4443' })
+ * // => true
+ */
+export function isUnreachableFromPage(baseUrl: unknown, page: Pick<Location, 'protocol' | 'origin'>) {
+  if (typeof baseUrl !== 'string' || baseUrl.trim() === '')
+    return false
+  let url: URL
+  try {
+    url = new URL(baseUrl)
+  }
+  catch {
+    return false
+  }
+  if (url.origin === page.origin)
+    return false
+  if (browserBlockedHosts.has(url.hostname))
+    return true
+  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]'
+  return page.protocol === 'https:' && url.protocol === 'http:' && !local
+}
+
 /**
  * Applies the server defaults where this browser has no setting of its own.
  *
  * - A provider gets the server configuration only when it has no stored configuration.
+ *   A stored base URL that this page can never reach gets the server base URL. The other
+ *   stored fields, for example the API key, stay.
  *   After a valid check, the provider is added, so the module selectors list it.
  * - A module gets the server selection only when it has no provider selected.
  * - The NeoAlice bridge gets the server site, speech mode, microphone, and user ID only when it has no site.
  *
  * So the server sets the first state, and every setting stays editable in the app.
  */
-export async function applyServerDefaults(defaults: ServerDefaults | undefined) {
+export async function applyServerDefaults(defaults: ServerDefaults | undefined, page: Pick<Location, 'protocol' | 'origin'> = globalThis.location) {
   if (!defaults)
     return
 
@@ -99,8 +132,13 @@ export async function applyServerDefaults(defaults: ServerDefaults | undefined) 
   for (const [providerId, config] of Object.entries(defaults.providers)) {
     if (!providerStore.findProviderDefinition(providerId))
       continue
-    if (!providerConfigStore.getProvider(providerId)) {
+    const stored = providerConfigStore.getProvider(providerId)
+    if (!stored) {
       providerConfigStore.ensureProvider(providerId, providerId, { ...providerStore.getDefaultProviderConfig(providerId), ...config })
+    }
+    else if (config.baseUrl && isUnreachableFromPage(stored.config.baseUrl, page)) {
+      console.info(`[server-defaults] ${providerId}: ${String(stored.config.baseUrl)} is not reachable from this page. It becomes ${config.baseUrl}.`)
+      await providerConfigStore.updateProviderConfig(providerId, { ...stored.config, baseUrl: config.baseUrl }, 'unconfigured')
     }
     try {
       if (await providerStore.validateProvider(providerId)) {
