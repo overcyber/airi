@@ -55,13 +55,15 @@ async function capture(page, name, always = false) {
   note(`screenshot ${name}`)
 }
 
-async function waitForButtons(page, minimum) {
-  for (let i = 0; i < 80; i++) {
-    if (await page.$eval('button', buttons => buttons.length) >= minimum)
-      return
-    await page.waitForTimeout(2000)
+/** Wait for the actual UI action; Playwright locators survive navigation/re-renders. */
+async function waitForModelSelector(page) {
+  try {
+    await page.getByRole('button', { name: 'Select model' })
+      .waitFor({ state: 'visible', timeout: 120_000 })
   }
-  throw new Error(`App buttons did not appear on ${page.url()} after 160 seconds. Check browser console and failed.png`)
+  catch (error) {
+    throw new Error(`The model selector did not appear at ${page.url()}. Check failed.png, console.txt and HTTP errors. Cause: ${error.message}`)
+  }
 }
 
 /** Uses the fake server for the LLM and the voice, and skips the onboarding. */
@@ -85,8 +87,9 @@ async function configureProviders(page) {
 }
 
 async function importNeptuna(page) {
-  await page.goto(`${BASE}/settings/models`)
-  await waitForButtons(page, 4)
+  note('navigating to model settings')
+  await page.goto(`${BASE}/settings/models`, { waitUntil: 'domcontentloaded', timeout: 180_000 })
+  await waitForModelSelector(page)
   await page.getByRole('button', { name: 'Select model' }).click()
   const importButton = page.locator('[role=dialog] button', { hasText: 'Import' }).first()
   await importButton.waitFor({ timeout: 30000 })
@@ -219,6 +222,7 @@ async function main() {
   })
   const page = await context.newPage()
   state.page = page
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) consoleLines.push(`NAVIGATED ${frame.url()}`) })
   page.on('pageerror', error => consoleLines.push(`PAGEERROR ${error.message}`))
   page.on('console', message => consoleLines.push(`${message.type()} ${message.text().slice(0, 400)}`))
   page.on('requestfailed', request => consoleLines.push(`NETWORK ${request.method()} ${request.url()} ${request.failure()?.errorText}`))
@@ -227,7 +231,9 @@ async function main() {
       consoleLines.push(`HTTP ${response.status()} ${response.url()}`)
   })
 
+  note('configuring fake LLM and TTS providers')
   await configureProviders(page)
+  note('starting Neptuna import')
   await importNeptuna(page)
   await page.waitForTimeout(15000)
   await importMotion(page)
