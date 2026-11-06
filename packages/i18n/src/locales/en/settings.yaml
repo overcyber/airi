@@ -1210,6 +1210,7 @@ pages:
       counters: '{received} messages received, {ignored} ignored'
       last-event: 'Last event: {event}'
       last-ignored: 'Last ignored message: {reason}'
+      build: 'Build {commit}, {builtOn}'
       server:
         url: Alice server URL
         url-description: The Alice Docker server that gives the settings of the services, for example http://192.0.2.10:4173. Empty uses the server of this page. The desktop app needs it.

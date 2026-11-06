@@ -7,6 +7,7 @@ import { storeToRefs } from 'pinia'
 import { computed, onScopeDispose, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useBuildInfo } from '../../composables/use-build-info'
 import { useNeoAliceBrainStore } from '../../stores/modules/neoalice-brain'
 import { useNeoAliceBridgeStore } from '../../stores/modules/neoalice-bridge'
 import { loadServerDefaults } from '../../stores/server-defaults'
@@ -39,6 +40,8 @@ const {
 } = storeToRefs(bridge)
 
 const { brainMode, serverUrl } = storeToRefs(useNeoAliceBrainStore())
+// The commit of this build, so a test can tell which version runs.
+const build = useBuildInfo()
 
 const serverLoad = ref<{ tone: 'success' | 'danger', text: string }>()
 const serverLoading = ref(false)
@@ -78,6 +81,9 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
   <SettingsCard>
     <p :class="['text-sm', 'text-neutral-500 dark:text-neutral-400']">
       {{ t('settings.pages.modules.neoalice-bridge.intro') }}
+    </p>
+    <p data-testid="neoalice-build" :class="['text-xs', 'text-neutral-400 dark:text-neutral-500']">
+      {{ t('settings.pages.modules.neoalice-bridge.build', { commit: build.commit, builtOn: build.builtOn }) }}
     </p>
 
     <FieldInput
