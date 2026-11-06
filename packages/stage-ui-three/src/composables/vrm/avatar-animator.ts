@@ -78,6 +78,9 @@ export class AvatarAnimator {
   private timedEmote: { action: AnimationAction, remainingSeconds: number, finish: () => void } | null = null
 
   private talkingClip: AnimationClip | null = null
+  private talkingPool: string[] = []
+  private lastTalkingUrl: string | null = null
+  private talkingToken = 0
   private thinkingClip: { url: string, clip: AnimationClip } | null = null
   private thinkingToken = 0
   private idleToken = 0
@@ -145,10 +148,24 @@ export class AvatarAnimator {
       })
   }
 
+  /**
+   * Sets the talking clips that take turns. Each speech picks one that the last speech did not use, so she
+   * gestures in a new way each time, as the TalkingHead avatar does with its talking animations.
+   */
+  setTalkingPool(urls: readonly string[]) {
+    this.talkingPool = [...urls]
+  }
+
   setTalking(speaking: boolean) {
     // A held pose stays while she speaks, for example she talks while sitting.
     if (this.pose)
       return
+    if (speaking && this.talkingPool.length > 0) {
+      this.startPooledTalking()
+      return
+    }
+    if (!speaking)
+      this.talkingToken++
     if (speaking && this.talkingClip) {
       this.idle?.fadeOut(fadeSeconds.talkOrThink)
       if (!this.talking) {
@@ -162,6 +179,28 @@ export class AvatarAnimator {
       if (!this.emotePlaying)
         this.idle?.reset().fadeIn(fadeSeconds.talkOrThink).play()
     }
+  }
+
+  private startPooledTalking() {
+    const others = this.talkingPool.filter(url => url !== this.lastTalkingUrl)
+    const choices = others.length > 0 ? others : this.talkingPool
+    const url = choices[Math.floor(this.random() * choices.length) % choices.length]
+    const token = ++this.talkingToken
+    this.hooks.loadClip(url)
+      .then((clip) => {
+        // The speech ended, a newer speech started, or something else holds the body.
+        if (this.disposed || token !== this.talkingToken || !this.hooks.isTalking() || this.pose || this.emotePlaying)
+          return
+        this.lastTalkingUrl = url
+        const action = this.mixer.clipAction(clip)
+        action.setLoop(LoopRepeat, Infinity)
+        this.idle?.fadeOut(fadeSeconds.talkOrThink)
+        if (this.talking && this.talking !== action)
+          this.talking.fadeOut(fadeSeconds.talkOrThink)
+        action.reset().fadeIn(fadeSeconds.talkOrThink).play()
+        this.talking = action
+      })
+      .catch(error => console.warn('[vrm-animator] talking clip failed to load, staying idle:', error))
   }
 
   startThinking(url: string) {

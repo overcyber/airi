@@ -115,6 +115,8 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
 
   const motionLibrary = computed<VrmMotionLibrary>(() => ({
     ...defaultVrmMotionLibrary,
+    // The talking animations of the TalkingHead server take turns while she speaks (Plan 08, M1).
+    talkingPool: serverEmotes.value.filter(emote => /^talking\s*\d+$/i.test(emote.name)).map(emote => emote.url),
     emotes: [...defaultVrmMotionLibrary.emotes, ...serverEmotes.value, ...importedEmotes.value],
   }))
 

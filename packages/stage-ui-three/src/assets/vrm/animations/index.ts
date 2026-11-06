@@ -22,6 +22,11 @@ export interface VrmEmoteAnimation {
 export interface VrmMotionLibrary {
   idles: string[]
   talking?: string
+  /**
+   * Talking clips that take turns, a different one for each speech, for example the `Talking_0`, `Talking_1`,
+   * and `Talking_2` FBX of the TalkingHead server. When it is not empty, it replaces `talking`.
+   */
+  talkingPool?: string[]
   /** Optional clip while the character waits for a reply. Without it, only the head reacts. */
   thinking?: string
   emotes: VrmEmoteAnimation[]

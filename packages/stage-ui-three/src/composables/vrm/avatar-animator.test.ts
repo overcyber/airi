@@ -236,4 +236,51 @@ describe('avatarAnimator layers (V6)', () => {
     animator.update(1)
     expect(animator.overlays.size).toBe(0)
   })
+
+  it('takes a different talking clip of the pool for each speech, and keeps a held pose while she speaks', async () => {
+    const clips = { 'idle-b': clip('idle-b', 2), 'talk-0': clip('talk-0', 2), 'talk-1': clip('talk-1', 2) }
+    const { animator, state } = createAnimator({ clips })
+    animator.start(clip('idle-a', 2))
+    animator.setTalkingPool(['talk-0', 'talk-1'])
+
+    state.talking = true
+    animator.setTalking(true)
+    await flushLoads()
+    const first = animator.talking?.getClip().name
+    state.talking = false
+    animator.setTalking(false)
+    state.talking = true
+    animator.setTalking(true)
+    await flushLoads()
+    expect(animator.talking?.getClip().name).not.toBe(first)
+    expect(['talk-0', 'talk-1']).toContain(first)
+
+    state.talking = false
+    animator.setTalking(false)
+    animator.holdPose(clip('sitting', 1))
+    state.talking = true
+    animator.setTalking(true)
+    await flushLoads()
+    animator.update(1)
+    expect(animator.pose?.getClip().name).toBe('sitting')
+    expect(animator.pose?.getEffectiveWeight()).toBeCloseTo(1, 2)
+    expect(animator.talking?.isRunning() && animator.talking.getEffectiveWeight() > 0.5).toBeFalsy()
+  })
+
+  it('plays a timed emote in a loop for its duration on the frame clock, then returns to the held pose', () => {
+    const { animator } = createAnimator()
+    animator.start(clip('idle-a', 2))
+    animator.holdPose(clip('hip', 1))
+    animator.update(1)
+
+    animator.playEmote(clip('wave', 0.5), undefined, { durationSeconds: 2, fadeSeconds: 1 })
+    animator.update(1.5)
+    expect(animator.emotePlaying).toBe(true)
+    expect(animator.emote?.isRunning()).toBe(true)
+
+    animator.update(0.6)
+    expect(animator.emotePlaying).toBe(false)
+    animator.update(1)
+    expect(animator.pose?.getEffectiveWeight()).toBeCloseTo(1, 2)
+  })
 })

@@ -117,6 +117,8 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   /** The phrase that waits for its reply, and since when. */
   let waitingSince: number | undefined
   let lastPresenceMs = Number.NEGATIVE_INFINITY
+  /** She sat down because nobody was on the cameras. The next person makes her stand up. */
+  let seatedByAbsence = false
   let lastGreetingMs = Number.NEGATIVE_INFINITY
   let greetingSequence = 0
   /** After a bare wake word, the next phrase goes to NeoAlice without the wake word, until this time. */
@@ -237,8 +239,16 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
       }
       case 'presence':
         // A person who arrives after a quiet time gets a wave and a smile. A person who stays does not.
-        if (now - lastPresenceMs > presenceGapMs)
+        // After an absence she sat down (Plan 08): she stands up and raises her hand.
+        if (seatedByAbsence) {
+          seatedByAbsence = false
+          submitAvatar('pose_straight', now)
+          submitAvatar('gesture_handup', now)
+          options.reactEmotion?.('happy')
+        }
+        else if (now - lastPresenceMs > presenceGapMs) {
           greet(now)
+        }
         lastPresenceMs = now
         break
       case 'greeting':
@@ -247,6 +257,25 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
       default:
         break
     }
+  }
+
+  /** Schedules a gesture or a pose of the stage itself, for example sitting down after an absence. */
+  function submitAvatar(semanticAction: string, now: number) {
+    const result = runtime.submit({ schemaVersion: 1, id: `neoalice-presence-${++greetingSequence}`, timestampMs: Math.round(now), source: 'vision', semanticAction }, now)
+    if (!result.ok)
+      console.info(`[neoalice-bridge] refused ${semanticAction}: ${result.reason}`)
+  }
+
+  /** Sits down when the cameras saw nobody for `absenceSitMinutes`. Only after a camera reported a person. */
+  function checkAbsence(now: number) {
+    const minutes = bridge.absenceSitMinutes
+    if (!bridge.vision || seatedByAbsence || !(minutes > 0) || lastPresenceMs === Number.NEGATIVE_INFINITY)
+      return
+    if (now - lastPresenceMs < minutes * 60_000)
+      return
+    seatedByAbsence = true
+    console.info(`[neoalice-bridge] nobody for ${minutes} min: she sits down`)
+    submitAvatar('pose_sitting', now)
   }
 
   /** Smile and wave, at most once per {@link greetingGapMs}, for example for a camera and a face greeting together. */
@@ -470,6 +499,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   const stopVoiceWatch = watch(() => bridge.voiceInput, () => void updateMicrophone(), { immediate: true })
   const timer = setInterval(() => {
     const now = clock()
+    checkAbsence(now)
     // The avatar must not hear its own voice: no capture while it speaks, and for a short tail after.
     if (currentSession !== undefined)
       deafUntilMs = now + echoTailMs

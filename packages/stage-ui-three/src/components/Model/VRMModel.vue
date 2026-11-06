@@ -1008,6 +1008,7 @@ async function loadModel() {
     // Play the first idle now. The animator cycles the idle pool from here on.
     nextVrmAnimator = new AvatarAnimator(_vrm.scene, createAnimatorHooks(_vrm))
     nextVrmAnimator.start(clip, props.motionLibrary.talking)
+    nextVrmAnimator.setTalkingPool(props.motionLibrary.talkingPool ?? [])
     nextVrmAnimationMixer = nextVrmAnimator.mixer
     lastIdleUrl = idleAnimation.value
 
@@ -1156,6 +1157,11 @@ onMounted(async () => {
   // wait until scene is not undefined
   await until(() => scene.value).toBeTruthy()
   await loadModel()
+
+  // The server list of talking clips loads after the model, so the pool follows it.
+  watch(() => props.motionLibrary.talkingPool, (pool) => {
+    vrmAnimator.value?.setTalkingPool(pool ?? [])
+  })
 
   // Speech and waiting drive the talking and thinking clips of the animator.
   watch(() => props.speechActive === true, (speaking) => {
