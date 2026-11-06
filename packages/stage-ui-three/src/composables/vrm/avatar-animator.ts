@@ -17,6 +17,13 @@ import { additiveClip, maskClip } from './motion-layers'
 export interface EmotePlayOptions {
   nodes?: ReadonlySet<string>
   additive?: boolean
+  /**
+   * Plays the clip in a loop at its recorded speed for this long, then returns to the base, like the TalkingHead
+   * `playAnimation` and `playGesture` of the mirror. Without it, the clip plays once at 1.5x.
+   */
+  durationSeconds?: number
+  /** Fade in and out, in seconds. Default: 0.2 in and 0.3 out. TalkingHead fades gestures over 1 s. */
+  fadeSeconds?: number
 }
 
 export interface AvatarAnimatorHooks {
@@ -62,6 +69,13 @@ export class AvatarAnimator {
   rest: AnimationAction | null = null
   /** Additive emotes that play now. They do not hold the stage. */
   readonly overlays = new Set<AnimationAction>()
+  /**
+   * A held body pose, for example TalkingHead `sitting`. It replaces the idle and the talking clip until
+   * {@link holdPose} releases it. Gestures play over it.
+   */
+  pose: AnimationAction | null = null
+  /** The emote of a timed play and its remaining time on the frame clock. */
+  private timedEmote: { action: AnimationAction, remainingSeconds: number, finish: () => void } | null = null
 
   private talkingClip: AnimationClip | null = null
   private thinkingClip: { url: string, clip: AnimationClip } | null = null
@@ -132,6 +146,9 @@ export class AvatarAnimator {
   }
 
   setTalking(speaking: boolean) {
+    // A held pose stays while she speaks, for example she talks while sitting.
+    if (this.pose)
+      return
     if (speaking && this.talkingClip) {
       this.idle?.fadeOut(fadeSeconds.talkOrThink)
       if (!this.talking) {
@@ -148,7 +165,7 @@ export class AvatarAnimator {
   }
 
   startThinking(url: string) {
-    if (this.thinking)
+    if (this.thinking || this.pose)
       return
     const token = ++this.thinkingToken
     const cached = this.thinkingClip?.url === url ? this.thinkingClip.clip : null
@@ -175,7 +192,7 @@ export class AvatarAnimator {
       return
     this.thinking.fadeOut(fadeSeconds.talkOrThink)
     this.thinking = null
-    if (resumeIdle)
+    if (resumeIdle && !this.pose)
       this.idle?.reset().fadeIn(fadeSeconds.talkOrThink).play()
   }
 
@@ -192,46 +209,113 @@ export class AvatarAnimator {
       return
     }
     if (options.nodes && options.nodes.size > 0) {
-      this.playMasked(clip, options.nodes, onFinished)
+      this.playMasked(clip, options.nodes, onFinished, options)
       return
     }
+    const fadeIn = options.fadeSeconds ?? fadeSeconds.emoteIn
+    const fadeOut = options.fadeSeconds ?? fadeSeconds.emoteOut
     if (this.emote) {
-      this.emote.fadeOut(fadeSeconds.emoteIn)
+      this.emote.fadeOut(fadeIn)
       this.emote = null
     }
-    const idle = this.idle
-    idle?.fadeOut(fadeSeconds.emoteIn)
-    this.talking?.fadeOut(fadeSeconds.emoteIn)
+    const base = this.baseAction()
+    base?.fadeOut(fadeIn)
+    if (base !== this.talking)
+      this.talking?.fadeOut(fadeIn)
     const action = this.mixer.clipAction(clip)
-    action.setLoop(LoopOnce, 1)
-    action.clampWhenFinished = true
-    action.timeScale = emoteTimeScale
-    action.reset().fadeIn(fadeSeconds.emoteIn).play()
+    this.startEmoteAction(action, options, fadeIn)
     this.emote = action
     this.emotePlaying = true
 
-    const onDone = (event: { action: AnimationAction }) => {
-      if (event.action !== action)
-        return
-      this.mixer.removeEventListener('finished', onDone)
+    const finish = () => {
       if (this.emote === action) {
         this.emotePlaying = false
         this.emote = null
       }
       // clampWhenFinished keeps the last frame at full weight. Release it, or the
       // idle blends against it and the arms hang between two poses.
-      action.fadeOut(fadeSeconds.emoteOut)
-      if (this.hooks.isTalking() && this.talking)
-        this.talking.reset().fadeIn(fadeSeconds.emoteOut).play()
-      else
-        idle?.reset().fadeIn(fadeSeconds.emoteOut).play()
+      action.fadeOut(fadeOut)
+      const next = this.baseAction()
+      if (next) {
+        next.enabled = true
+        next.reset().fadeIn(fadeOut).play()
+      }
       onFinished?.()
+    }
+    this.whenDone(action, options, finish)
+  }
+
+  /**
+   * Holds a body pose until the next call, like TalkingHead `setPoseFromTemplate`. `null` releases it,
+   * and the idle (or the talking clip) comes back. Fades take `fade` seconds, 1 s like TalkingHead.
+   */
+  holdPose(clip: AnimationClip | null, fade = 1) {
+    const previous = this.pose
+    if (!clip) {
+      if (!previous)
+        return
+      this.pose = null
+      previous.fadeOut(fade)
+      if (!this.emotePlaying) {
+        const next = this.baseAction()
+        if (next) {
+          next.enabled = true
+          next.reset().fadeIn(fade).play()
+        }
+      }
+      return
+    }
+    const action = this.mixer.clipAction(clip)
+    action.setLoop(LoopRepeat, Infinity)
+    if (previous && previous !== action)
+      previous.fadeOut(fade)
+    if (!previous) {
+      this.idle?.fadeOut(fade)
+      this.talking?.fadeOut(fade)
+      this.thinking?.fadeOut(fade)
+      this.thinking = null
+    }
+    this.pose = action
+    if (!this.emotePlaying)
+      action.reset().fadeIn(fade).play()
+  }
+
+  /** Starts an emote action: once at 1.5x, or in a loop for `durationSeconds` at the recorded speed. */
+  private startEmoteAction(action: AnimationAction, options: EmotePlayOptions, fadeIn: number) {
+    if (options.durationSeconds !== undefined) {
+      action.setLoop(LoopRepeat, Infinity)
+      action.clampWhenFinished = false
+      action.timeScale = 1
+    }
+    else {
+      action.setLoop(LoopOnce, 1)
+      action.clampWhenFinished = true
+      action.timeScale = emoteTimeScale
+    }
+    action.reset().fadeIn(fadeIn).play()
+  }
+
+  /** Runs `finish` once: when a one-shot emote ends, or when the time of a timed emote runs out. */
+  private whenDone(action: AnimationAction, options: EmotePlayOptions, finish: () => void) {
+    if (options.durationSeconds !== undefined) {
+      if (this.timedEmote && this.timedEmote.action !== action)
+        this.timedEmote = null
+      this.timedEmote = { action, remainingSeconds: Math.max(0, options.durationSeconds), finish }
+      return
+    }
+    const onDone = (event: { action: AnimationAction }) => {
+      if (event.action !== action)
+        return
+      this.mixer.removeEventListener('finished', onDone)
+      finish()
     }
     this.mixer.addEventListener('finished', onDone)
   }
 
   /** The action that holds the body when no emote plays: talking, or the idle. */
   private baseAction() {
+    if (this.pose)
+      return this.pose
     return this.hooks.isTalking() && this.talking ? this.talking : this.idle
   }
 
@@ -258,9 +342,11 @@ export class AvatarAnimator {
    * The emote plays on `nodes`. The base clip moves to a copy without those nodes, at the same time,
    * so the rest of the body keeps breathing and shifting weight. The base comes back at the end.
    */
-  private playMasked(clip: AnimationClip, nodes: ReadonlySet<string>, onFinished?: () => void) {
+  private playMasked(clip: AnimationClip, nodes: ReadonlySet<string>, onFinished?: () => void, options: EmotePlayOptions = {}) {
+    const fadeIn = options.fadeSeconds ?? fadeSeconds.emoteIn
+    const fadeOut = options.fadeSeconds ?? fadeSeconds.emoteOut
     if (this.emote) {
-      this.emote.fadeOut(fadeSeconds.emoteIn)
+      this.emote.fadeOut(fadeIn)
       this.emote = null
     }
     const base = this.baseAction()
@@ -268,31 +354,25 @@ export class AvatarAnimator {
     if (base) {
       rest = this.mixer.clipAction(maskClip(base.getClip(), nodes, 'drop'))
       if (rest !== this.rest) {
-        this.rest?.fadeOut(fadeSeconds.emoteIn)
+        this.rest?.fadeOut(fadeIn)
         rest.reset()
         rest.time = base.time
         rest.setEffectiveWeight(1).play()
       }
-      base.fadeOut(fadeSeconds.emoteIn)
+      base.fadeOut(fadeIn)
     }
     this.rest = rest
     const action = this.mixer.clipAction(maskClip(clip, nodes, 'keep'))
-    action.setLoop(LoopOnce, 1)
-    action.clampWhenFinished = true
-    action.timeScale = emoteTimeScale
-    action.reset().fadeIn(fadeSeconds.emoteIn).play()
+    this.startEmoteAction(action, options, fadeIn)
     this.emote = action
     this.emotePlaying = true
 
-    const onDone = (event: { action: AnimationAction }) => {
-      if (event.action !== action)
-        return
-      this.mixer.removeEventListener('finished', onDone)
+    const finish = () => {
       if (this.emote === action) {
         this.emotePlaying = false
         this.emote = null
       }
-      action.fadeOut(fadeSeconds.emoteOut)
+      action.fadeOut(fadeOut)
       const resting = this.rest
       this.rest = null
       // The base clip continues from the time of its copy, so the body does not jump.
@@ -302,12 +382,12 @@ export class AvatarAnimator {
         next.enabled = true
         if (resting && resting.getClip().name === `${next.getClip().name}:drop`)
           next.time = resting.time
-        next.fadeIn(fadeSeconds.emoteOut).play()
+        next.fadeIn(fadeOut).play()
       }
-      resting?.fadeOut(fadeSeconds.emoteOut)
+      resting?.fadeOut(fadeOut)
       onFinished?.()
     }
-    this.mixer.addEventListener('finished', onDone)
+    this.whenDone(action, options, finish)
   }
 
   /**
@@ -324,13 +404,24 @@ export class AvatarAnimator {
   update(deltaSeconds: number) {
     this.mixer.update(deltaSeconds)
 
+    const timed = this.timedEmote
+    if (timed) {
+      timed.remainingSeconds -= deltaSeconds
+      if (timed.remainingSeconds <= 0) {
+        this.timedEmote = null
+        // A newer emote replaced it. Its own finish runs later.
+        if (this.emote === timed.action)
+          timed.finish()
+      }
+    }
+
     if (this.idleCycleRemainingSeconds === null)
       return
     this.idleCycleRemainingSeconds -= deltaSeconds
     if (this.idleCycleRemainingSeconds > 0)
       return
 
-    const busy = this.hooks.isTalking() || this.hooks.isThinking() || this.emotePlaying
+    const busy = this.hooks.isTalking() || this.hooks.isThinking() || this.emotePlaying || this.pose !== null
     if (busy)
       this.scheduleIdleCycle(this.idleClipDurationSeconds)
     else

@@ -1054,7 +1054,8 @@ defineExpose({
     modelRef.value?.reactExpression(expression, intensity)
   },
   motions: () => modelRef.value?.motions() ?? [],
-  playMotion: async (id: string) => await modelRef.value?.playMotion(id) ?? false,
+  playMotion: async (id: string, options?: { durationMs?: number }) => await modelRef.value?.playMotion(id, options) ?? false,
+  playMotionUrl: async (url: string, options?: { durationMs?: number }) => await modelRef.value?.playMotionUrl(url, options) ?? false,
   // NOTICE: External runtime hooks are intentionally separate from internal VRM model hooks.
   // This public frame hook is reserved for live pose/tracking input and is forwarded to VRMModel
   // without exposing the internal model/material lifecycle hook pipeline.

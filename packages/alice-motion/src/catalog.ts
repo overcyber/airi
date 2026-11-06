@@ -79,6 +79,57 @@ const bothArms: MotionChannel[] = ['leftArm', 'rightArm', 'hands']
 const stance: MotionChannel[] = ['locomotion', 'posture', 'torso']
 
 /**
+ * The gestures of the TalkingHead avatar of the mirror, native and NeoAlice ones, with the hands they use.
+ * One-hand gestures use the left hand. `_mirror` plays them with the right hand, like `"mirror": true`.
+ * The VRM plays the TalkingHead templates (`talkinghead-templates.ts` of stage-ui-three).
+ */
+const talkingHeadGestures: Array<[name: string, hands: 'one' | 'both', description: string]> = [
+  ['handup', 'one', 'Raise a hand'],
+  ['index', 'one', 'Point up with the index finger'],
+  ['ok', 'one', 'Make the OK sign'],
+  ['thumbup', 'one', 'Thumbs up'],
+  ['thumbdown', 'one', 'Thumbs down'],
+  ['side', 'one', 'Gesture to the side'],
+  ['wave', 'one', 'Wave with the hand'],
+  ['point', 'one', 'Point forward'],
+  ['think', 'one', 'Hand to the chin, thinking'],
+  ['shrug', 'both', 'Shrug the shoulders'],
+  ['namaste', 'both', 'Put the palms together'],
+  ['open', 'both', 'Open both arms'],
+  ['celebrate', 'both', 'Raise both arms to celebrate'],
+]
+
+/**
+ * The renderer holds a pose until the next pose, like TalkingHead. The cue holds its channels only this long,
+ * so the next pose is not refused while the body is still in the old one.
+ */
+const poseCueMs = 1500
+
+/** The poses of the TalkingHead avatar. A pose stays until the next pose. `straight` is the normal stance. */
+const talkingHeadPoses: Array<[name: string, description: string]> = [
+  ['straight', 'Stand straight'],
+  ['side', 'Stand with the weight on one side'],
+  ['hip', 'Hand on the hip'],
+  ['turn', 'Turn the body to the side'],
+  ['back', 'Turn the back'],
+  ['wide', 'Stand with the legs wide'],
+  ['oneknee', 'Kneel on one knee'],
+  ['kneel', 'Kneel'],
+  ['bend', 'Bend forward'],
+  ['sitting', 'Sit on the floor'],
+  ['thinking', 'Stand and think'],
+  ['arms_open', 'Stand with open arms'],
+  ['bow', 'Bow'],
+]
+
+function talkingHeadGestureEntries(): MotionCatalogEntry[] {
+  return talkingHeadGestures.flatMap(([name, hands, description]) => [
+    clip(`gesture_${name}`, `th:gesture:${name}`, hands === 'one' ? ['leftArm'] : ['torso', ...bothArms], 3000, 50, description),
+    clip(`gesture_${name}_mirror`, `th:gesture:${name}:mirror`, hands === 'one' ? ['rightArm'] : ['torso', ...bothArms], 3000, 50, `${description}, other hand`),
+  ])
+}
+
+/**
  * Default entries.
  *
  * - Procedural actions are what the director sends on its own: breathing room, glances, nods, speech beats.
@@ -109,17 +160,9 @@ export const defaultMotionCatalogEntries: MotionCatalogEntry[] = [
   clip('explain_left_hand', 'explain_left_hand', ['torso', 'leftArm'], 1600, 40, 'Explain with an open left hand'),
   entry({ semanticAction: 'sit', clipId: 'sit', channels: fullBodyChannels, durationMs: 5000, priority: 70, interruptible: false, description: 'Sit down' }),
 
-  clip('gesture_handup', 'handup', arm, 3000, 50, 'Raise a hand'),
-  clip('gesture_index', 'index', arm, 3000, 50, 'Point with the index finger'),
-  clip('gesture_ok', 'ok', arm, 3000, 50, 'Make the OK sign'),
-  clip('gesture_thumbup', 'thumbup', arm, 3000, 50, 'Thumbs up'),
-  clip('gesture_thumbdown', 'thumbdown', arm, 3000, 50, 'Thumbs down'),
-  clip('gesture_side', 'side', arm, 3000, 50, 'Gesture to the side'),
-  clip('gesture_shrug', 'shrug', ['torso', ...bothArms], 3000, 50, 'Shrug the shoulders'),
-  clip('gesture_namaste', 'namaste', bothArms, 3000, 50, 'Put the palms together'),
-
-  ...['straight', 'side', 'hip', 'turn', 'back', 'wide', 'oneknee', 'kneel', 'bend', 'sitting'].map(pose =>
-    clip(`pose_${pose}`, `pose/${pose}`, stance, 10_000, 45, `Body pose "${pose}"`),
+  ...talkingHeadGestureEntries(),
+  ...talkingHeadPoses.map(([pose, description]) =>
+    clip(`pose_${pose}`, `th:pose:${pose}`, stance, poseCueMs, 45, description),
   ),
   entry({ semanticAction: 'emoji', generatorId: 'facial/emoji', channels: ['facial'], durationMs: 2000, priority: 30, description: 'Show an emoji face' }),
 ]

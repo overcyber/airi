@@ -101,21 +101,29 @@ if ! find "$here/modelos" -maxdepth 1 -iname '*.vrm' | grep -q .; then
   rm -rf "$source_dir"
 fi
 
-# The motions of the TalkingHead (Mixamo FBX). They stay out of Git: animacoes/ is ignored.
-# Source: ANIMATIONS_DIR, or ../talkinghead-neoalice/animations next to this repository.
-mkdir -p "$here/animacoes"
-if ! find "$here/animacoes" -maxdepth 1 \( -iname '*.fbx' -o -iname '*.vrma' \) | grep -q .; then
-  repo_root="$(cd "$here/../.." && pwd)"
-  for candidate in "${ANIMATIONS_DIR:-}" "$repo_root/../talkinghead-neoalice/animations"; do
-    if [ -n "$candidate" ] && [ -d "$candidate" ]; then
-      find "$candidate" -maxdepth 1 \( -iname '*.fbx' -o -iname '*.vrma' \) -exec cp {} "$here/animacoes/" \;
-      echo "preparar: copied the motions of $candidate to animacoes/"
-      break
-    fi
-  done
-fi
-chmod a+rx "$here/animacoes"
-find "$here/animacoes" -maxdepth 1 \( -iname '*.fbx' -o -iname '*.vrma' \) -exec chmod a+r {} +
+# The motions of the TalkingHead (Mixamo and Ready Player Me FBX). They stay out of Git: animacoes/ is ignored.
+# Source: TALKINGHEAD_DIR, or ../talkinghead-neoalice next to this repository. The three folders of the
+# TalkingHead server keep their paths, so a cmd/avatar/animation URL of the mirror loads from airi-web:
+#   animations/*        -> animacoes/                  (served at /animations/)
+#   animations_arkit/*  -> animacoes/animations_arkit/ (served at /animations_arkit/)
+#   poses/*             -> animacoes/poses/            (served at /poses/)
+# A file that is already there stays as it is. ANIMATIONS_DIR is the older name of the animations folder.
+mkdir -p "$here/animacoes/animations_arkit" "$here/animacoes/poses"
+repo_root="$(cd "$here/../.." && pwd)"
+talkinghead_dir="${TALKINGHEAD_DIR:-$repo_root/../talkinghead-neoalice}"
+copy_motions() {
+  from="$1"
+  to="$2"
+  if [ -n "$from" ] && [ -d "$from" ]; then
+    find "$from" -maxdepth 1 -type f \( -iname '*.fbx' -o -iname '*.vrma' \) -exec cp -n {} "$to/" \;
+    echo "preparar: copied the motions of $from to ${to#"$here/"}/"
+  fi
+}
+copy_motions "${ANIMATIONS_DIR:-$talkinghead_dir/animations}" "$here/animacoes"
+copy_motions "$talkinghead_dir/animations_arkit" "$here/animacoes/animations_arkit"
+copy_motions "$talkinghead_dir/poses" "$here/animacoes/poses"
+find "$here/animacoes" -type d -exec chmod a+rx {} +
+find "$here/animacoes" -type f \( -iname '*.fbx' -o -iname '*.vrma' \) -exec chmod a+r {} +
 
 # Nginx in the container runs as another user. A model readable only by its owner answers 403.
 chmod a+rx "$here/modelos"

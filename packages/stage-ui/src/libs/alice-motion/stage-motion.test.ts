@@ -11,8 +11,8 @@ function intent(semanticAction: string, extra: Partial<MotionIntent> = {}): Moti
   return { schemaVersion: 1, id: `bridge-${sequence}`, timestampMs: 0, source: 'llm', semanticAction, ...extra }
 }
 
-function createRuntime(knownClips: string[] = ['greeting', 'shoot', 'peace_sign', 'wave', 'vrm-motion-1']) {
-  const playClip = vi.fn(async (clipId: string) => knownClips.includes(clipId))
+function createRuntime(knownClips: string[] = ['greeting', 'shoot', 'peace_sign', 'th:gesture:wave:mirror', 'vrm-motion-1']) {
+  const playClip = vi.fn(async (clipId: string, _options: { durationMs?: number }) => knownClips.includes(clipId))
   return { runtime: new StageMotionRuntime({ playClip }, { seed: 1 }), playClip }
 }
 
@@ -23,20 +23,20 @@ describe('stageMotionRuntime', () => {
     expect(runtime.submit(intent('peace_sign'), 0).ok).toBe(true)
     await runtime.tick(0)
 
-    expect(playClip).toHaveBeenCalledWith('peace_sign')
+    expect(playClip).toHaveBeenCalledWith('peace_sign', { durationMs: 2500 })
     expect(runtime.stats.started).toBe(1)
   })
 
-  it('plays a wave of either hand as the wave gesture of the VRM, and counts a clip that the renderer lacks', async () => {
+  it('plays a right wave as the mirrored TalkingHead wave, with the requested time, and counts a clip that the renderer lacks', async () => {
     const { runtime, playClip } = createRuntime()
 
     runtime.submit(intent('wave_right'), 0)
-    runtime.submit(intent('gesture_namaste'), 10_000)
+    runtime.submit(intent('gesture_namaste', { requestedDurationMs: 6000 }), 10_000)
     await runtime.tick(10_000)
 
-    expect(playClip).toHaveBeenNthCalledWith(1, 'wave')
-    expect(playClip).toHaveBeenNthCalledWith(2, 'namaste')
-    expect(runtime.stats).toMatchObject({ missingClips: 1, lastMissingClip: 'namaste' })
+    expect(playClip).toHaveBeenNthCalledWith(1, 'th:gesture:wave:mirror', { durationMs: 1600 })
+    expect(playClip).toHaveBeenNthCalledWith(2, 'th:gesture:namaste', { durationMs: 6000 })
+    expect(runtime.stats).toMatchObject({ missingClips: 1, lastMissingClip: 'th:gesture:namaste' })
   })
 
   it('refuses a second gesture on a busy arm and keeps the reason', () => {
@@ -44,7 +44,7 @@ describe('stageMotionRuntime', () => {
 
     runtime.submit(intent('gesture_thumbup'), 0)
     expect(runtime.submit(intent('gesture_ok'), 100).ok).toBe(false)
-    expect(runtime.stats.lastRefusal).toMatch(/^gesture_ok: channel rightArm is held by/)
+    expect(runtime.stats.lastRefusal).toMatch(/^gesture_ok: channel leftArm is held by/)
   })
 
   it('accepts an imported emote by its name and plays its clip', async () => {
@@ -55,7 +55,7 @@ describe('stageMotionRuntime', () => {
     runtime.submit(intent('happy_spin'), 0)
     await runtime.tick(0)
 
-    expect(playClip).toHaveBeenCalledWith('vrm-motion-1')
+    expect(playClip).toHaveBeenCalledWith('vrm-motion-1', { durationMs: 3000 })
   })
 
   it('keeps director intents as procedural cues and never sends them to the renderer as clips', async () => {

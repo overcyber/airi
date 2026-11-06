@@ -123,6 +123,16 @@ describe('moodFace (Utsuwa composer)', () => {
     expect(happy.get('mouthSmileLeft')).toBeCloseTo(0.3, 2)
   })
 
+  it('moves the ARKit shapes of a reaction too, and releases them with it', () => {
+    const face = new MoodFace([...vrm1Names, 'mouthFrownLeft', 'browOuterUpLeft'], noEarlyBlink)
+    face.react('sad')
+    expect(run(face, 0.5).get('mouthFrownLeft')).toBeCloseTo(0.8, 2)
+    expect(run(face, 4).get('mouthFrownLeft')).toBe(0)
+
+    face.react('think')
+    expect(run(face, 0.5).get('browOuterUpLeft')).toBeCloseTo(0.4, 2)
+  })
+
   it('lets the lip sync and the blink run under a mood expression', () => {
     const expressions = new Map(['sad', 'aa'].map(name => [name, { overrideMouth: 'blend', overrideBlink: 'blend' }]))
     releaseMoodOverrides({ getExpression: name => expressions.get(name) })

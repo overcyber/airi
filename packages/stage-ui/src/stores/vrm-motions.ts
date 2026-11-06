@@ -65,8 +65,8 @@ export async function fetchServerMotions(origin: string | undefined, fetchList: 
   }
 }
 
-/** Origin of the Alice server: the saved server URL, or the page when it is served over HTTP. */
-function serverOrigin() {
+/** Origin of the Alice server: the saved server URL, or the page when it is served over HTTP. `undefined` without one. */
+export function aliceServerOrigin() {
   const saved = useNeoAliceBrainStore().serverUrl.trim()
   if (saved) {
     try {
@@ -122,7 +122,7 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
   function load() {
     loading ??= Promise.all([
       vrmMotionsRepo.list(),
-      fetchServerMotions(serverOrigin()),
+      fetchServerMotions(aliceServerOrigin()),
     ]).then(([records, server]) => {
       imported.value = records
       serverEmotes.value = server

@@ -120,8 +120,12 @@ export function retargetFbxClip(vrm: VRM, clip: AnimationClip, asset?: Object3D)
   const sourceHipsHeight = mixamo
     ? asset!.getObjectByName(bones.get('Hips')!.trackName)!.getWorldPosition(new Vector3()).y
     : (hipsTrack && Math.max(...Array.from(hipsTrack.values).map(Math.abs)) > 10 ? rpmHipsHeightMeters * 100 : rpmHipsHeightMeters)
+  // The rest height, not the current one: a clip built while she sits must not shrink the next pose.
+  const restHips = vrm.humanoid.normalizedRestPose?.hips?.position
   const vrmHips = vrm.humanoid.getNormalizedBoneNode('hips')
-  const vrmHipsHeight = vrmHips ? Math.abs(vrmHips.getWorldPosition(new Vector3()).y - vrm.scene.getWorldPosition(new Vector3()).y) : 1
+  const vrmHipsHeight = restHips
+    ? Math.abs(restHips[1])
+    : vrmHips ? Math.abs(vrmHips.getWorldPosition(new Vector3()).y - vrm.scene.getWorldPosition(new Vector3()).y) : 1
   const hipsScale = sourceHipsHeight > 0 ? vrmHipsHeight / sourceHipsHeight : 1
 
   const tracks: KeyframeTrack[] = []

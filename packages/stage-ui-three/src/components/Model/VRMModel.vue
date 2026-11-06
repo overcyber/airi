@@ -82,7 +82,6 @@ import { loadVrm } from '../../composables/vrm/core'
 import { findVrmEmote } from '../../composables/vrm/emote-cue'
 import { useVRMEmote } from '../../composables/vrm/expression'
 import { loadFbxClip } from '../../composables/vrm/fbx-retarget'
-import { createGestureClip, isProceduralGesture } from '../../composables/vrm/gesture-poses'
 import { createVrmInteractionColliders } from '../../composables/vrm/interaction'
 import { resolveInternalVrmHooks } from '../../composables/vrm/internal-hooks'
 import { useVRMLipSync } from '../../composables/vrm/lip-sync'
@@ -90,6 +89,7 @@ import { MoodBody } from '../../composables/vrm/mood-body'
 import { MoodFace, releaseMoodOverrides } from '../../composables/vrm/mood-face'
 import { emoteLayerBones, inferEmoteLayering } from '../../composables/vrm/motion-layers'
 import { PerformanceDirector } from '../../composables/vrm/performance-director'
+import { createTalkingHeadClip, parseTalkingHeadClipId } from '../../composables/vrm/talkinghead-motion'
 import { createThinkingClip } from '../../composables/vrm/thinking-pose'
 import {
   createThreeRendererMemorySnapshot,
@@ -1315,24 +1315,36 @@ defineExpose({
    * `id` can also be the emote name or an LLM cue, see `findVrmEmote`.
    * Resolves `false` when no emote matches or the clip cannot load.
    */
-  async playMotion(id: string): Promise<boolean> {
-    const emote = findVrmEmote(props.motionLibrary.emotes, id)
+  async playMotion(id: string, options: { durationMs?: number } = {}): Promise<boolean> {
     const targetVrm = vrm.value
     const animator = vrmAnimator.value
     if (!targetVrm || !animator)
       return false
-    // NeoAlice sends the hand gestures and stances of the TalkingHead avatar, which have no clip file.
-    // They are drawn by code on the arm bones, over the idle (bone mask of V6).
-    if (!emote && isProceduralGesture(id)) {
-      const clip = createGestureClip(targetVrm, id)
+    // NeoAlice sends the gestures and poses of the TalkingHead avatar. The VRM plays the same templates.
+    const template = parseTalkingHeadClipId(id)
+    if (template) {
+      if (template.kind === 'pose') {
+        // The poses stay until the next pose, like `setPoseFromTemplate` of the mirror. `straight` is the idle.
+        if (template.name === 'straight') {
+          animator.holdPose(null)
+          return true
+        }
+        const clip = createTalkingHeadClip(targetVrm, template, { durationSeconds: 4 })
+        if (!clip)
+          return false
+        animator.holdPose(clip)
+        return true
+      }
+      // A gesture holds for its duration (3 s by default in TalkingHead) and fades in and out over 1 s.
+      const durationSeconds = (options.durationMs ?? 3000) / 1000
+      const clip = createTalkingHeadClip(targetVrm, template, { durationSeconds })
       if (!clip)
         return false
-      if (clip.tracks.length > 0) {
-        const nodes = new Set(clip.tracks.map(track => track.name.slice(0, track.name.lastIndexOf('.'))))
-        animator.playEmote(clip, undefined, { nodes })
-      }
+      const nodes = new Set(clip.tracks.map(track => track.name.slice(0, track.name.lastIndexOf('.'))))
+      animator.playEmote(clip, undefined, { nodes, durationSeconds, fadeSeconds: 1 })
       return true
     }
+    const emote = findVrmEmote(props.motionLibrary.emotes, id)
     if (!emote)
       return false
     try {
@@ -1353,6 +1365,27 @@ defineExpose({
     }
     catch (error) {
       console.error(`[vrm] motion "${id}" failed to load:`, error)
+      return false
+    }
+  },
+  /**
+   * Plays an FBX or VRMA file by URL on the whole body, in a loop for `durationMs` (10 s by default), like
+   * TalkingHead `playAnimation(url, null, duration)` of the mirror. Resolves `false` when it cannot load.
+   */
+  async playMotionUrl(url: string, options: { durationMs?: number } = {}): Promise<boolean> {
+    const targetVrm = vrm.value
+    const animator = vrmAnimator.value
+    if (!targetVrm || !animator)
+      return false
+    try {
+      const clip = await loadMotionClip(targetVrm, url, /\.vrma(?:$|[?#])/i.test(url) ? 'vrma' : 'fbx')
+      if (vrm.value !== targetVrm || vrmAnimator.value !== animator)
+        return false
+      animator.playEmote(clip, undefined, { durationSeconds: (options.durationMs ?? 10_000) / 1000, fadeSeconds: 0.5 })
+      return true
+    }
+    catch (error) {
+      console.error(`[vrm] animation "${url}" failed to load:`, error)
       return false
     }
   },

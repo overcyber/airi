@@ -2,7 +2,7 @@ import type { MotionCatalog } from './catalog'
 import type { MotionIntent, MotionSource } from './contracts'
 import type { ResolvedMood } from './mood-vocabulary'
 
-import { array, fallback, finite, looseObject, maxLength, maxValue, minValue, number, optional, pipe, safeParse, string } from 'valibot'
+import { array, boolean, fallback, finite, looseObject, maxLength, maxValue, minValue, number, optional, pipe, safeParse, string } from 'valibot'
 
 import { maxMessageBytes, motionSources, parseMotionIntent } from './contracts'
 import { resolveMood } from './mood-vocabulary'
@@ -32,6 +32,11 @@ export type NeoAliceBridgeEvent
     | { type: 'user-speech', site: string, text: string }
     | { type: 'mood', site: string, mood: ResolvedMood, intensity?: number, origin: 'neoalice' | 'companion' }
     | { type: 'intent', site: string, intent: MotionIntent, emoji?: string }
+    /**
+     * `cmd/avatar/animation`: an FBX or VRMA file to play on the whole body, like TalkingHead `playAnimation`.
+     * `url` is the URL of the message, `name` a TalkingHead animation name. The stage resolves both.
+     */
+    | { type: 'animation', site: string, url?: string, name?: string, durationMs?: number }
     /** A camera of NeoAlice sees people (F5). `people` is above 0. */
     | { type: 'presence', site: string, people: number, camera?: string }
     /** The face recognition greets someone by name, for example "Ola Ana" (F5). */
@@ -134,6 +139,8 @@ const AvatarPayload = looseObject({
   emoji: fallback(optional(pipe(string(), maxLength(16))), undefined),
   duration: Seconds,
   source: Name,
+  /** A one-hand gesture with the other hand, as in TalkingHead `playGesture(name, dur, mirror)`. */
+  mirror: fallback(optional(boolean()), undefined),
 })
 
 const CompanionMood = looseObject({
@@ -143,11 +150,6 @@ const CompanionMood = looseObject({
 })
 const CompanionStatePayload = looseObject({ mood: fallback(optional(CompanionMood), undefined) })
 const CompanionAffectPayload = looseObject({ emotion: Name, airiEmotion: Name, intensity: fallback(optional(Percent), undefined) })
-
-/** Gesture names that NeoAlice uses without a `gesture_` entry of the same name. */
-const gestureAliases: Record<string, string> = { wave: 'wave_right' }
-/** Animation file stems that NeoAlice uses, and their catalog action. */
-const animationAliases: Record<string, string> = { walking: 'walk', walk: 'walk', sitting: 'sit', sit: 'sit' }
 
 /**
  * Stateful translator: it remembers recent payloads to drop repeats and numbers the intents.
@@ -226,9 +228,10 @@ export class NeoAliceTranslator {
           return ignored(topic, 'no mood')
         return { type: 'mood', site, mood: resolveMood(name), intensity: toUnit(parsed.success ? parsed.output.intensity : undefined), origin: 'neoalice' }
       }
+      case 'cmd/avatar/animation':
+        return translateAnimation(topic, site, data)
       case 'cmd/avatar/gesture':
       case 'cmd/avatar/pose':
-      case 'cmd/avatar/animation':
       case 'cmd/avatar/emoji':
         return this.translateAvatar(topic, site, action, data, payload)
       default:
@@ -271,20 +274,14 @@ export class NeoAliceTranslator {
     switch (action) {
       case 'cmd/avatar/gesture': {
         const name = normalizeName(command.gesture ?? command.name)
-        semanticAction = name && (gestureAliases[name] ?? this.known(`gesture_${name}`) ?? this.known(name))
+        const gesture = name && (command.mirror ? this.known(`gesture_${name}_mirror`) : undefined)
+        semanticAction = gesture || (name && (this.known(`gesture_${name}`) ?? this.known(name)))
         break
       }
       case 'cmd/avatar/pose': {
         const name = normalizeName(command.pose ?? command.name)
         semanticAction = name && this.known(`pose_${name}`)
         extra = { requestedChannels: ['posture'] }
-        break
-      }
-      case 'cmd/avatar/animation': {
-        // The file name of `url`, as the mirror module sends it, or a plain `name`.
-        const stem = normalizeName((command.url ?? command.name)?.split(/[?#]/)[0].split('/').pop()?.replace(/\.[a-z0-9]+$/i, ''))
-        // An imported animation with the name of the file comes first, for example `wave_hello` for Wave_Hello.fbx.
-        semanticAction = stem && (this.known(stem) ?? animationAliases[stem])
         break
       }
       default:
@@ -335,6 +332,23 @@ export class NeoAliceTranslator {
 
   private known(semanticAction: string) {
     return this.catalog.get(semanticAction) ? semanticAction : undefined
+  }
+}
+
+/** `cmd/avatar/animation`: `{"url": "...", "duration": 5}` of the mirror, or `{"name": "Wave"}`. */
+function translateAnimation(topic: string, site: string, data: unknown): NeoAliceBridgeEvent {
+  const parsed = safeParse(AvatarPayload, data)
+  if (!parsed.success)
+    return ignored(topic, 'animation payload is not an object')
+  const { url, name, duration } = parsed.output
+  if (!url && !name)
+    return ignored(topic, 'no animation url or name')
+  return {
+    type: 'animation',
+    site,
+    ...(url && { url }),
+    ...(name && { name }),
+    ...(duration !== undefined && duration > 0 && { durationMs: Math.round(duration * 1000) }),
   }
 }
 

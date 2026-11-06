@@ -7,17 +7,21 @@ import { isPublishableSite, matchWakeWord, neoAliceAudioEvent, neoAliceStateEven
 import { number, object, safeParse, string } from 'valibot'
 import { onScopeDispose, ref, watch } from 'vue'
 
+import { resolveNeoAliceAnimationUrl } from '../libs/alice-motion/neoalice-animation-url'
 import { NeoAliceMicrophone, neoAliceVoiceSampleRate, segmentToWavBase64 } from '../libs/alice-motion/neoalice-voice'
 import { StageMotionRuntime } from '../libs/alice-motion/stage-motion'
 import { useChatSessionStore } from '../stores/chat/session-store'
 import { useNeoAliceBrainStore } from '../stores/modules/neoalice-brain'
 import { useNeoAliceBridgeStore } from '../stores/modules/neoalice-bridge'
+import { aliceServerOrigin } from '../stores/vrm-motions'
 import { useNeoAliceBrainTools } from './use-neoalice-brain-tools'
 import { useNeoAlicePhraseTranscriber } from './use-neoalice-phrase-transcriber'
 
 export interface NeoAliceStageBridgeOptions {
   /** Plays a clip of the VRM stage. Resolves `false` when the stage is not VRM or has no such clip. */
-  playClip: (clipId: string) => Promise<boolean>
+  playClip: (clipId: string, options: { durationMs?: number }) => Promise<boolean>
+  /** Plays an FBX or VRMA file by URL on the whole body, for `durationMs`. Resolves `false` when it cannot. */
+  playAnimation?: (url: string, durationMs?: number) => Promise<boolean>
   /** Emotes of the VRM motion library, including imported VRMA files. */
   emotes: () => readonly StageEmote[]
   /** Synthesizes text with the AIRI voice settings. Resolves `null` when no voice is configured. */
@@ -218,6 +222,17 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         const result = runtime.submit({ ...event.intent, timestampMs: Math.round(now) }, now)
         if (!result.ok)
           console.info(`[neoalice-bridge] refused ${event.intent.semanticAction}: ${result.reason}`)
+        break
+      }
+      case 'animation': {
+        const url = resolveNeoAliceAnimationUrl(event, aliceServerOrigin())
+        if (!url || !options.playAnimation) {
+          console.info(`[neoalice-bridge] no animation to play for ${event.url ?? event.name}`)
+          break
+        }
+        void options.playAnimation(url, event.durationMs).then((played) => {
+          console.info(`[neoalice-bridge] ${played ? 'played' : 'could not play'} the animation ${url}`)
+        })
         break
       }
       case 'presence':
@@ -509,18 +524,18 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
 
 /** Face emotion of an emoji of `cmd/avatar/emoji`. Unknown emoji give `undefined`. */
 export function emotionOfEmoji(emoji: string): string | undefined {
-  if (/[\u{1F600}-\u{1F60A}\u{1F60D}\u{1F642}\u{1F643}\u{1F917}\u{1F970}\u{263A}\u{2764}\u{1F496}\u{1F44B}\u{1F44D}]/u.test(emoji))
+  if (/[\u{1F600}-\u{1F60E}\u{1F617}-\u{1F61D}\u{1F642}\u{1F643}\u{1F917}\u{1F929}\u{1F970}\u{1F973}\u{263A}\u{2764}\u{1F496}\u{1F44B}\u{1F44D}\u{1F389}]/u.test(emoji))
     return 'happy'
-  if (/[\u{1F622}\u{1F62D}\u{1F61E}\u{1F614}\u{1F625}\u{1F641}\u{2639}\u{1F494}]/u.test(emoji))
+  if (/[\u{1F622}\u{1F62D}\u{1F61E}\u{1F614}\u{1F625}\u{1F641}\u{1F97A}\u{2639}\u{1F494}]/u.test(emoji))
     return 'sad'
-  if (/[\u{1F620}\u{1F621}\u{1F624}\u{1F92C}]/u.test(emoji))
+  if (/[\u{1F620}\u{1F621}\u{1F624}\u{1F92C}\u{1F612}]/u.test(emoji))
     return 'angry'
-  if (/[\u{1F62E}\u{1F62F}\u{1F632}\u{1F631}\u{1F92F}]/u.test(emoji))
+  if (/[\u{1F62E}\u{1F62F}\u{1F632}\u{1F631}\u{1F92F}\u{1F628}\u{1F630}\u{1F633}]/u.test(emoji))
     return 'surprised'
-  if (/[\u{1F914}\u{1F9D0}]/u.test(emoji))
+  if (/[\u{1F914}\u{1F9D0}\u{1F928}]/u.test(emoji))
     return 'think'
-  if (/[\u{1F634}\u{1F62A}\u{1F971}]/u.test(emoji))
-    return 'tired'
+  if (/[\u{1F634}\u{1F62A}\u{1F971}\u{1F60C}]/u.test(emoji))
+    return 'relaxed'
   return undefined
 }
 

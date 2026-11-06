@@ -56,17 +56,23 @@ describe('neoAliceTranslator', () => {
       .toMatchObject({ type: 'mood', mood: { airiEmotion: 'sad' } })
   })
 
-  it('turns gestures, poses, animations, and emojis into catalog intents', () => {
+  it('turns gestures, poses, and emojis into catalog intents, and animations into animation events', () => {
     const bridge = translator()
 
     expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/gesture', JSON.stringify({ gesture: 'thumbup', duration: 3 }), 0))
       .toMatchObject({ type: 'intent', intent: { semanticAction: 'gesture_thumbup', requestedDurationMs: 3000, source: 'llm' } })
     expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/gesture', JSON.stringify({ name: 'wave', source: 'vision' }), 0))
-      .toMatchObject({ type: 'intent', intent: { semanticAction: 'wave_right', source: 'vision' } })
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'gesture_wave', source: 'vision' } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/gesture', JSON.stringify({ gesture: 'wave', duration: 4, mirror: true }), 0))
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'gesture_wave_mirror', requestedDurationMs: 4000 } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/gesture', JSON.stringify({ gesture: 'namaste', duration: 6 }), 0))
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'gesture_namaste', requestedDurationMs: 6000 } })
     expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'straight' }), 0))
       .toMatchObject({ type: 'intent', intent: { semanticAction: 'pose_straight', requestedChannels: ['posture'] } })
-    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/animation', JSON.stringify({ url: 'https://example.com/animations/walking.fbx', duration: 10 }), 0))
-      .toMatchObject({ type: 'intent', intent: { semanticAction: 'walk', requestedDurationMs: 10_000 } })
+    for (const pose of ['arms_open', 'bow', 'thinking', 'sitting'])
+      expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose }), 0)).toMatchObject({ type: 'intent', intent: { semanticAction: `pose_${pose}` } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/animation', JSON.stringify({ url: 'http://192.0.2.10:8081/poses/dance.fbx', duration: 15 }), 0))
+      .toEqual({ type: 'animation', site: 'mirror', url: 'http://192.0.2.10:8081/poses/dance.fbx', durationMs: 15_000 })
     expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/emoji', JSON.stringify({ emoji: smile }), 0))
       .toMatchObject({ type: 'intent', emoji: smile, intent: { semanticAction: 'emoji', requestedChannels: ['facial'] } })
   })
@@ -79,25 +85,16 @@ describe('neoAliceTranslator', () => {
     expect(first.type === 'intent' && second.type === 'intent' && first.intent.id !== second.intent.id).toBe(true)
   })
 
-  it('plays an imported animation with the name of the NeoAlice file before the aliases', () => {
-    const bridge = translator()
-    const base = catalog.get('greeting')!
-    bridge.setCatalog(catalog.extend([
-      { ...base, semanticAction: 'wave_hello', clipId: 'vrm-motion-1' },
-      { ...base, semanticAction: 'walking', clipId: 'vrm-motion-2' },
-    ]))
-
-    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/animation', '{"url":"animations/Wave_Hello.fbx"}', 0))
-      .toMatchObject({ type: 'intent', intent: { semanticAction: 'wave_hello' } })
-    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/animation', '{"url":"animations/walking.fbx"}', 0))
-      .toMatchObject({ type: 'intent', intent: { semanticAction: 'walking' } })
+  it('reads a TalkingHead animation name when the message has no url', () => {
+    expect(translator().translate('neoalice/v1/mirror/cmd/avatar/animation', '{"name":"Wave","duration":5}', 0))
+      .toEqual({ type: 'animation', site: 'mirror', name: 'Wave', durationMs: 5000 })
   })
 
-  it('refuses an unknown animation URL or gesture with a reason', () => {
+  it('refuses an animation without url or name, and an unknown gesture, with a reason', () => {
     const bridge = translator()
 
-    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/animation', '{"url":"https://example.com/x/backflip.fbx"}', 0))
-      .toEqual({ type: 'ignored', topic: 'neoalice/v1/mirror/cmd/avatar/animation', reason: 'the catalog has no action for this command' })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/animation', '{"duration":5}', 0))
+      .toEqual({ type: 'ignored', topic: 'neoalice/v1/mirror/cmd/avatar/animation', reason: 'no animation url or name' })
     expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/gesture', '{"gesture":"moonwalk"}', 0)).toMatchObject({ type: 'ignored' })
   })
 

@@ -10,8 +10,11 @@ export interface StageEmote {
 }
 
 export interface StageMotionHooks {
-  /** Plays a clip of the renderer. Resolves `false` when the renderer has no such clip. */
-  playClip: (clipId: string) => Promise<boolean>
+  /**
+   * Plays a clip of the renderer. Resolves `false` when the renderer has no such clip.
+   * `durationMs` is the time of the cue, for example the `duration` of a NeoAlice gesture.
+   */
+  playClip: (clipId: string, options: { durationMs?: number }) => Promise<boolean>
   /** Diagnostic line for each clip that starts or has no renderer clip. */
   log?: (message: string) => void
 }
@@ -28,12 +31,12 @@ export interface StageMotionStats {
 }
 
 /**
- * Clips that the VRM stage draws under another name. The VRM draws the TalkingHead hand gestures
- * by code (`gesture-poses.ts` of stage-ui-three), and a wave of either hand is its `wave` gesture.
+ * Clips that the VRM stage draws under another name: a wave of either hand is the TalkingHead `wave` gesture.
+ * TalkingHead waves with the left hand, and the mirrored gesture with the right hand.
  */
 const vrmClipAliases: Record<string, string> = {
-  wave_left: 'wave',
-  wave_right: 'wave',
+  wave_left: 'th:gesture:wave',
+  wave_right: 'th:gesture:wave:mirror',
 }
 
 /** Lower snake case of an emote name, the form of a semantic action. */
@@ -146,7 +149,8 @@ export class StageMotionRuntime {
       const clipId = event.cue.clipId!
       this.stats.started++
       const rendererClip = vrmClipAliases[clipId] ?? clipId
-      if (await this.hooks.playClip(rendererClip)) {
+      const durationMs = event.cue.expiresAtMs !== undefined ? event.cue.expiresAtMs - event.cue.startAtMs : undefined
+      if (await this.hooks.playClip(rendererClip, { durationMs })) {
         this.hooks.log?.(`played ${event.semanticAction} as clip ${rendererClip}`)
       }
       else {

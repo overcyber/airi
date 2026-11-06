@@ -65,6 +65,8 @@ const arkitMoodShapes: Record<string, Record<string, number>> = {
   angry: { browDownLeft: 0.6, browDownRight: 0.6, jawForward: 0.3, mouthFrownLeft: 0.7, mouthFrownRight: 0.7, mouthRollLower: 0.2, mouthShrugLower: 0.3 },
   surprised: { browInnerUp: 0.7, eyeSquintLeft: 0.5, eyeSquintRight: 0.5, eyeWideLeft: 0.6, eyeWideRight: 0.6, mouthClose: 0.1, mouthFunnel: 0.3, mouthShrugLower: 0.5, mouthShrugUpper: 0.5 },
   relaxed: { mouthSmileLeft: 0.3, mouthSmileRight: 0.3, eyeSquintLeft: 0.2, eyeSquintRight: 0.2 },
+  // Not from TalkingHead, which has no thinking mood: one brow up, lips pressed to the side.
+  think: { browInnerUp: 0.35, browOuterUpLeft: 0.4, browDownRight: 0.3, mouthPressLeft: 0.4, mouthRollLower: 0.2, mouthLeft: 0.25, eyeSquintRight: 0.25 },
 }
 
 /** The VRM 1.0 expressions that hold a mood. See {@link releaseMoodOverrides}. */
@@ -146,7 +148,7 @@ export class MoodFace {
     const target = targetFor(mood, 1, this.expressionNames, 'flash')
     if (!target)
       return
-    this.flash = { name: target.name, weight: weightOverride ?? target.weight, t: 0, holdUntil: null }
+    this.flash = { name: target.name, weight: weightOverride ?? target.weight, key: target.key, t: 0, holdUntil: null }
   }
 
   /** Advances one frame and returns the expression weights to write. */
@@ -189,13 +191,6 @@ export class MoodFace {
           arkit.set(name, Math.round(weight * share * 1000) / 1000)
       }
     }
-    for (const name of this.arkitWritten) {
-      if (!arkit.has(name))
-        face.set(name, 0)
-    }
-    for (const [name, weight] of arkit)
-      face.set(name, weight)
-    this.arkitWritten = new Set(arkit.keys())
     if (mood) {
       if (emoteName !== mood.name)
         face.set(mood.name, mood.weight)
@@ -228,6 +223,23 @@ export class MoodFace {
       }
     }
     this.flash = flash
+
+    // A reaction moves the ARKit shapes of its mood too, for example the frown of a sad emoji on Eva.
+    const flashShapes = flash?.key ? arkitMoodShapes[flash.key] : undefined
+    if (flash && flashShapes && emoteName !== flash.name) {
+      const shape = flash.holdUntil === null ? Math.min(1, flash.t / 0.25) : 1 - (flash.t - flash.holdUntil) / 0.8
+      for (const [name, weight] of Object.entries(flashShapes)) {
+        if (this.expressionNames.includes(name))
+          arkit.set(name, Math.max(arkit.get(name) ?? 0, Math.round(weight * Math.max(0, shape) * 1000) / 1000))
+      }
+    }
+    for (const name of this.arkitWritten) {
+      if (!arkit.has(name))
+        face.set(name, 0)
+    }
+    for (const [name, weight] of arkit)
+      face.set(name, weight)
+    this.arkitWritten = new Set(arkit.keys())
 
     // Blink, idle only, off during emotes: about 0.125 s, quick close (30%), slow open (70%).
     const blink = this.blink
@@ -281,7 +293,7 @@ function targetFor(mood: string, intensity: number, available: readonly string[]
   if (!name)
     return null
   if (kind === 'flash')
-    return { name, weight: Math.round(Math.min(0.9, face.scale * 1.4) * 1000) / 1000 }
+    return { name, weight: Math.round(Math.min(0.9, face.scale * 1.4) * 1000) / 1000, key }
   const clamped = Math.max(0, Math.min(1, intensity))
   const weight = Math.round(face.scale * clamped * 1000) / 1000
   return weight > 0 ? { name, weight, key } : null

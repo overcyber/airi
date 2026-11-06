@@ -505,7 +505,8 @@ function showBridgeCaption(text: string) {
 }
 
 const { thinking: neoAliceThinking, restoreMood: restoreNeoAliceMood } = useNeoAliceStageBridge({
-  playClip: async clipId => stageModelRenderer.value === 'vrm' ? (await vrmViewerRef.value?.playMotion(clipId)) ?? false : false,
+  playClip: async (clipId, options) => stageModelRenderer.value === 'vrm' ? (await vrmViewerRef.value?.playMotion(clipId, options)) ?? false : false,
+  playAnimation: async (url, durationMs) => stageModelRenderer.value === 'vrm' ? (await vrmViewerRef.value?.playMotionUrl(url, { durationMs })) ?? false : false,
   emotes: () => vrmMotions.motionLibrary.emotes,
   synthesize: async (text, signal) => {
     const turn = { sessionId: 'neoalice-bridge', turnId: `neoalice-${++neoAliceClip}` }

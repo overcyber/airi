@@ -78,7 +78,7 @@ describe('motionScheduler', () => {
     const thumb = scheduler.submit(intent('gesture_thumbup'), 0)
 
     const sameLevel = scheduler.submit(intent('gesture_ok'), 100)
-    expect(sameLevel).toEqual({ ok: false, reason: `channel rightArm is held by ${thumb.ok && thumb.cue.id} (priority 50)` })
+    expect(sameLevel).toEqual({ ok: false, reason: `channel leftArm is held by ${thumb.ok && thumb.cue.id} (priority 50)` })
 
     const urgent = scheduler.submit(intent('gesture_ok', { priority: 80 }), 200)
     expect(urgent.ok && urgent.preempted).toEqual([thumb.ok && thumb.cue.id])
