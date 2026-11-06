@@ -87,7 +87,7 @@ import { createVrmInteractionColliders } from '../../composables/vrm/interaction
 import { resolveInternalVrmHooks } from '../../composables/vrm/internal-hooks'
 import { useVRMLipSync } from '../../composables/vrm/lip-sync'
 import { MoodBody } from '../../composables/vrm/mood-body'
-import { MoodFace } from '../../composables/vrm/mood-face'
+import { MoodFace, releaseMoodOverrides } from '../../composables/vrm/mood-face'
 import { emoteLayerBones, inferEmoteLayering } from '../../composables/vrm/motion-layers'
 import { PerformanceDirector } from '../../composables/vrm/performance-director'
 import { createThinkingClip } from '../../composables/vrm/thinking-pose'
@@ -1078,6 +1078,7 @@ async function loadModel() {
     emit('sceneBootstrap', buildSceneBootstrap(_vrm, false))
 
     const nextInteractionColliders = createVrmInteractionColliders(_vrm)
+    releaseMoodOverrides(_vrm.expressionManager)
 
     commitManagedVrmInstance(createManagedVrmInstance({
       animator: nextVrmAnimator,

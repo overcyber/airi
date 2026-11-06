@@ -254,16 +254,13 @@ export function convertRpmToVrm(glb: Glb, options: ConvertOptions): ConvertRepor
 
   const preset: Record<string, unknown> = {}
   for (const [name, weights] of Object.entries(presetBlendShapes)) {
-    const isMouth = ['aa', 'ih', 'ou', 'ee', 'oh'].includes(name)
-    const isEmotion = ['happy', 'angry', 'sad', 'relaxed', 'surprised'].includes(name)
     preset[name] = {
       morphTargetBinds: binds(weights),
       isBinary: false,
-      // An emotion face lowers the blink and the mouth shapes, so they do not stack into a broken face.
-      overrideBlink: isEmotion ? 'blend' : 'none',
+      // The mood of NeoAlice stays for minutes, so an emotion face must not lower the lip sync or the blink.
+      overrideBlink: 'none',
       overrideLookAt: 'none',
-      overrideMouth: isEmotion ? 'blend' : 'none',
-      ...(isMouth && { overrideMouth: 'none' }),
+      overrideMouth: 'none',
     }
   }
   const custom: Record<string, unknown> = {}

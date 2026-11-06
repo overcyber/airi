@@ -8,6 +8,8 @@
 export interface FaceTarget {
   name: string
   weight: number
+  /** The mood key of {@link moodFaces}, for the ARKit shapes of the mood. */
+  key?: string
 }
 
 interface FlashFace extends FaceTarget {
@@ -39,13 +41,55 @@ export interface MoodFaceFrameInput {
  * content (relaxed), curious (think).
  */
 const moodFaces: Record<string, { candidates: string[], scale: number } | null> = {
-  happy: { candidates: ['happy', 'joy'], scale: 0.6 },
-  sad: { candidates: ['sad', 'sorrow'], scale: 0.6 },
-  angry: { candidates: ['angry'], scale: 0.5 },
-  surprised: { candidates: ['surprised'], scale: 0.4 },
-  relaxed: { candidates: ['relaxed', 'fun'], scale: 0.5 },
+  happy: { candidates: ['happy', 'joy'], scale: 0.75 },
+  sad: { candidates: ['sad', 'sorrow'], scale: 0.8 },
+  angry: { candidates: ['angry'], scale: 0.7 },
+  surprised: { candidates: ['surprised'], scale: 0.55 },
+  relaxed: { candidates: ['relaxed', 'fun'], scale: 0.6 },
   think: { candidates: ['think', 'surprised'], scale: 0.3 },
   neutral: null,
+}
+
+/**
+ * ARKit shapes of each mood at full intensity, for a model that has them as expressions (for example Eva,
+ * converted from Ready Player Me). The NeoAlice avatar showed these faces, so the VRM shows the same.
+ *
+ * `sad`, `angry`, and `surprised` (NeoAlice `fear`) are the mood baselines of TalkingHead
+ * (MIT, https://github.com/met4citizen/TalkingHead, `modules/talkinghead.mjs`, `animMoods`).
+ * TalkingHead makes its happy face with animated smiles, so `happy` here is a held smile.
+ * The eye look shapes stay with the look-at, and the blink shapes stay with the blink layer.
+ */
+const arkitMoodShapes: Record<string, Record<string, number>> = {
+  happy: { mouthSmileLeft: 0.6, mouthSmileRight: 0.6, cheekSquintLeft: 0.4, cheekSquintRight: 0.4, eyeSquintLeft: 0.3, eyeSquintRight: 0.3, browInnerUp: 0.15 },
+  sad: { browDownRight: 0.1, browInnerUp: 0.6, browOuterUpRight: 0.2, eyeSquintLeft: 0.7, eyeSquintRight: 0.7, mouthFrownLeft: 0.8, mouthFrownRight: 0.8, mouthLeft: 0.2, mouthPucker: 0.5, mouthRollLower: 0.2, mouthRollUpper: 0.2, mouthShrugLower: 0.2, mouthShrugUpper: 0.2, mouthStretchLeft: 0.4 },
+  angry: { browDownLeft: 0.6, browDownRight: 0.6, jawForward: 0.3, mouthFrownLeft: 0.7, mouthFrownRight: 0.7, mouthRollLower: 0.2, mouthShrugLower: 0.3 },
+  surprised: { browInnerUp: 0.7, eyeSquintLeft: 0.5, eyeSquintRight: 0.5, eyeWideLeft: 0.6, eyeWideRight: 0.6, mouthClose: 0.1, mouthFunnel: 0.3, mouthShrugLower: 0.5, mouthShrugUpper: 0.5 },
+  relaxed: { mouthSmileLeft: 0.3, mouthSmileRight: 0.3, eyeSquintLeft: 0.2, eyeSquintRight: 0.2 },
+}
+
+/** The VRM 1.0 expressions that hold a mood. See {@link releaseMoodOverrides}. */
+const moodExpressionNames = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'joy', 'sorrow', 'fun']
+
+/** The part of `VRMExpressionManager` that {@link releaseMoodOverrides} changes. */
+interface MoodExpressionManager {
+  getExpression: (name: string) => { overrideMouth: string, overrideBlink: string } | null | undefined
+}
+
+/**
+ * Lets the lip sync and the blink run while a mood face shows.
+ *
+ * A VRM 1.0 emotion with `overrideMouth: blend` scales the mouth shapes down by its own weight. That fits a
+ * short emotion. The mood face of NeoAlice stays for minutes, so `sad` at 0.8 would leave 20% of the lip sync.
+ * Same for the blink. The function sets both overrides of the mood expressions to `none`, once per load.
+ */
+export function releaseMoodOverrides(expressionManager: MoodExpressionManager | undefined) {
+  for (const name of moodExpressionNames) {
+    const expression = expressionManager?.getExpression(name)
+    if (!expression)
+      continue
+    expression.overrideMouth = 'none'
+    expression.overrideBlink = 'none'
+  }
 }
 
 const blinkNames = ['blink', 'Blink', 'eyeBlinkLeft', 'eyeBlinkRight']
@@ -73,6 +117,8 @@ export class MoodFace {
   private readonly blink: BlinkState
   private readonly emoteFace: string | null
   private emoteFaceActive = false
+  /** The ARKit shapes that the last frame wrote, so a mood change sets them back to 0. */
+  private arkitWritten = new Set<string>()
 
   constructor(
     private readonly expressionNames: readonly string[],
@@ -129,9 +175,27 @@ export class MoodFace {
         mood.weight = 0
     }
     else if (moodGoal) {
-      mood ??= { name: moodGoal.name, weight: 0 }
+      mood ??= { name: moodGoal.name, weight: 0, key: moodGoal.key }
       mood.weight += (moodGoal.weight - mood.weight) * moodStep
     }
+    // The ARKit shapes of the mood follow the weight of its expression, so they ease in and out with it.
+    const arkit = new Map<string, number>()
+    const shapes = mood?.key ? arkitMoodShapes[mood.key] : undefined
+    const scale = mood?.key ? moodFaces[mood.key]?.scale : undefined
+    if (mood && shapes && scale) {
+      const share = Math.min(1, mood.weight / scale)
+      for (const [name, weight] of Object.entries(shapes)) {
+        if (this.expressionNames.includes(name))
+          arkit.set(name, Math.round(weight * share * 1000) / 1000)
+      }
+    }
+    for (const name of this.arkitWritten) {
+      if (!arkit.has(name))
+        face.set(name, 0)
+    }
+    for (const [name, weight] of arkit)
+      face.set(name, weight)
+    this.arkitWritten = new Set(arkit.keys())
     if (mood) {
       if (emoteName !== mood.name)
         face.set(mood.name, mood.weight)
@@ -209,7 +273,8 @@ export class MoodFace {
 
 /** Picks the expression of a mood, or `null` for neutral or no match. */
 function targetFor(mood: string, intensity: number, available: readonly string[], kind: 'mood' | 'flash'): FaceTarget | null {
-  const face = moodFaces[mood.trim().toLowerCase()]
+  const key = mood.trim().toLowerCase()
+  const face = moodFaces[key]
   if (!face)
     return null
   const name = pickCandidate(face.candidates, available)
@@ -219,7 +284,7 @@ function targetFor(mood: string, intensity: number, available: readonly string[]
     return { name, weight: Math.round(Math.min(0.9, face.scale * 1.4) * 1000) / 1000 }
   const clamped = Math.max(0, Math.min(1, intensity))
   const weight = Math.round(face.scale * clamped * 1000) / 1000
-  return weight > 0 ? { name, weight } : null
+  return weight > 0 ? { name, weight, key } : null
 }
 
 function pickCandidate(candidates: string[], available: readonly string[]): string | undefined {

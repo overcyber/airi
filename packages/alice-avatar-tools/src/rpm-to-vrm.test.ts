@@ -158,7 +158,8 @@ describe('convertRpmToVrm', () => {
     expect(vrm.humanoid.humanBones.hips.node).toBe(0)
     expect(vrm.humanoid.humanBones.leftUpperArm.node).toBe(bones.findIndex(bone => bone.name === 'LeftArm'))
     expect(vrm.expressions.preset.blinkLeft.morphTargetBinds).toEqual([{ node: bones.length, index: 0, weight: 1 }])
-    expect(vrm.expressions.preset.happy.overrideBlink).toBe('blend')
+    // A mood face stays for minutes, so it must not lower the blink or the lip sync.
+    expect(vrm.expressions.preset.happy).toMatchObject({ overrideBlink: 'none', overrideMouth: 'none' })
     expect(report.missingBlendShapes).toContain('mouthSmileLeft')
     // Every blend shape is also a custom expression, so ARKit names stay reachable.
     expect(report.customExpressions).toBe(1)
