@@ -103,7 +103,9 @@ export async function requestServerDefaults(origin: string, fetchFile: typeof fe
 export async function loadServerDefaults(options: { overwrite?: boolean } = {}) {
   let saved = useNeoAliceBrainStore().serverUrl.trim()
   // An HTTPS page cannot call http:// (mixed content). On the web app the page is the server, so use it.
-  if (saved && globalThis.location && isUnreachableFromPage(saved, globalThis.location))
+  // The Android app page is https://localhost and allows http://, so only the page server itself is replaced.
+  const page = globalThis.location
+  if (saved && page && isUnreachableFromPage(saved, page) && sameHostname(saved, page.origin))
     saved = ''
   let serverOrigin: string | undefined
   if (saved) {
@@ -154,6 +156,15 @@ export function resolveServerDefaults(defaults: ServerDefaults, origin: string):
  */
 function plainConfig(config: Record<string, unknown>): Record<string, unknown> {
   return JSON.parse(JSON.stringify(config)) as Record<string, unknown>
+}
+
+function sameHostname(url: string, origin: string) {
+  try {
+    return new URL(url).hostname === new URL(origin).hostname
+  }
+  catch {
+    return false
+  }
 }
 
 /** Hosts that refuse calls from a browser page (CORS). The server proxy reaches them. */

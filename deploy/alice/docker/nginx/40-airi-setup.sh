@@ -47,8 +47,9 @@ put_key AIRI_NEOALICE_AUTH X-API-Key "" "${NEOALICE_API_KEY:-}" NEOALICE_API_KEY
 # CORS: the origins of AIRI_CORS_ORIGINS (comma separated) can call the proxies from another origin.
 # The default "null" is the desktop app (file://). The headers of the upstream are replaced.
 cors_map=/etc/nginx/airi-cors-origins.map
-# The desktop app is always permitted: Electron sends "null" or "file://" for its pages.
-printf '  "null" "null";\n  "file://" "file://";\n' > "$cors_map"
+# The desktop and mobile apps are always permitted: Electron sends "null" or "file://" for its pages,
+# and the Capacitor app sends "https://localhost" (Android) or "capacitor://localhost" (iOS).
+printf '  "null" "null";\n  "file://" "file://";\n  "https://localhost" "https://localhost";\n  "capacitor://localhost" "capacitor://localhost";\n' > "$cors_map"
 for origin in $(printf '%s' "${AIRI_CORS_ORIGINS-null,file://}" | tr ',' ' '); do
   case "$origin" in
     *[!A-Za-z0-9.:/_-]*)
@@ -56,7 +57,7 @@ for origin in $(printf '%s' "${AIRI_CORS_ORIGINS-null,file://}" | tr ',' ' '); d
       continue
       ;;
   esac
-  case "$origin" in null|file://) continue ;; esac
+  case "$origin" in null|file://|https://localhost|capacitor://localhost) continue ;; esac
   printf '  "%s" "%s";\n' "$origin" "$origin" >> "$cors_map"
 done
 cat > /etc/nginx/airi-cors.inc <<'CORS'
