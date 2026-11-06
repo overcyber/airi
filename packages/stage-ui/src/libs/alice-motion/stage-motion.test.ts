@@ -11,7 +11,7 @@ function intent(semanticAction: string, extra: Partial<MotionIntent> = {}): Moti
   return { schemaVersion: 1, id: `bridge-${sequence}`, timestampMs: 0, source: 'llm', semanticAction, ...extra }
 }
 
-function createRuntime(knownClips: string[] = ['greeting', 'shoot', 'peace_sign', 'vrm-motion-1']) {
+function createRuntime(knownClips: string[] = ['greeting', 'shoot', 'peace_sign', 'wave', 'vrm-motion-1']) {
   const playClip = vi.fn(async (clipId: string) => knownClips.includes(clipId))
   return { runtime: new StageMotionRuntime({ playClip }, { seed: 1 }), playClip }
 }
@@ -27,14 +27,14 @@ describe('stageMotionRuntime', () => {
     expect(runtime.stats.started).toBe(1)
   })
 
-  it('maps NeoAlice gestures to the nearest VRM clip and counts the ones without a clip', async () => {
+  it('plays a wave of either hand as the wave gesture of the VRM, and counts a clip that the renderer lacks', async () => {
     const { runtime, playClip } = createRuntime()
 
-    runtime.submit(intent('gesture_index'), 0)
+    runtime.submit(intent('wave_right'), 0)
     runtime.submit(intent('gesture_namaste'), 10_000)
     await runtime.tick(10_000)
 
-    expect(playClip).toHaveBeenNthCalledWith(1, 'shoot')
+    expect(playClip).toHaveBeenNthCalledWith(1, 'wave')
     expect(playClip).toHaveBeenNthCalledWith(2, 'namaste')
     expect(runtime.stats).toMatchObject({ missingClips: 1, lastMissingClip: 'namaste' })
   })
