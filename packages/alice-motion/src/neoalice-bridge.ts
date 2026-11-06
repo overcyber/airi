@@ -229,7 +229,8 @@ export class NeoAliceTranslator {
         break
       }
       case 'cmd/avatar/animation': {
-        const stem = normalizeName(command.url?.split(/[?#]/)[0].split('/').pop()?.replace(/\.[a-z0-9]+$/i, ''))
+        // The file name of `url`, as the mirror module sends it, or a plain `name`.
+        const stem = normalizeName((command.url ?? command.name)?.split(/[?#]/)[0].split('/').pop()?.replace(/\.[a-z0-9]+$/i, ''))
         // An imported animation with the name of the file comes first, for example `wave_hello` for Wave_Hello.fbx.
         semanticAction = stem && (this.known(stem) ?? animationAliases[stem])
         break

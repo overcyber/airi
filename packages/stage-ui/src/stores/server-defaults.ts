@@ -146,6 +146,14 @@ export function resolveServerDefaults(defaults: ServerDefaults, origin: string):
   return { ...defaults, providers, neoalice }
 }
 
+/**
+ * A copy of a provider configuration as plain data. A saved configuration holds reactive proxies,
+ * and the synced store sends it to other windows through BroadcastChannel, which cannot clone a proxy.
+ */
+function plainConfig(config: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(config)) as Record<string, unknown>
+}
+
 /** Hosts that refuse calls from a browser page (CORS). The server proxy reaches them. */
 const browserBlockedHosts = new Set(['integrate.api.nvidia.com'])
 
@@ -209,14 +217,14 @@ export async function applyServerDefaults(
       continue
     const stored = providerConfigStore.getProvider(providerId)
     if (!stored) {
-      providerConfigStore.ensureProvider(providerId, providerId, { ...providerStore.getDefaultProviderConfig(providerId), ...config })
+      providerConfigStore.ensureProvider(providerId, providerId, plainConfig({ ...providerStore.getDefaultProviderConfig(providerId), ...config }))
     }
     else if (overwrite) {
-      await providerConfigStore.updateProviderConfig(providerId, { ...stored.config, ...config }, 'unconfigured')
+      await providerConfigStore.updateProviderConfig(providerId, plainConfig({ ...stored.config, ...config }), 'unconfigured')
     }
     else if (config.baseUrl && isUnreachableFromPage(stored.config.baseUrl, page)) {
       console.info(`[server-defaults] ${providerId}: ${String(stored.config.baseUrl)} is not reachable from this page. It becomes ${config.baseUrl}.`)
-      await providerConfigStore.updateProviderConfig(providerId, { ...stored.config, baseUrl: config.baseUrl }, 'unconfigured')
+      await providerConfigStore.updateProviderConfig(providerId, plainConfig({ ...stored.config, baseUrl: config.baseUrl }), 'unconfigured')
     }
     try {
       if (await providerStore.validateProvider(providerId)) {
