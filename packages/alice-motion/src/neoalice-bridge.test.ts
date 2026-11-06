@@ -5,7 +5,7 @@ import { neoAliceBridgeTopics, NeoAliceTranslator } from './neoalice-bridge'
 
 const catalog = new MotionCatalog()
 
-function translator(options: { acceptAnySite?: boolean } = {}) {
+function translator(options: { acceptAnySite?: boolean, moodSite?: string } = {}) {
   return new NeoAliceTranslator({ site: 'mirror', catalog, ...options })
 }
 
@@ -123,5 +123,15 @@ describe('neoAliceTranslator', () => {
     expect(bridge.translate('neoalice/v1/companion/evt/companion/affect', JSON.stringify({ emotion: 'annoyed', airiEmotion: 'angry' }), 0))
       .toMatchObject({ type: 'mood', mood: { airiEmotion: 'angry' } })
     expect(bridge.translate('neoalice/v1/companion/evt/companion/state', JSON.stringify({ mood: null }), 0)).toMatchObject({ type: 'ignored' })
+  })
+
+  it('reads the mood and the avatar commands of the mood site, but not its speech', () => {
+    const bridge = translator({ moodSite: 'magicmirror' })
+    expect(neoAliceBridgeTopics({ site: 'mirror', moodSite: 'magicmirror' })).toContain('neoalice/v1/magicmirror/evt/mood')
+    expect(neoAliceBridgeTopics({ site: 'mirror', moodSite: 'magicmirror' })).not.toContain('neoalice/v1/magicmirror/cmd/tts/audio')
+
+    expect(bridge.translate('neoalice/v1/magicmirror/evt/mood', '{"mood":"happy"}', 0).type).toBe('mood')
+    expect(bridge.translate('neoalice/v1/magicmirror/cmd/avatar/gesture', '{"gesture":"wave"}', 0).type).toBe('intent')
+    expect(bridge.translate('neoalice/v1/magicmirror/cmd/tts/say', '{"text":"oi"}', 0).type).toBe('ignored')
   })
 })

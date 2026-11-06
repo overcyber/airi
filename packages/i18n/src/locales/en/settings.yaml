@@ -1190,6 +1190,8 @@ pages:
       accept-any-site-description: Read all sites, like the acceptAnySite option of the mirror module
       companion-site: Companion site
       companion-site-description: Site where the companion service publishes its state. The default is companion.
+      mood-site: Mood site
+      mood-site-description: Site where NeoAlice publishes the mood and the avatar commands (gestures, poses, animations). NeoAlice sends them to the mirror site, magicmirror. The bridge reads only the mood and the avatar commands of this site, never its speech.
       username: User name
       password: Password
       speech-mode:

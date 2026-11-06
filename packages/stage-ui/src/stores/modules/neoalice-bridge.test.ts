@@ -101,7 +101,10 @@ describe('useNeoAliceBridgeStore', () => {
     expect(bridge.status).toBe('connected')
     const topics = client.subscribe.mock.calls[0][0]
     expect(topics).toContain('neoalice/v1/mirror/cmd/tts/say')
-    expect(topics.every(topic => topic.startsWith('neoalice/v1/mirror/') || topic.startsWith('neoalice/v1/companion/'))).toBe(true)
+    // The mood site (magicmirror) gives only the mood and the avatar commands, never the speech.
+    expect(topics.every(topic => topic.startsWith('neoalice/v1/mirror/') || topic.startsWith('neoalice/v1/companion/') || topic.startsWith('neoalice/v1/magicmirror/'))).toBe(true)
+    expect(topics).toContain('neoalice/v1/magicmirror/evt/mood')
+    expect(topics).not.toContain('neoalice/v1/magicmirror/cmd/tts/audio')
 
     client.emit('message', 'neoalice/v1/mirror/cmd/tts/say', new TextEncoder().encode('{"text":"Oi"}'))
     client.emit('message', 'neoalice/v1/mirror/cmd/avatar/gesture', new TextEncoder().encode('{"gesture":"index"}'))

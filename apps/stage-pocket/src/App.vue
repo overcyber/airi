@@ -15,6 +15,7 @@ import { useHearingStore } from '@proj-airi/stage-ui/stores/modules/hearing'
 import { useSpeechStore } from '@proj-airi/stage-ui/stores/modules/speech'
 import { useVisionStore } from '@proj-airi/stage-ui/stores/modules/vision'
 import { useOnboardingStore } from '@proj-airi/stage-ui/stores/onboarding'
+import { loadServerDefaults } from '@proj-airi/stage-ui/stores/server-defaults'
 import { useSettings, useSettingsAudioDevice } from '@proj-airi/stage-ui/stores/settings'
 import { useSettingsStageModel } from '@proj-airi/stage-ui/stores/settings/stage-model'
 import { useStartupResourcesStore } from '@proj-airi/stage-ui/stores/startup-resources'
@@ -107,6 +108,10 @@ watch(settings.themeColorsHueDynamic, () => {
 async function loadStartup() {
   try {
     initializeAnalytics()
+    // The Alice Docker server gives the first settings: providers on its proxies and the NeoAlice bridge.
+    // Its URL is in the NeoAlice bridge settings, first from VITE_AIRI_SERVER_URL. Saved settings stay.
+    void loadServerDefaults()
+      .catch(error => console.error('Server defaults failed:', error))
     await startup.run('auth', () => authStore.initialize())
     await startup.run('modelIndex', () => displayModelsStore.initialize())
     await startup.run('card', async () => {

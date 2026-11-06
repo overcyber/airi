@@ -39,16 +39,30 @@ export interface NeoAliceTranslatorOptions {
   site: string
   /** Reads every site. The mirror module calls it `acceptAnySite`. */
   acceptAnySite?: boolean
+  /**
+   * Site where NeoAlice publishes the mood and the avatar commands, when it is not `site`.
+   * NeoAlice sends them to the mirror site (`magicmirror`), also for a separate avatar site.
+   * The bridge reads only the mood and the avatar commands of this site, never its speech.
+   */
+  moodSite?: string
   /** Site where the companion service publishes its state and affect. Default: `companion`. */
   companionSite?: string
   catalog: MotionCatalog
 }
 
+/** The actions of the mood site: mood and avatar commands, no speech. */
+const moodActions = ['evt/mood', 'cmd/evt/mood', 'cmd/avatar/gesture', 'cmd/avatar/pose', 'cmd/avatar/animation', 'cmd/avatar/emoji']
+
 /** The topics to subscribe to. All of them are read-only for the bridge. */
-export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 'site' | 'acceptAnySite' | 'companionSite'>) {
+export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 'site' | 'acceptAnySite' | 'companionSite' | 'moodSite'>) {
   const site = options.acceptAnySite ? '+' : options.site
   const companionSite = options.companionSite ?? 'companion'
+  const moodSite = options.moodSite?.trim()
+  const moodTopics = !options.acceptAnySite && moodSite && moodSite !== options.site
+    ? moodActions.map(action => `${topicRoot}/${moodSite}/${action}`)
+    : []
   return [
+    ...moodTopics,
     `${topicRoot}/${site}/cmd/tts/say`,
     `${topicRoot}/${site}/cmd/tts/audio`,
     `${topicRoot}/${site}/cmd/tts/stop`,
@@ -144,7 +158,8 @@ export class NeoAliceTranslator {
 
     if (site === this.companionSite)
       return this.translateCompanion(topic, site, action, payload)
-    if (!this.options.acceptAnySite && site !== this.options.site)
+    const fromMoodSite = !!this.options.moodSite && site === this.options.moodSite && moodActions.includes(action)
+    if (!this.options.acceptAnySite && site !== this.options.site && !fromMoodSite)
       return ignored(topic, `site "${site}" is not the bridge site`)
 
     const previous = this.recent.get(topic)
