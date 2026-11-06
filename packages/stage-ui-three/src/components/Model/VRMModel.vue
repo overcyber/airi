@@ -78,6 +78,7 @@ import {
   useIdleEyeSaccades,
 } from '../../composables/vrm/animation'
 import { AvatarAnimator } from '../../composables/vrm/avatar-animator'
+import { BodyInertia } from '../../composables/vrm/body-inertia'
 import { loadVrm } from '../../composables/vrm/core'
 import { findVrmEmote } from '../../composables/vrm/emote-cue'
 import { useVRMEmote } from '../../composables/vrm/expression'
@@ -221,6 +222,8 @@ const vrmAnimator = shallowRef<AvatarAnimator>()
 const vrmDirector = shallowRef<PerformanceDirector>()
 const vrmMoodFace = shallowRef<MoodFace>()
 const vrmMoodBody = shallowRef<MoodBody>()
+/** Lag of the upper body after a turn or a push of the hips (Plan 08, M2). A new model starts a new one. */
+let bodyInertia = new BodyInertia()
 /** Mouth opening written by lip sync in the last frame, read by the director in the next one. */
 let lastMouth = 0
 let lastIdleUrl: string | null = null
@@ -385,6 +388,7 @@ function applyManagedVrmInstance(instance: ManagedVrmInstance) {
   vrmDirector.value = instance.director
   vrmMoodFace.value = instance.moodFace
   vrmMoodBody.value = instance.moodBody
+  bodyInertia = new BodyInertia()
   vrmEmote.value = instance.emote
   interactionColliders.value = instance.interactionColliders
 }
@@ -584,6 +588,8 @@ function bindManagedVrmInstanceRenderLoop() {
       director.restore(activeVrm)
     if (activeVrm && moodBody)
       moodBody.restore(activeVrm)
+    if (activeVrm)
+      bodyInertia.restore(activeVrm)
     const animationMixerMs = measureFrameStep(tracingEnabled, () => {
       if (vrmAnimator.value)
         vrmAnimator.value.update(delta)
@@ -610,6 +616,8 @@ function bindManagedVrmInstanceRenderLoop() {
     const bodyFrame = activeVrm && moodBody
       ? moodBody.apply(activeVrm, delta, { speaking: props.speechActive === true, emotePlaying: vrmAnimator.value?.emotePlaying ?? false })
       : undefined
+    if (activeVrm)
+      bodyInertia.apply(activeVrm, delta)
     updateManagedVrmMaterials(activeVrm, delta)
     const vrmFrameHookMs = measureFrameStep(tracingEnabled, () => {
       if (activeVrm && activeVrmGroup) {

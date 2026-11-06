@@ -70,34 +70,35 @@ chmod 600 "$tls_dir/ca.key"
 # Nginx in the container reads the server key.
 chmod 644 "$tls_dir/server.key" "$tls_dir/server.crt" "$tls_dir/ca.crt"
 
-# The Eva in VRM. When modelos/ has no VRM, the script takes eva2.glb and converts it.
-# Sources, in order: EVA_GLB (a path), then ../talkinghead-neoalice/avatars/eva2.glb next to
-# this repository. No server is needed: only the file.
+# The Eva in VRM. When modelos/ has no eva-ruiva.vrm, the script converts the red-haired Eva GLB.
+# The converter also gives her braid spring bones (hair physics, Plan 08 M2).
+# Sources, in order: EVA_GLB (a path), then ../talkinghead-neoalice/avatars/eva-new-ruiva.glb, then
+# ../talkinghead-neoalice/avatars/eva2.glb next to this repository. No server is needed: only the file.
 mkdir -p "$here/modelos"
-if ! find "$here/modelos" -maxdepth 1 -iname '*.vrm' | grep -q .; then
+if [ ! -f "$here/modelos/eva-ruiva.vrm" ]; then
   repo_root="$(cd "$here/../.." && pwd)"
   source_dir="$here/modelos/.fonte"
   mkdir -p "$source_dir"
   glb=""
-  for candidate in "${EVA_GLB:-}" "$repo_root/../talkinghead-neoalice/avatars/eva2.glb"; do
+  for candidate in "${EVA_GLB:-}" "$repo_root/../talkinghead-neoalice/avatars/eva-new-ruiva.glb" "$repo_root/../talkinghead-neoalice/avatars/eva2.glb"; do
     if [ -n "$candidate" ] && [ -f "$candidate" ]; then
-      cp "$candidate" "$source_dir/eva2.glb"
+      cp "$candidate" "$source_dir/eva.glb"
       glb="$candidate"
       break
     fi
   done
   if [ -z "$glb" ]; then
     rm -rf "$source_dir"
-    echo "preparar: ERROR eva2.glb not found. Run again with EVA_GLB=/path/to/eva2.glb, or clone talkinghead-neoalice next to airi." >&2
+    echo "preparar: ERROR eva-new-ruiva.glb not found. Run again with EVA_GLB=/path/to/eva-new-ruiva.glb, or clone talkinghead-neoalice next to airi." >&2
     exit 1
   fi
-  echo "preparar: converting $glb to modelos/eva2.vrm (the first run builds the tools image)"
+  echo "preparar: converting $glb to modelos/eva-ruiva.vrm (the first run builds the tools image)"
   if ! docker image inspect alice/airi-tools:local >/dev/null 2>&1; then
     docker compose -f "$here/compose.yaml" --profile tools build eva-convert
   fi
   # Runs as the user of this script, so the new file belongs to that user.
   docker compose -f "$here/compose.yaml" --profile tools run --rm --user "$(id -u):$(id -g)" eva-convert \
-    /modelos/.fonte/eva2.glb /modelos/eva2.vrm Eva Alice
+    /modelos/.fonte/eva.glb /modelos/eva-ruiva.vrm Eva Alice
   rm -rf "$source_dir"
 fi
 

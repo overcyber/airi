@@ -59,12 +59,18 @@ Evidência do teste no navegador (Eva, VRM 1.0), comparada com o TalkingHead rea
 | Fase | Entrega | Muda a NeoAlice |
 | --- | --- | --- |
 | M1 | Feito em 06/11: gesticular durante a fala com as FBX `Talking_*`. No teste, duas falas seguidas usaram `Talking_1` e depois `Talking_2`. | Não |
-| M2 | Cabelo com física na Eva. O GLB da Eva não tem nenhum osso de cabelo: o cabelo é parte da malha única `Wolf3D_Avatar`, preso à cabeça. Por isso o TalkingHead também não move o cabelo dela. É preciso criar cadeias de ossos de cabelo no conversor (`rpm-to-vrm.ts`), pesar os vértices do cabelo nelas e declarar os `spring bones` do VRM. Modelos VRoid, como a Neptuna, já têm ossos de cabelo, e o AIRI já os simula. | Não |
+| M2 | Feito em 06/11, para a Eva ruiva (`eva-new-ruiva.glb`). O conversor (`hair-springs.ts`) acha a trança que pende atrás da cabeça (283 vértices, de 1,62 m a 1,35 m), cria uma cadeia de 4 ossos mais a ponta, passa os pesos para ela e declara `VRMC_springBone` com colisores na cabeça, no pescoço, nas costas e nos ombros. O corpo ganhou inércia (`body-inertia.ts`): o peito e a cabeça atrasam quando o quadril gira ou acelera, e assentam com um pequeno balanço. | Não |
 | M3 | Página `/mirror` com o corpo inteiro na tela, como a vista `full` do TalkingHead. Hoje a câmera vem das configurações do modelo. Sentada, a Eva fica abaixo do enquadramento do busto. | Não |
 | M4 | Componentes 1 e 2 da seção 2 (backend NeoAlice e presença por sensores de porta e radar) | Sim, só depois do avatar aprovado |
 | M5 | Componente 3 da seção 2 (`MMM-AvatarMQTT`, o avatar antigo do espelho) | Não muda a NeoAlice. Só vale enquanto o espelho usa o avatar antigo. |
 
-## 6. Verificação no espelho
+## 6. Correções de 06/11 depois do teste do responsável
+
+- `celebrate`: o modelo do `custom_moves.json` cruzava os braços embaixo, também no TalkingHead. Agora os dois braços sobem, com as mãos acima da cabeça.
+- Torção do corpo nos gestos: os idles `idle-2` e `idle-4` viravam a cabeça de 37° a 65°. Com um gesto por cima, o avatar parecia torto. Ficaram só os três idles que olham para a frente.
+- Mensagens de câmera sem pessoa não aparecem mais no console, porque as câmeras publicam muitos quadros por segundo.
+
+## 7. Verificação no espelho
 
 1. Rodar `deploy/alice/scripts/preparar.sh`. Ele copia as pastas `animations`, `animations_arkit` e `poses` do TalkingHead para `deploy/alice/animacoes/`.
 2. Reconstruir o `airi-web` e recarregar a página `/mirror`.

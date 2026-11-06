@@ -5,6 +5,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { errorMessageFrom } from '@moeru/std'
 
 import { readGlb, writeGlb } from './glb'
+import { addHairSprings } from './hair-springs'
 import { convertRpmToVrm } from './rpm-to-vrm'
 
 /**
@@ -21,8 +22,9 @@ async function main() {
   }
   const glb = readGlb(await readFile(input))
   const report = convertRpmToVrm(glb, { name, authors: [author], otherLicenseUrl: 'https://readyplayer.me/terms' })
+  const hair = addHairSprings(glb)
   await writeFile(output, writeGlb(glb))
-  console.info(JSON.stringify({ output, ...report }, null, 2))
+  console.info(JSON.stringify({ output, ...report, hair }, null, 2))
 }
 
 main().catch((error: unknown) => {

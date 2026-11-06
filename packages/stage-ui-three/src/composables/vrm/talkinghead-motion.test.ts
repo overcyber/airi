@@ -78,6 +78,19 @@ describe('createTalkingHeadClip', () => {
     expect(direction.z).toBeGreaterThan(0.2)
   })
 
+  it('raises both arms for celebrate, and the hands end above the shoulders', () => {
+    const clip = createTalkingHeadClip(fakeVrm(), { kind: 'gesture', name: 'celebrate', mirror: false }, { durationSeconds: 2, random: middle })!
+    for (const side of ['left', 'right'] as const) {
+      const upper = rotationOf(clip.tracks.find(track => track.name === `Normalized_${side}UpperArm.quaternion`) as QuaternionKeyframeTrack)
+      const lower = rotationOf(clip.tracks.find(track => track.name === `Normalized_${side}LowerArm.quaternion`) as QuaternionKeyframeTrack)
+      // T pose: the left arm points along +X, the right arm along -X. Chain the forearm on the upper arm.
+      const axis = new Object3D().up.set(side === 'left' ? 1 : -1, 0, 0)
+      const upperDirection = axis.clone().applyQuaternion(upper)
+      const forearmDirection = axis.clone().applyQuaternion(upper.clone().multiply(lower))
+      expect(upperDirection.y + forearmDirection.y).toBeGreaterThan(0.5)
+    }
+  })
+
   it('swings the forearm for a wave, across the range of the template', () => {
     const clip = createTalkingHeadClip(fakeVrm(), { kind: 'gesture', name: 'wave', mirror: true }, { durationSeconds: 3, random: middle })!
     const forearm = clip.tracks.find(track => track.name === 'Normalized_rightLowerArm.quaternion') as QuaternionKeyframeTrack

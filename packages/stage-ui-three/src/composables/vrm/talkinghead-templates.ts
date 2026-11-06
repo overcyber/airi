@@ -278,13 +278,18 @@ export const talkingHeadGestures: Readonly<Record<string, TalkingHeadProps>> = {
     'RightArm.rotation': { x: 0.8, y: -0.3, z: -0.6 },
     'RightForeArm.rotation': { x: 0, y: 0, z: -0.4 },
   },
+  // AIRI fix: the NeoAlice `celebrate` of custom_moves.json crosses the arms low, also on TalkingHead.
+  // Both arms rise: upper arms out, forearms up, hands above the head. Found by a search on the retargeted
+  // arm directions. The right side is the mirror image (x, -y, -z).
   celebrate: {
-    'LeftShoulder.rotation': { x: 1.8, y: 0.2, z: -1.5 },
-    'LeftArm.rotation': { x: 2, y: 0.3, z: 0.5 },
-    'LeftForeArm.rotation': { x: 0, y: 0, z: 0.3 },
-    'RightShoulder.rotation': { x: 1.8, y: -0.2, z: 1.5 },
-    'RightArm.rotation': { x: 2, y: -0.3, z: -0.5 },
-    'RightForeArm.rotation': { x: 0, y: 0, z: -0.3 },
+    'LeftShoulder.rotation': { x: 1.75, y: 0.3, z: -1.4 },
+    'LeftArm.rotation': { x: [1.3, 1.5], y: -1, z: [1.7, 1.9] },
+    'LeftForeArm.rotation': { x: -0.2, y: 0, z: 1.575 },
+    'LeftHand.rotation': { x: -0.3, y: -0.2, z: 0 },
+    'RightShoulder.rotation': { x: 1.75, y: -0.3, z: 1.4 },
+    'RightArm.rotation': { x: [1.3, 1.5], y: 1, z: [-1.9, -1.7] },
+    'RightForeArm.rotation': { x: -0.2, y: 0, z: -1.575 },
+    'RightHand.rotation': { x: -0.3, y: 0.2, z: 0 },
   },
 }
 

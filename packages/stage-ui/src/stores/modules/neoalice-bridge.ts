@@ -206,6 +206,9 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
         return
       receivedCount.value++
       const event = translator.translate(topic, payload.toString(), Date.now())
+      // The cameras publish many frames per second. A frame without a person is normal, so it is not logged.
+      if (event.type === 'ignored' && topic.includes('/evt/vision/'))
+        return
       if (event.type === 'ignored') {
         ignoredCount.value++
         lastIgnored.value = `${event.topic}: ${event.reason}`

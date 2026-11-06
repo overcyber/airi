@@ -31,7 +31,7 @@ describe('useVrmMotionsStore', () => {
     await store.load()
 
     expect(store.motionLibrary.emotes.map(emote => emote.id)).toContain('greeting')
-    expect(store.motionLibrary.idles).toHaveLength(5)
+    expect(store.motionLibrary.idles).toHaveLength(3)
   })
 
   it('adds an imported VRMA file as an emote with its description', async () => {

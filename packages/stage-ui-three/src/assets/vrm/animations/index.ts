@@ -44,11 +44,11 @@ export const proceduralThinkingMotion = 'airi:procedural/thinking'
 // Source: https://vite.dev/guide/assets#new-url-url-import-meta-url
 // Removal condition: none while the assets ship with the package.
 export const defaultVrmMotionLibrary: VrmMotionLibrary = {
+  // idle-2 and idle-4 turn the head 37 to 65 degrees away. On the mirror, with a gesture over them, the avatar
+  // looked twisted, so the pool keeps the three idles that face the viewer (head turn under 8 degrees).
   idles: [
     new URL('./utsuwa/idle-1.vrma', import.meta.url).toString(),
-    new URL('./utsuwa/idle-2.vrma', import.meta.url).toString(),
     new URL('./utsuwa/idle-3.vrma', import.meta.url).toString(),
-    new URL('./utsuwa/idle-4.vrma', import.meta.url).toString(),
     new URL('./utsuwa/idle-5.vrma', import.meta.url).toString(),
   ],
   talking: new URL('./utsuwa/talking.vrma', import.meta.url).toString(),

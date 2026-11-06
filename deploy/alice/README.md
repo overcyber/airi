@@ -131,8 +131,8 @@ O navegador só libera algumas funções em contexto seguro: HTTPS, ou `http://l
 
 Rode na raiz do repositório.
 
-1. Tenha o arquivo `eva2.glb`: o repositório `talkinghead-neoalice` ao lado do `airi` (por exemplo `~/talkinghead-neoalice` e `~/airi`), ou o caminho do arquivo em `EVA_GLB`. Nenhum servidor é necessário.
-2. Rode o script. Ele cria o `.env` com os IPs da máquina (`hostname -I`), os certificados, e a Eva em VRM: se `modelos/` não tem nenhum `.vrm`, ele pega o `avatars/eva2.glb` e converte sozinho em `modelos/eva2.vrm`. Na primeira vez, isso constrói a imagem de ferramentas e leva alguns minutos. Com o GLB em outro lugar: `EVA_GLB=/caminho/eva2.glb deploy/alice/scripts/preparar.sh`.
+1. Tenha o arquivo `eva-new-ruiva.glb` (a Eva ruiva): o repositório `talkinghead-neoalice` ao lado do `airi` (por exemplo `~/talkinghead-neoalice` e `~/airi`), ou o caminho do arquivo em `EVA_GLB`. Sem ele, o script usa o `eva2.glb`. Nenhum servidor é necessário.
+2. Rode o script. Ele cria o `.env` com os IPs da máquina (`hostname -I`), os certificados, e a Eva em VRM: se `modelos/` não tem o `eva-ruiva.vrm`, ele pega o `avatars/eva-new-ruiva.glb` e converte sozinho em `modelos/eva-ruiva.vrm`, com a trança com física (spring bones). Um `eva2.vrm` que já existe continua na lista. Na primeira vez, isso constrói a imagem de ferramentas e leva alguns minutos. Com o GLB em outro lugar: `EVA_GLB=/caminho/eva-new-ruiva.glb deploy/alice/scripts/preparar.sh`.
 
    ```bash
    deploy/alice/scripts/preparar.sh
