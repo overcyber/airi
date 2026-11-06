@@ -123,6 +123,7 @@ export async function loadServerDefaults(options: { overwrite?: boolean } = {}) 
     return true
   }
   const defaults = await fetchServerDefaults(globalThis.location, globalThis.fetch, serverOrigin)
+  console.info(`[server-defaults] ${defaults ? 'applying the settings of' : 'no settings from'} ${serverOrigin ?? 'the page server'}`)
   if (!defaults)
     return false
   await applyServerDefaults(defaults, globalThis.location, options)
@@ -208,6 +209,20 @@ export async function applyServerDefaults(
   // the saved ones. A saved API key stays when the server has none.
   const overwrite = options.overwrite === true
 
+  // The NeoAlice bridge first: a provider check can wait for a slow service, and the bridge must not wait.
+  const bridge = useNeoAliceBridgeStore()
+  if (defaults.neoalice?.site && (overwrite || !bridge.site)) {
+    bridge.site = defaults.neoalice.site
+    bridge.enabled = defaults.neoalice.enabled
+    bridge.speechMode = defaults.neoalice.speechMode
+    bridge.voiceInput = defaults.neoalice.voiceInput
+    bridge.userId = defaults.neoalice.userId
+    bridge.announceState = defaults.neoalice.announceState
+    if (defaults.neoalice.brokerUrl)
+      bridge.brokerUrl = defaults.neoalice.brokerUrl
+    useNeoAliceBrainStore().brainMode = defaults.neoalice.brainMode
+  }
+
   const providerStore = useProviderStore()
   const providerConfigStore = useProviderConfigStore()
   const valid = new Set<string>()
@@ -252,18 +267,5 @@ export async function applyServerDefaults(
   if (hearing?.provider && valid.has(hearing.provider) && (overwrite || !hearingStore.activeTranscriptionProvider)) {
     hearingStore.activeTranscriptionProvider = hearing.provider
     hearingStore.activeTranscriptionModel = hearing.model
-  }
-
-  const bridge = useNeoAliceBridgeStore()
-  if (defaults.neoalice?.site && (overwrite || !bridge.site)) {
-    bridge.site = defaults.neoalice.site
-    bridge.enabled = defaults.neoalice.enabled
-    bridge.speechMode = defaults.neoalice.speechMode
-    bridge.voiceInput = defaults.neoalice.voiceInput
-    bridge.userId = defaults.neoalice.userId
-    bridge.announceState = defaults.neoalice.announceState
-    if (defaults.neoalice.brokerUrl)
-      bridge.brokerUrl = defaults.neoalice.brokerUrl
-    useNeoAliceBrainStore().brainMode = defaults.neoalice.brainMode
   }
 }

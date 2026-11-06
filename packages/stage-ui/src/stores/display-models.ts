@@ -507,15 +507,26 @@ export const useDisplayModelsStore = defineStore('display-models', () => {
     startAccountWatcher()
     cloud.start()
 
-    await import('@proj-airi/stage-ui-live2d/utils/live2d-zip-loader')
-    await import('@proj-airi/stage-ui-live2d/utils/live2d-opfs-registration')
+    // NOTICE:
+    // The Live2D modules need the Cubism core script. Without it, they throw while they load
+    // ("Could not find Cubism 4 runtime"), and initialize() stopped there. The desktop app then never
+    // reached its next startup steps: the stage model, the audio devices, and the widgets channel.
+    // Source: apps/stage-tamagotchi/src/renderer/App.vue, the full stage runtime initialize().
+    // Removal condition: the Live2D modules load without the Cubism core, or the core always loads first.
+    try {
+      await import('@proj-airi/stage-ui-live2d/utils/live2d-zip-loader')
+      await import('@proj-airi/stage-ui-live2d/utils/live2d-opfs-registration')
+      const { loadLive2DModelPreview } = await import('@proj-airi/stage-ui-live2d/utils/live2d-preview')
+      generateLive2DPreview = loadLive2DModelPreview
+    }
+    catch (err) {
+      console.error('[display-models] failed to load the Live2D modules:', err)
+    }
 
-    const { loadLive2DModelPreview } = await import('@proj-airi/stage-ui-live2d/utils/live2d-preview')
     const { loadVrmModelPreview } = await import('@proj-airi/stage-ui-three/utils/vrm-preview')
     const { loadSpineModelPreview } = await import('@proj-airi/stage-ui-spine/utils/spine-preview')
     const { loadTachieModelPreview } = await import('@proj-airi/stage-ui-tachie/utils/tachie-preview')
 
-    generateLive2DPreview = loadLive2DModelPreview
     generateVrmPreview = loadVrmModelPreview
     generateSpinePreview = loadSpineModelPreview
     generateTachiePreview = loadTachieModelPreview

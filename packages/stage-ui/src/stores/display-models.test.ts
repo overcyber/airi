@@ -78,8 +78,12 @@ async function startCloudSync() {
   signIn('owner-a')
   useFeatureFlagsStore().setPreference(DISPLAY_MODEL_SYNC_FLAG.key, true)
   const store = useDisplayModelsStore()
-  // The preview renderers need `window` and fail to load in Node. Sync starts before they load.
-  await expect(store.initialize()).rejects.toThrow('window is not defined')
+  // The preview renderers need browser APIs and fail to load in Node. Sync starts before they load.
+  // A Live2D module that fails to load is logged and skipped, so the VRM preview import fails here.
+  const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  await expect(store.initialize()).rejects.toThrow()
+  expect(consoleError).toHaveBeenCalledWith('[display-models] failed to load the Live2D modules:', expect.anything())
+  consoleError.mockRestore()
   await vi.waitFor(() => expect(store.cloudModels).toHaveLength(1))
   return store
 }

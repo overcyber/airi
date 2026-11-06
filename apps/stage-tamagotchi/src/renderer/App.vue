@@ -300,17 +300,17 @@ function createFullStageRuntime() {
   return {
     async initialize() {
       initializeAnalytics()
+      // The Alice Docker server gives the first settings: providers on its proxies and the NeoAlice
+      // bridge. Its URL is in the NeoAlice bridge settings, first from VITE_AIRI_SERVER_URL. Saved settings
+      // stay. It runs first, so a slow startup step below does not delay the bridge.
+      void loadServerDefaults()
+        .catch(error => console.error('Server defaults failed:', error))
       await authStore.initialize()
       await displayModelsStore.initialize()
       await cardStore.initialize()
       registerAuthenticatedSetup()
       if (!authStore.isAuthenticated)
         await removeAuthenticationProviderConfiguration()
-
-      // The Alice Docker server gives the first settings: providers on its proxies and the NeoAlice
-      // bridge. Its URL is in the NeoAlice bridge settings, first from VITE_AIRI_SERVER_URL. Saved settings stay.
-      void loadServerDefaults()
-        .catch(error => console.error('Server defaults failed:', error))
 
       await displayModelsStore.loadDisplayModelsFromIndexedDB()
       await settingsStore.initializeStageModel()
@@ -408,7 +408,6 @@ onMounted(async () => {
   await restoreLocale()
 
   await chatStore.initialize(syncedPinia)
-
   await fullStageRuntime?.initialize()
   await chatStreamView?.initializeStreamView()
 })
