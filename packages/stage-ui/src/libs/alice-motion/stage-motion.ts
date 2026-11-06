@@ -28,17 +28,12 @@ export interface StageMotionStats {
 }
 
 /**
- * Clips that the VRM motion library has under another name.
- * NOTICE:
- * The VRM library has no clip for most NeoAlice gestures yet (see `defaultMotionCatalogEntries`).
- * These are the nearest bundled emotes: the greeting waves with both hands, and shoot points the index finger.
- * Source: `packages/stage-ui-three/src/assets/vrm/animations/index.ts`.
- * Removal condition: the VRM library gets its own wave and pointing clips (sprint V5).
+ * Clips that the VRM stage draws under another name. The VRM draws the TalkingHead hand gestures
+ * by code (`gesture-poses.ts` of stage-ui-three), and a wave of either hand is its `wave` gesture.
  */
 const vrmClipAliases: Record<string, string> = {
-  wave_left: 'greeting',
-  wave_right: 'greeting',
-  index: 'shoot',
+  wave_left: 'wave',
+  wave_right: 'wave',
 }
 
 /** Lower snake case of an emote name, the form of a semantic action. */

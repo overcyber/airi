@@ -552,6 +552,15 @@ const { thinking: neoAliceThinking } = useNeoAliceStageBridge({
     neoAliceGroup?.stop({ fadeMs: 120 }).catch(() => {})
   },
   showCaption: showBridgeCaption,
+  reactEmotion: (emotion) => {
+    if (stageModelRenderer.value === 'vrm') {
+      vrmViewerRef.value?.reactExpression(emotion, 1)
+      return
+    }
+    const payload = toStageEmotionPayload({ name: emotion, intensity: 1 })
+    if (payload)
+      emotionsQueue.enqueue(payload)
+  },
   applyEmotion: (emotion, intensity) => {
     const payload = toStageEmotionPayload({ name: emotion, intensity })
     if (payload)

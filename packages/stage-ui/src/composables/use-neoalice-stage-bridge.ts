@@ -26,6 +26,8 @@ export interface NeoAliceStageBridgeOptions {
   showCaption: (text: string) => void
   /** Applies an AIRI emotion name, for example `happy`, with an intensity from 0 to 1. */
   applyEmotion: (emotion: string, intensity: number) => void
+  /** Shows a short face reaction that does not change the resting mood, for example for an emoji. */
+  reactEmotion?: (emotion: string) => void
 }
 
 /** The bridge stops thinking after this time without speech, so a lost reply cannot freeze the pose. */
@@ -168,6 +170,10 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         return
       case 'intent':
       {
+        // NeoAlice sends an emoji to show on the face. The VRM has no emoji, so the face reacts with its emotion.
+        const reaction = event.emoji ? emotionOfEmoji(event.emoji) : undefined
+        if (reaction)
+          options.reactEmotion?.(reaction)
         const result = runtime.submit({ ...event.intent, timestampMs: Math.round(now) }, now)
         if (!result.ok)
           console.info(`[neoalice-bridge] refused ${event.intent.semanticAction}: ${result.reason}`)
@@ -361,6 +367,23 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   })
 
   return { thinking, runtime }
+}
+
+/** Face emotion of an emoji of `cmd/avatar/emoji`. Unknown emoji give `undefined`. */
+export function emotionOfEmoji(emoji: string): string | undefined {
+  if (/[\u{1F600}-\u{1F60A}\u{1F60D}\u{1F642}\u{1F643}\u{1F917}\u{1F970}\u{263A}\u{2764}\u{1F496}\u{1F44B}\u{1F44D}]/u.test(emoji))
+    return 'happy'
+  if (/[\u{1F622}\u{1F62D}\u{1F61E}\u{1F614}\u{1F625}\u{1F641}\u{2639}\u{1F494}]/u.test(emoji))
+    return 'sad'
+  if (/[\u{1F620}\u{1F621}\u{1F624}\u{1F92C}]/u.test(emoji))
+    return 'angry'
+  if (/[\u{1F62E}\u{1F62F}\u{1F632}\u{1F631}\u{1F92F}]/u.test(emoji))
+    return 'surprised'
+  if (/[\u{1F914}\u{1F9D0}]/u.test(emoji))
+    return 'think'
+  if (/[\u{1F634}\u{1F62A}\u{1F971}]/u.test(emoji))
+    return 'tired'
+  return undefined
 }
 
 /** Decodes base64 WAV from `cmd/tts/audio`. Returns `null` for broken base64. */

@@ -82,6 +82,7 @@ import { loadVrm } from '../../composables/vrm/core'
 import { findVrmEmote } from '../../composables/vrm/emote-cue'
 import { useVRMEmote } from '../../composables/vrm/expression'
 import { loadFbxClip } from '../../composables/vrm/fbx-retarget'
+import { createGestureClip, isProceduralGesture } from '../../composables/vrm/gesture-poses'
 import { createVrmInteractionColliders } from '../../composables/vrm/interaction'
 import { resolveInternalVrmHooks } from '../../composables/vrm/internal-hooks'
 import { useVRMLipSync } from '../../composables/vrm/lip-sync'
@@ -1317,7 +1318,21 @@ defineExpose({
     const emote = findVrmEmote(props.motionLibrary.emotes, id)
     const targetVrm = vrm.value
     const animator = vrmAnimator.value
-    if (!emote || !targetVrm || !animator)
+    if (!targetVrm || !animator)
+      return false
+    // NeoAlice sends the hand gestures and stances of the TalkingHead avatar, which have no clip file.
+    // They are drawn by code on the arm bones, over the idle (bone mask of V6).
+    if (!emote && isProceduralGesture(id)) {
+      const clip = createGestureClip(targetVrm, id)
+      if (!clip)
+        return false
+      if (clip.tracks.length > 0) {
+        const nodes = new Set(clip.tracks.map(track => track.name.slice(0, track.name.lastIndexOf('.'))))
+        animator.playEmote(clip, undefined, { nodes })
+      }
+      return true
+    }
+    if (!emote)
       return false
     try {
       const clip = await loadMotionClip(targetVrm, emote.url, emote.format)
