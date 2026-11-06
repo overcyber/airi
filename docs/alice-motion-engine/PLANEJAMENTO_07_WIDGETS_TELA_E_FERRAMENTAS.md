@@ -76,6 +76,17 @@ Regras:
 
 Ordem: W1 e W2 primeiro, porque ver a tela é o pedido mais direto e não depende de ferramentas. Depois W3. A W4 pode ser feita a qualquer momento, e a W5 depende da sua aprovação.
 
+### Estado (06/11/2026)
+
+A W3 foi feita antes da W1 e da W2, porque o responsável relatou que nenhum widget abre no modo cérebro.
+
+- `packages/stage-ui/src/composables/use-neoalice-brain-tools.ts`: cada resposta da NeoAlice (as partes que chegam a menos de 2 s uma da outra) inicia um passe do modelo de chat do AIRI.
+- O passe recebe só `stage_widgets`, `get_weather` e `image_journal`, a pergunta digitada (quando existe) e a resposta da NeoAlice. O texto do modelo é descartado.
+- A opção "Abrir widgets para as respostas da NeoAlice" fica na página da ponte, abaixo do modo cérebro. Ela começa ligada.
+- Só o app desktop registra essas ferramentas. Na Web, o passe não roda.
+- Teste no Electron: um modelo falso pediu `stage_widgets` com o componente `weather`, e a janela do widget abriu.
+- Uma pergunta por voz chega à NeoAlice como áudio, então o passe vê só a resposta dela.
+
 ## 6. Critérios de aceite
 
 - W2: com a tela compartilhada, "o que tem na minha tela?" recebe uma resposta da NeoAlice que cita o conteúdo da tela. Com o compartilhamento desligado, nenhuma captura acontece.

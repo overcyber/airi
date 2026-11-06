@@ -4,6 +4,7 @@ import type { StageEmote } from '../libs/alice-motion/stage-motion'
 
 import { errorMessageFrom } from '@moeru/std'
 import { isPublishableSite, neoAliceAudioEvent, neoAliceStateEvent, neoAliceSttFinalEvent } from '@proj-airi/alice-motion'
+import { number, object, safeParse, string } from 'valibot'
 import { onScopeDispose, ref, watch } from 'vue'
 
 import { NeoAliceMicrophone, neoAliceVoiceSampleRate, segmentToWavBase64 } from '../libs/alice-motion/neoalice-voice'
@@ -11,6 +12,7 @@ import { StageMotionRuntime } from '../libs/alice-motion/stage-motion'
 import { useChatSessionStore } from '../stores/chat/session-store'
 import { useNeoAliceBrainStore } from '../stores/modules/neoalice-brain'
 import { useNeoAliceBridgeStore } from '../stores/modules/neoalice-bridge'
+import { useNeoAliceBrainTools } from './use-neoalice-brain-tools'
 
 export interface NeoAliceStageBridgeOptions {
   /** Plays a clip of the VRM stage. Resolves `false` when the stage is not VRM or has no such clip. */
@@ -50,6 +52,30 @@ const heartbeatIntervalMs = 30_000
  */
 const mountedStages: symbol[] = []
 
+interface StoredMood {
+  emotion: string
+  intensity: number
+  atMs: number
+}
+
+/** NeoAlice keeps a mood for hours. After half a day, the stored mood is too old to show. */
+const storedMoodMaxAgeMs = 12 * 60 * 60 * 1000
+
+const storedMoodSchema = object({ emotion: string(), intensity: number(), atMs: number() })
+
+/** Reads the stored mood. An empty or broken value gives `undefined`. */
+export function readStoredMood(raw: string): StoredMood | undefined {
+  if (!raw)
+    return undefined
+  try {
+    const result = safeParse(storedMoodSchema, JSON.parse(raw))
+    return result.success ? result.output : undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
 /**
  * Connects the NeoAlice bridge (S08) to the stage.
  *
@@ -60,6 +86,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   const bridge = useNeoAliceBridgeStore()
   const brain = useNeoAliceBrainStore()
   const chatSession = useChatSessionStore()
+  const brainTools = useNeoAliceBrainTools()
   const runtime = new StageMotionRuntime({
     playClip: options.playClip,
     log: message => console.info(`[neoalice-bridge] ${message}`),
@@ -167,6 +194,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
       case 'mood':
         runtime.director.setAffect(event.mood.airiEmotion, event.intensity)
         options.applyEmotion(event.mood.airiEmotion, event.intensity ?? 1)
+        bridge.lastMood = JSON.stringify({ emotion: event.mood.airiEmotion, intensity: event.intensity ?? 1, atMs: Date.now() } satisfies StoredMood)
         return
       case 'intent':
       {
@@ -259,6 +287,8 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
 
   /** In the brain mode, the reply of NeoAlice is the reply of the chat, so the history keeps it. */
   function recordReply(text: string) {
+    if (brain.brainMode && text)
+      brainTools.noteReply(text)
     const sessionId = chatSession.activeSessionId
     if (!brain.brainMode || !text || !sessionId)
       return
@@ -359,6 +389,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     synthesis?.abort()
     stopVoiceWatch()
     disconnectTextSink()
+    brainTools.dispose()
     waitingSince = undefined
     void microphone.stop().then(() => {
       bridge.voiceStatus = 'off'
@@ -366,7 +397,21 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     release()
   })
 
-  return { thinking, runtime }
+  /**
+   * Shows the last mood of NeoAlice again, for example on a model that just loaded.
+   * A mood older than {@link storedMoodMaxAgeMs} is stale, and the face stays neutral.
+   */
+  function restoreMood(nowMs = Date.now()) {
+    if (!bridge.enabled || mountedStages[0] !== token)
+      return
+    const mood = readStoredMood(bridge.lastMood)
+    if (!mood || nowMs - mood.atMs > storedMoodMaxAgeMs || mood.emotion === 'neutral')
+      return
+    runtime.director.setAffect(mood.emotion, mood.intensity)
+    options.applyEmotion(mood.emotion, mood.intensity)
+  }
+
+  return { thinking, runtime, restoreMood }
 }
 
 /** Face emotion of an emoji of `cmd/avatar/emoji`. Unknown emoji give `undefined`. */

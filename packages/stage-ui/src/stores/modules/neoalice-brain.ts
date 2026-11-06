@@ -18,6 +18,13 @@ export const useNeoAliceBrainStore = defineStore('neoalice-brain', () => {
    * Empty: the server of the page (web app). The desktop app starts with `VITE_AIRI_SERVER_URL`.
    */
   const serverUrl = useLocalStorageManualReset<string>('settings/alice/server-url', serverDefaultsOrigin() ?? '')
+  /**
+   * The AIRI chat model opens widgets for the replies of NeoAlice (Plan 07, W3). It never answers.
+   * Only an app with widget tools (the desktop app) uses it.
+   */
+  const widgetTools = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/widget-tools', true)
+  /** The last typed text and when it was sent, so the widget pass sees the question and the reply. */
+  let lastUserText: { text: string, atMs: number } | undefined
   /** The stage that is connected to NeoAlice sends the text. Only one stage plays the bridge. */
   let textSink: ((text: string) => Promise<void>) | undefined
 
@@ -35,12 +42,21 @@ export const useNeoAliceBrainStore = defineStore('neoalice-brain', () => {
     if (!textSink)
       throw new Error('NeoAlice is not connected. Open the stage, and check the NeoAlice bridge settings.')
     await textSink(text)
+    lastUserText = { text, atMs: Date.now() }
+  }
+
+  /** Returns the typed text of the last two minutes once, then forgets it. A voice question gives `undefined`. */
+  function takeUserText(nowMs = Date.now()) {
+    const last = lastUserText
+    lastUserText = undefined
+    return last && nowMs - last.atMs < 120_000 ? last.text : undefined
   }
 
   function resetState() {
     brainMode.reset()
     serverUrl.reset()
+    widgetTools.reset()
   }
 
-  return { brainMode, serverUrl, connectTextSink, sendText, resetState }
+  return { brainMode, serverUrl, widgetTools, connectTextSink, sendText, takeUserText, resetState }
 })

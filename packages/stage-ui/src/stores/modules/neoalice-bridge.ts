@@ -96,6 +96,11 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
   const userId = useLocalStorageManualReset<string>('settings/neoalice-bridge/user-id', '')
   /** Publishes the `evt/state` heartbeat, so NeoAlice lists the avatar as an active satellite. */
   const announceState = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/announce-state', false)
+  /**
+   * The last mood of NeoAlice and when it arrived. NeoAlice publishes the mood only when it changes, and the
+   * broker does not keep it, so a stage that loads later shows this mood until the next one.
+   */
+  const lastMood = useLocalStorageManualReset<string>('settings/neoalice-bridge/last-mood', '')
   const voiceStatus = ref<NeoAliceVoiceStatus>('off')
   const voiceError = ref('')
   /** The text of the last reply of NeoAlice. */
@@ -260,6 +265,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     voiceInput.reset()
     userId.reset()
     announceState.reset()
+    lastMood.reset()
   }
 
   return {
@@ -275,6 +281,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     voiceInput,
     userId,
     announceState,
+    lastMood,
     voiceStatus,
     voiceError,
     lastHeard,

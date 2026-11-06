@@ -39,7 +39,7 @@ const {
   lastEvent,
 } = storeToRefs(bridge)
 
-const { brainMode, serverUrl } = storeToRefs(useNeoAliceBrainStore())
+const { brainMode, serverUrl, widgetTools } = storeToRefs(useNeoAliceBrainStore())
 // The commit of this build, so a test can tell which version runs.
 const build = useBuildInfo()
 
@@ -152,6 +152,13 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
       v-model="brainMode"
       :label="t('settings.pages.modules.neoalice-bridge.brain-mode')"
       :description="t('settings.pages.modules.neoalice-bridge.brain-mode-description')"
+    />
+
+    <FieldCheckbox
+      v-if="brainMode"
+      v-model="widgetTools"
+      :label="t('settings.pages.modules.neoalice-bridge.widget-tools')"
+      :description="t('settings.pages.modules.neoalice-bridge.widget-tools-description')"
     />
 
     <FieldCheckbox

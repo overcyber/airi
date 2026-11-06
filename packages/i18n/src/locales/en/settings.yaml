@@ -1219,6 +1219,8 @@ pages:
         missing: The server did not send settings. Check the URL, and that the server permits this app (AIRI_CORS_ORIGINS).
       brain-mode: NeoAlice answers the chat
       brain-mode-description: AIRI is the face of NeoAlice, like the TalkingHead avatar. Typed text goes to NeoAlice as evt/stt/final on the site of the avatar, and the reply of NeoAlice is the reply of the chat. The LLM of AIRI does not answer. Set Speech to "Play the audio that NeoAlice sends".
+      widget-tools: Open widgets for the answers of NeoAlice
+      widget-tools-description: The AIRI chat model reads each answer of NeoAlice and opens the weather, map, or image widget when the answer needs one. It never answers. It needs a chat model in Consciousness, and only the desktop app has widgets.
       announce-state: Announce the avatar as a satellite
       announce-state-description: Publishes evt/state on the site every 30 seconds, so NeoAlice lists the avatar as an active satellite and sends it broadcasts, for example alarms
       voice:

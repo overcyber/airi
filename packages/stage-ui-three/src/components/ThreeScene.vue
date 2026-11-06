@@ -117,6 +117,8 @@ const emit = defineEmits<{
   (e: 'error', value: unknown): void
   (e: 'vrmInteract', value: VrmInteractionTarget): void
   (e: 'webglState', value: WebGLState): void
+  /** A VRM model finished loading and can show expressions. The value is the model source. */
+  (e: 'modelReady', value: string): void
 }>()
 
 /**
@@ -734,6 +736,7 @@ function onVRMModelLoaded(value: string) {
   loadingModelIdentity.value = undefined
   modelPhase.value = 'ready'
   void completeSceneBinding(bindingRevision.value)
+  emit('modelReady', value)
 }
 function onVRMModelError(error: unknown) {
   invalidateBindingRevision()

@@ -504,7 +504,7 @@ function showBridgeCaption(text: string) {
   }
 }
 
-const { thinking: neoAliceThinking } = useNeoAliceStageBridge({
+const { thinking: neoAliceThinking, restoreMood: restoreNeoAliceMood } = useNeoAliceStageBridge({
   playClip: async clipId => stageModelRenderer.value === 'vrm' ? (await vrmViewerRef.value?.playMotion(clipId)) ?? false : false,
   emotes: () => vrmMotions.motionLibrary.emotes,
   synthesize: async (text, signal) => {
@@ -843,6 +843,7 @@ defineExpose({
         :motion-library="vrmMotions.motionLibrary"
         @error="reportStageRenderError"
         @vrm-interact="onVRMInteract"
+        @model-ready="restoreNeoAliceMood()"
       >
         <template #webgl-unavailable="{ retry }">
           <WebglUnavailable @retry="retry" />
