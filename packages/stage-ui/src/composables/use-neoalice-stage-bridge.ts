@@ -3,7 +3,7 @@ import type { NeoAliceBridgeEvent, SpeechSegment } from '@proj-airi/alice-motion
 import type { StageEmote } from '../libs/alice-motion/stage-motion'
 
 import { errorMessageFrom } from '@moeru/std'
-import { isPublishableSite, neoAliceAudioEvent, neoAliceStateEvent, neoAliceSttFinalEvent } from '@proj-airi/alice-motion'
+import { isPublishableSite, matchWakeWord, neoAliceAudioEvent, neoAliceStateEvent, neoAliceSttFinalEvent, neoAliceWakeEvent, parseWakeWords } from '@proj-airi/alice-motion'
 import { number, object, safeParse, string } from 'valibot'
 import { onScopeDispose, ref, watch } from 'vue'
 
@@ -13,6 +13,7 @@ import { useChatSessionStore } from '../stores/chat/session-store'
 import { useNeoAliceBrainStore } from '../stores/modules/neoalice-brain'
 import { useNeoAliceBridgeStore } from '../stores/modules/neoalice-bridge'
 import { useNeoAliceBrainTools } from './use-neoalice-brain-tools'
+import { useNeoAlicePhraseTranscriber } from './use-neoalice-phrase-transcriber'
 
 export interface NeoAliceStageBridgeOptions {
   /** Plays a clip of the VRM stage. Resolves `false` when the stage is not VRM or has no such clip. */
@@ -45,6 +46,12 @@ const echoTailMs = 700
 const voiceReplyTimeoutMs = 150_000
 /** Interval of the `evt/state` heartbeat. NeoAlice forgets a satellite after 120 s without one. */
 const heartbeatIntervalMs = 30_000
+/** A camera that sees nobody for this long, then a person, counts as an arrival. */
+const presenceGapMs = 60_000
+/** Shortest time between two greetings. */
+const greetingGapMs = 10_000
+/** A bare wake word opens the microphone for one phrase during this time. */
+const wakeListenMs = 8000
 
 /**
  * Mounted stages that use the bridge, in mount order. Only the first one plays bridge events,
@@ -105,6 +112,12 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   let deafUntilMs = 0
   /** The phrase that waits for its reply, and since when. */
   let waitingSince: number | undefined
+  let lastPresenceMs = Number.NEGATIVE_INFINITY
+  let lastGreetingMs = Number.NEGATIVE_INFINITY
+  let greetingSequence = 0
+  /** After a bare wake word, the next phrase goes to NeoAlice without the wake word, until this time. */
+  let wakeOpenUntilMs = 0
+  const phrases = useNeoAlicePhraseTranscriber()
   const microphone = new NeoAliceMicrophone(segment => void sendPhrase(segment))
 
   watch(options.emotes, emotes => runtime.setEmotes(emotes), { immediate: true })
@@ -207,9 +220,29 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
           console.info(`[neoalice-bridge] refused ${event.intent.semanticAction}: ${result.reason}`)
         break
       }
+      case 'presence':
+        // A person who arrives after a quiet time gets a wave and a smile. A person who stays does not.
+        if (now - lastPresenceMs > presenceGapMs)
+          greet(now)
+        lastPresenceMs = now
+        break
+      case 'greeting':
+        greet(now)
+        break
       default:
         break
     }
+  }
+
+  /** Smile and wave, at most once per {@link greetingGapMs}, for example for a camera and a face greeting together. */
+  function greet(now: number) {
+    if (now - lastGreetingMs < greetingGapMs)
+      return
+    lastGreetingMs = now
+    options.reactEmotion?.('happy')
+    const result = runtime.submit({ schemaVersion: 1, id: `neoalice-vision-${++greetingSequence}`, timestampMs: Math.round(now), source: 'vision', semanticAction: 'wave_right' }, now)
+    if (!result.ok)
+      console.info(`[neoalice-bridge] refused the greeting wave: ${result.reason}`)
   }
 
   const token = Symbol('neoalice-stage')
@@ -219,6 +252,9 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   // stage listens, like the playback of bridge events.
 
   async function sendPhrase(segment: SpeechSegment) {
+    const wakeWords = parseWakeWords(bridge.wakeWord)
+    if (wakeWords.length > 0)
+      return sendWakePhrase(segment, wakeWords)
     if (waitingSince !== undefined)
       return
     const site = bridge.site.trim()
@@ -250,6 +286,61 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
       thinking.value = true
       thinkingSinceMs = clock()
       announce('thinking', sessionId)
+    }
+    catch (error) {
+      bridge.voiceStatus = 'error'
+      bridge.voiceError = errorMessageFrom(error) ?? 'The phrase was not published'
+    }
+  }
+
+  /**
+   * Wake word mode (Plan 06, F2). The phrase is transcribed here, and only a call to Alice goes to NeoAlice:
+   * - "Eva, que horas sao": the wake word stops her speech (barge-in), `evt/wake` goes out, and the question
+   *   goes as `evt/stt/final`. NeoAlice answers `evt/wake` with `cmd/tts/stop`, like on the satellites.
+   * - "Eva" alone: the microphone takes the next phrase, within {@link wakeListenMs}, without the wake word.
+   * - Any other phrase is dropped. The microphone also listens while she speaks, so a wake word can stop her.
+   */
+  async function sendWakePhrase(segment: SpeechSegment, wakeWords: string[]) {
+    const site = bridge.site.trim()
+    if (followsAnySite() || !isPublishableSite(site)) {
+      bridge.voiceStatus = 'error'
+      bridge.voiceError = 'Set one site for the avatar, for example airi-avatar. The microphone does not publish with "Follow every site".'
+      return
+    }
+    let text: string
+    try {
+      bridge.voiceStatus = 'transcribing'
+      text = (await phrases.transcribe(segment)).trim()
+    }
+    catch (error) {
+      bridge.voiceStatus = 'error'
+      bridge.voiceError = errorMessageFrom(error) ?? 'The phrase was not transcribed'
+      return
+    }
+    bridge.voiceStatus = waitingSince === undefined ? 'listening' : 'waiting'
+    const match = text ? matchWakeWord(text, wakeWords) : undefined
+    const open = clock() < wakeOpenUntilMs
+    if (!match && (!open || !text))
+      return
+    try {
+      if (match) {
+        stopCurrentSpeech()
+        stopWaiting()
+        const sessionId = `airi-wake-${Date.now()}-${++voiceSequence}`
+        await bridge.publish(neoAliceWakeEvent({ site, userId: bridge.userId, sessionId, word: match.word, confidence: 1, nowMs: Date.now() }))
+        options.reactEmotion?.('surprised')
+        if (!match.rest) {
+          wakeOpenUntilMs = clock() + wakeListenMs
+          announce('listening', sessionId)
+          return
+        }
+      }
+      wakeOpenUntilMs = 0
+      await sendTypedText(match ? match.rest : text)
+      bridge.voiceStatus = 'waiting'
+      bridge.voiceError = ''
+      runtime.director.userStartedSpeaking(clock())
+      runtime.director.userFinishedSpeaking(clock())
     }
     catch (error) {
       bridge.voiceStatus = 'error'
@@ -367,7 +458,9 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     // The avatar must not hear its own voice: no capture while it speaks, and for a short tail after.
     if (currentSession !== undefined)
       deafUntilMs = now + echoTailMs
-    microphone.paused = now < deafUntilMs
+    // With a wake word, the microphone also listens while she speaks, so the wake word can stop her.
+    // Her own voice rarely starts with the wake word, and the browser echo cancellation removes most of it.
+    microphone.paused = now < deafUntilMs && parseWakeWords(bridge.wakeWord).length === 0
     if (waitingSince !== undefined && now - waitingSince > voiceReplyTimeoutMs) {
       stopWaiting()
       thinking.value = false

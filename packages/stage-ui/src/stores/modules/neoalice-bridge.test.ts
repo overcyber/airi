@@ -102,7 +102,10 @@ describe('useNeoAliceBridgeStore', () => {
     const topics = client.subscribe.mock.calls[0][0]
     expect(topics).toContain('neoalice/v1/mirror/cmd/tts/say')
     // The mood site (magicmirror) gives only the mood and the avatar commands, never the speech.
-    expect(topics.every(topic => topic.startsWith('neoalice/v1/mirror/') || topic.startsWith('neoalice/v1/companion/') || topic.startsWith('neoalice/v1/magicmirror/'))).toBe(true)
+    // The cameras of every site and the face recognition are read too (F5, the vision setting is on by default).
+    const vision = ['neoalice/v1/+/evt/vision/detection', 'neoalice/v1/+/evt/vision/detections', 'neoalice/v1/facialrecog/evt/stt/final']
+    expect(topics).toEqual(expect.arrayContaining(vision))
+    expect(topics.filter(topic => !vision.includes(topic)).every(topic => topic.startsWith('neoalice/v1/mirror/') || topic.startsWith('neoalice/v1/companion/') || topic.startsWith('neoalice/v1/magicmirror/'))).toBe(true)
     expect(topics).toContain('neoalice/v1/magicmirror/evt/mood')
     expect(topics).not.toContain('neoalice/v1/magicmirror/cmd/tts/audio')
 

@@ -1223,15 +1223,20 @@ pages:
       widget-tools-description: The AIRI chat model reads each answer of NeoAlice and opens the weather, map, or image widget when the answer needs one. It never answers. It needs a chat model in Consciousness, and only the desktop app has widgets.
       announce-state: Announce the avatar as a satellite
       announce-state-description: Publishes evt/state on the site every 30 seconds, so NeoAlice lists the avatar as an active satellite and sends it broadcasts, for example alarms
+      vision: React to the NeoAlice cameras
+      vision-description: Reads evt/vision/detection of the NeoAlice cameras and the greetings of the face recognition (site facialrecog). The avatar smiles and waves when a person arrives or is greeted by name. It only reads.
       voice:
         enable: Send the microphone to NeoAlice
         enable-description: Each spoken phrase goes to NeoAlice as evt/audio on the site of the avatar, like a satellite. NeoAlice answers with cmd/tts/audio. Set Speech to "Play the audio that NeoAlice sends", and turn off Hearing, so AIRI does not answer the same phrase.
         user-id: NeoAlice user ID
         user-id-description: The UUID of the NeoAlice user. Empty uses the default user of NeoAlice.
+        wake-word: Wake word
+        wake-word-description: 'For example Eva. Separate other spellings with commas. When it is set, AIRI transcribes each phrase with the Hearing provider, and only a phrase that starts with the wake word goes to NeoAlice. The wake word also stops her speech. Empty: every phrase goes to NeoAlice.'
         status:
           'off': The microphone is off. It listens only while the stage page is open.
           starting: Starting the microphone...
           listening: Listening
+          transcribing: Reading the phrase...
           waiting: Waiting for the reply of NeoAlice. It can take about two minutes.
           error: Voice error
         last-reply: 'Last reply: {text}'

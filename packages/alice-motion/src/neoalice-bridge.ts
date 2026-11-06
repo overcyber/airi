@@ -2,7 +2,7 @@ import type { MotionCatalog } from './catalog'
 import type { MotionIntent, MotionSource } from './contracts'
 import type { ResolvedMood } from './mood-vocabulary'
 
-import { fallback, finite, looseObject, maxLength, maxValue, minValue, number, optional, pipe, safeParse, string } from 'valibot'
+import { array, fallback, finite, looseObject, maxLength, maxValue, minValue, number, optional, pipe, safeParse, string } from 'valibot'
 
 import { maxMessageBytes, motionSources, parseMotionIntent } from './contracts'
 import { resolveMood } from './mood-vocabulary'
@@ -32,6 +32,10 @@ export type NeoAliceBridgeEvent
     | { type: 'user-speech', site: string, text: string }
     | { type: 'mood', site: string, mood: ResolvedMood, intensity?: number, origin: 'neoalice' | 'companion' }
     | { type: 'intent', site: string, intent: MotionIntent, emoji?: string }
+    /** A camera of NeoAlice sees people (F5). `people` is above 0. */
+    | { type: 'presence', site: string, people: number, camera?: string }
+    /** The face recognition greets someone by name, for example "Ola Ana" (F5). */
+    | { type: 'greeting', site: string, text: string }
     | { type: 'ignored', topic: string, reason: string }
 
 export interface NeoAliceTranslatorOptions {
@@ -47,6 +51,13 @@ export interface NeoAliceTranslatorOptions {
   moodSite?: string
   /** Site where the companion service publishes its state and affect. Default: `companion`. */
   companionSite?: string
+  /**
+   * Reads the cameras of NeoAlice (F5): `evt/vision/detection(s)` of every site, and the greetings of
+   * `facialSite`. The avatar looks at a person who arrives, and smiles and waves at a greeting.
+   */
+  vision?: boolean
+  /** Site of the NeoAlice face recognition. Default: `facialrecog`. */
+  facialSite?: string
   catalog: MotionCatalog
 }
 
@@ -54,7 +65,7 @@ export interface NeoAliceTranslatorOptions {
 const moodActions = ['evt/mood', 'cmd/evt/mood', 'cmd/avatar/gesture', 'cmd/avatar/pose', 'cmd/avatar/animation', 'cmd/avatar/emoji']
 
 /** The topics to subscribe to. All of them are read-only for the bridge. */
-export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 'site' | 'acceptAnySite' | 'companionSite' | 'moodSite'>) {
+export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 'site' | 'acceptAnySite' | 'companionSite' | 'moodSite' | 'vision' | 'facialSite'>) {
   const site = options.acceptAnySite ? '+' : options.site
   const companionSite = options.companionSite ?? 'companion'
   const moodSite = options.moodSite?.trim()
@@ -75,6 +86,13 @@ export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 's
     `${topicRoot}/${site}/cmd/avatar/emoji`,
     `${topicRoot}/${companionSite}/evt/companion/state`,
     `${topicRoot}/${companionSite}/evt/companion/affect`,
+    ...(options.vision
+      ? [
+          `${topicRoot}/+/evt/vision/detection`,
+          `${topicRoot}/+/evt/vision/detections`,
+          `${topicRoot}/${options.facialSite || 'facialrecog'}/evt/stt/final`,
+        ]
+      : []),
   ]
 }
 
@@ -83,10 +101,20 @@ const Name = fallback(optional(pipe(string(), maxLength(64))), undefined)
 const Seconds = fallback(optional(pipe(number(), finite(), minValue(0), maxValue(60))), undefined)
 const Percent = fallback(optional(pipe(number(), finite(), minValue(0), maxValue(100))), undefined)
 
+/** The NeoAlice YOLO class of a person. */
+const personClass = 'person'
+const VisionObject = looseObject({ class: Name, class_name: Name })
+const VisionPayload = looseObject({
+  camera: Name,
+  detection: fallback(optional(looseObject({ camera: Name, objects: fallback(optional(array(VisionObject)), undefined) })), undefined),
+  detections: fallback(optional(array(VisionObject)), undefined),
+})
+
 const SpeechPayload = looseObject({
   text: Text,
   lang: Name,
   tts: fallback(optional(looseObject({ text: Text, lang: Name })), undefined),
+  stt: fallback(optional(looseObject({ text: Text })), undefined),
   session_id: fallback(optional(pipe(string(), maxLength(128))), undefined),
   audio: fallback(optional(looseObject({ b64: fallback(optional(string()), undefined) })), undefined),
   audio_base64: fallback(optional(string()), undefined),
@@ -158,6 +186,13 @@ export class NeoAliceTranslator {
 
     if (site === this.companionSite)
       return this.translateCompanion(topic, site, action, payload)
+    if (this.options.vision && (action === 'evt/vision/detection' || action === 'evt/vision/detections'))
+      return translateVision(topic, site, payload)
+    if (this.options.vision && site === (this.options.facialSite || 'facialrecog') && action === 'evt/stt/final') {
+      const parsed = safeParse(SpeechPayload, parseJson(payload))
+      const text = parsed.success ? parsed.output.stt?.text ?? parsed.output.text : undefined
+      return text?.trim() ? { type: 'greeting', site, text: text.trim() } : ignored(topic, 'no greeting text')
+    }
     const fromMoodSite = !!this.options.moodSite && site === this.options.moodSite && moodActions.includes(action)
     if (!this.options.acceptAnySite && site !== this.options.site && !fromMoodSite)
       return ignored(topic, `site "${site}" is not the bridge site`)
@@ -178,8 +213,10 @@ export class NeoAliceTranslator {
       case 'cmd/tts/stop':
         return { type: 'speech-stop', site }
       case 'evt/stt/final': {
-        const text = safeParse(SpeechPayload, data)
-        return text.success && text.output.text ? { type: 'user-speech', site, text: text.output.text } : ignored(topic, 'no text')
+        // The v1 message of NeoAlice has the text in `stt.text`. Older senders put it in `text`.
+        const parsed = safeParse(SpeechPayload, data)
+        const text = parsed.success ? parsed.output.stt?.text ?? parsed.output.text : undefined
+        return text ? { type: 'user-speech', site, text } : ignored(topic, 'no text')
       }
       case 'evt/mood':
       case 'cmd/evt/mood': {
@@ -299,6 +336,19 @@ export class NeoAliceTranslator {
   private known(semanticAction: string) {
     return this.catalog.get(semanticAction) ? semanticAction : undefined
   }
+}
+
+/** A vision message of NeoAlice, in the `detection` (core) or the `detections` (camera satellite) form. */
+function translateVision(topic: string, site: string, payload: string): NeoAliceBridgeEvent {
+  const parsed = safeParse(VisionPayload, parseJson(payload))
+  if (!parsed.success)
+    return ignored(topic, 'vision payload is not an object')
+  const objects = parsed.output.detection?.objects ?? parsed.output.detections ?? []
+  const people = objects.filter(object => (object.class ?? object.class_name) === personClass).length
+  if (people === 0)
+    return ignored(topic, 'no person in the vision message')
+  const camera = parsed.output.detection?.camera ?? parsed.output.camera
+  return { type: 'presence', site, people, ...(camera && { camera }) }
 }
 
 function ignored(topic: string, reason: string): NeoAliceBridgeEvent {

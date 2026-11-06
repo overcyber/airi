@@ -26,6 +26,8 @@ const {
   speechMode,
   voiceInput,
   userId,
+  wakeWord,
+  vision,
   announceState,
   voiceStatus,
   voiceError,
@@ -174,6 +176,14 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
         :description="t('settings.pages.modules.neoalice-bridge.voice.user-id-description')"
       />
 
+      <FieldInput
+        v-model="wakeWord"
+        :label="t('settings.pages.modules.neoalice-bridge.voice.wake-word')"
+        :description="t('settings.pages.modules.neoalice-bridge.voice.wake-word-description')"
+        placeholder="Eva"
+        data-testid="neoalice-wake-word"
+      />
+
       <Alert :tone="voiceTone" data-testid="neoalice-voice-status">
         <div>{{ t(`settings.pages.modules.neoalice-bridge.voice.status.${voiceStatus}`) }}</div>
         <div v-if="voiceError" :class="['text-xs']">
@@ -189,6 +199,12 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
       v-model="announceState"
       :label="t('settings.pages.modules.neoalice-bridge.announce-state')"
       :description="t('settings.pages.modules.neoalice-bridge.announce-state-description')"
+    />
+
+    <FieldCheckbox
+      v-model="vision"
+      :label="t('settings.pages.modules.neoalice-bridge.vision')"
+      :description="t('settings.pages.modules.neoalice-bridge.vision-description')"
     />
 
     <Alert v-if="enabled && !configured" tone="warning">

@@ -51,7 +51,7 @@ export type NeoAliceSpeechMode = 'airi-voice' | 'neoalice-audio' | 'silent'
 
 export type NeoAliceBridgeStatus = 'off' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
-export type NeoAliceVoiceStatus = 'off' | 'starting' | 'listening' | 'waiting' | 'error'
+export type NeoAliceVoiceStatus = 'off' | 'starting' | 'listening' | 'transcribing' | 'waiting' | 'error'
 
 /**
  * Default broker URL: the `/mqtt` path of the page address.
@@ -73,7 +73,7 @@ export function defaultNeoAliceBrokerUrl(page: Pick<Location, 'protocol' | 'host
  * A read-only MQTT client over WebSocket. It subscribes to the topics of one NeoAlice site and of the
  * companion service, translates each message with `NeoAliceTranslator`, and hands the events to the stage.
  * It publishes only on its own site, like a NeoAlice satellite: `evt/audio` with the microphone phrases
- * (`voiceInput`), `evt/stt/final` with typed text (brain mode), and the `evt/state` heartbeat
+ * (`voiceInput`), `evt/stt/final` with typed text (brain mode), `evt/wake` (`wakeWord`), and the `evt/state` heartbeat
  * (`announceState`). All are off by default. NeoAlice answers on the same site with `cmd/tts/audio`.
  *
  * The connection lives while at least one holder needs it: the stage and the settings page call `hold`.
@@ -96,6 +96,13 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
   const userId = useLocalStorageManualReset<string>('settings/neoalice-bridge/user-id', '')
   /** Publishes the `evt/state` heartbeat, so NeoAlice lists the avatar as an active satellite. */
   const announceState = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/announce-state', false)
+  /**
+   * The wake word of the microphone, for example `Eva`. Commas separate other spellings. Empty: every phrase goes
+   * to NeoAlice. Set: only a phrase that starts with the word goes, and the word stops the speech (`evt/wake`).
+   */
+  const wakeWord = useLocalStorageManualReset<string>('settings/neoalice-bridge/wake-word', '')
+  /** Reads the NeoAlice cameras and the face recognition: the avatar greets a person who arrives (F5). */
+  const vision = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/vision', true)
   /**
    * The last mood of NeoAlice and when it arrived. NeoAlice publishes the mood only when it changes, and the
    * broker does not keep it, so a stage that loads later shows this mood until the next one.
@@ -139,7 +146,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     // In the brain mode, AIRI is one satellite: it follows its own site only. Every site would bring the
     // broadcasts of the other satellites, so the same reply arrives once for each site.
     const followAnySite = acceptAnySite.value && !brain.brainMode
-    const options = { site: site.value.trim(), acceptAnySite: followAnySite, companionSite: companionSite.value.trim() || 'companion', moodSite: moodSite.value.trim() || undefined }
+    const options = { site: site.value.trim(), acceptAnySite: followAnySite, companionSite: companionSite.value.trim() || 'companion', moodSite: moodSite.value.trim() || undefined, vision: vision.value }
     // Imported VRMA and FBX motions are part of the catalog, so `cmd/avatar/animation` can name them.
     const translator = new NeoAliceTranslator({ ...options, catalog: catalogWithEmotes(vrmMotions.motionLibrary.emotes) })
     activeTranslator = translator
@@ -207,14 +214,14 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
 
   /**
    * Publishes a satellite message of the avatar. Resolves `false` when the bridge is not connected.
-   * Only `evt/audio`, `evt/state`, and `evt/stt/final` of the configured site are permitted.
+   * Only `evt/audio`, `evt/state`, `evt/stt/final`, and `evt/wake` of the configured site are permitted.
    */
   async function publish(message: NeoAliceSatelliteMessage) {
     const current = client
     const ownSite = site.value.trim()
     if (!current || status.value !== 'connected' || !isPublishableSite(ownSite))
       return false
-    const permitted = ['evt/audio', 'evt/state', 'evt/stt/final'].map(action => `neoalice/v1/${ownSite}/${action}`)
+    const permitted = ['evt/audio', 'evt/state', 'evt/stt/final', 'evt/wake'].map(action => `neoalice/v1/${ownSite}/${action}`)
     if (!permitted.includes(message.topic))
       throw new Error(`The bridge does not publish on ${message.topic}`)
     await current.publishAsync(message.topic, message.payload, { qos: message.qos })
@@ -246,7 +253,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
 
   // Typing in a settings field changes these values on each key. The bridge reconnects once, after a pause.
   // A manual reset ref triggers on every assignment, even with the same value. The key changes only with a real change.
-  const connectionKey = computed(() => JSON.stringify([enabled.value, brokerUrl.value, site.value, acceptAnySite.value, brain.brainMode, companionSite.value, moodSite.value, username.value, password.value]))
+  const connectionKey = computed(() => JSON.stringify([enabled.value, brokerUrl.value, site.value, acceptAnySite.value, brain.brainMode, companionSite.value, moodSite.value, vision.value, username.value, password.value]))
   watchDebounced(connectionKey, () => {
     if (holders > 0)
       void connect()
@@ -265,6 +272,8 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     voiceInput.reset()
     userId.reset()
     announceState.reset()
+    wakeWord.reset()
+    vision.reset()
     lastMood.reset()
   }
 
@@ -281,6 +290,8 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     voiceInput,
     userId,
     announceState,
+    wakeWord,
+    vision,
     lastMood,
     voiceStatus,
     voiceError,

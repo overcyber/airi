@@ -28,8 +28,9 @@ vi.mock('./text-generation', () => ({
 }))
 
 function textOf(conversation: Conversation, index: number) {
-  const part = conversation.turns[index].content[0]
-  return part.type === 'text' ? part.text : ''
+  const turn = conversation.turns[index]
+  const part = turn.type === 'assistant' ? undefined : turn.content[0]
+  return part?.type === 'text' ? part.text : ''
 }
 
 describe('createNeoAliceBrainToolConversation', () => {

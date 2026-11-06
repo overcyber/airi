@@ -37,6 +37,8 @@ const ServerDefaultsSchema = v.object({
     /** NeoAlice answers the chat. See `useNeoAliceBrainStore`. */
     brainMode: v.optional(v.boolean(), false),
     moodSite: v.optional(v.string(), ''),
+    /** The wake word of the microphone. Empty: every phrase goes to NeoAlice. */
+    wakeWord: v.optional(v.string(), ''),
   })),
 })
 
@@ -235,6 +237,7 @@ export async function applyServerDefaults(
     useNeoAliceBrainStore().brainMode = defaults.neoalice.brainMode
     if (defaults.neoalice.moodSite)
       bridge.moodSite = defaults.neoalice.moodSite
+    bridge.wakeWord = defaults.neoalice.wakeWord
   }
 
   const providerStore = useProviderStore()

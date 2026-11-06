@@ -29,14 +29,14 @@ Fonte: respostas do responsável, testadas na NeoAlice real (`AIRI-AVATAR_respos
 | Voz do usuário | `evt/audio` v1 canônico (WAV 16 kHz em `audio.b64`, `user_id`, `session_id`) | avatar → NeoAlice | Feito em 05/11. Uma frase por vez, espera de até 150 s. |
 | Texto digitado | `evt/stt/final` v1 (`stt.text`) | avatar → NeoAlice | Feito em 05/11, no modo cérebro. |
 | Estado do satélite | `evt/state` a cada 30 s | avatar → NeoAlice | Feito em 05/11. Desligado até o responsável autorizar. |
-| Palavra de ativação | `evt/wake` | avatar → NeoAlice | **Falta.** |
-| Visão | `evt/vision/detection`, `evt/stt/final` do facialrecog | NeoAlice → avatar | **Falta** a reação local. |
+| Palavra de ativação | `evt/wake` (`wake.word`, `wake.confidence`) | avatar → NeoAlice | Feito em 06/11 (F2). A NeoAlice responde com `cmd/tts/stop`. |
+| Visão | `evt/vision/detection(s)`, `evt/stt/final` do facialrecog | NeoAlice → avatar | Feito em 06/11 (F5). Só leitura. |
 | HTTP `/audio` e `/chat` | API 8080 | — | Não serve para a voz: a resposta HTTP não traz áudio. Fica de fora. |
 
 Regras do contrato:
 
 - **Site próprio**: o avatar usa `airi-avatar`. O `cmd/tts/audio` vai para um site só. Com o site `magicmirror`, o espelho antigo e o avatar novo tocariam a mesma resposta.
-- O AIRI só publica no próprio site, e só `evt/audio`, `evt/stt/final` e `evt/state`. O código recusa qualquer outro tópico.
+- O AIRI só publica no próprio site, e só `evt/audio`, `evt/stt/final`, `evt/state` e `evt/wake`. O código recusa qualquer outro tópico.
 - Latência medida na NeoAlice: 35 s (`/chat`), 70 s (`evt/stt/final` → `cmd/tts/audio`), até 115 s (`/audio`). O gargalo é o Whisper na CPU (porta 9100). O responsável recomenda o Whisper na NPU (porta 9200).
 
 ## 3. Arquitetura alvo
@@ -91,6 +91,15 @@ Não testado: a NeoAlice real, o desktop compilado, o MagicMirror com o AIRI e o
 - O AIRI tem um detector de palavra de ativação (`libs/voice/wake-word-detector.ts`). Avaliar se ele serve no navegador e sem internet. Senão, propor uma alternativa ao responsável antes de escolher uma biblioteca.
 - Ao detectar a palavra: publicar `evt/wake`, cortar a fala local (interrupção) e abrir o microfone para uma frase.
 
+Estado em 06/11/2026 (feito):
+
+- A palavra é uma configuração da ponte ("Wake word") e do `.env` (`AIRI_DEFAULT_NEOALICE_WAKE_WORD=Eva`). Vazia, o microfone continua em escuta contínua.
+- O detector do AIRI (`wake-word-detector.ts`) não foi usado. Ele baixa um modelo chinês e inglês do Hugging Face e depende do pipeline de voz do chat.
+- No lugar dele, cada frase é transcrita pelo STT do módulo Hearing, que no Docker é o Whisper local (`AIRI_STT_UPSTREAM`). Não entrou nenhuma biblioteca nova.
+- Frase que começa com "Eva" (ou "oi Eva"): a fala local para, sai `evt/wake`, e o resto da frase sai como `evt/stt/final`. "Eva" sozinha abre o microfone por 8 s. As outras frases são descartadas.
+- Com a palavra ligada, o microfone também escuta enquanto o avatar fala. Por isso a palavra interrompe a fala.
+- Teste no navegador, com microfone e STT falsos: uma fala de 25 s parou depois de 3,25 s, no mesmo milissegundo do `evt/wake`. O `evt/stt/final` levou "que horas são?".
+
 ### F3 — Página do espelho
 
 - O `MMM-AiriStage` mostra a página inteira do AIRI num iframe, com chat e botões. O espelho precisa de uma página só do palco: fundo transparente, sem interface, com a ponte e o microfone.
@@ -102,10 +111,19 @@ Não testado: a NeoAlice real, o desktop compilado, o MagicMirror com o AIRI e o
 - Medir o custo por quadro das camadas V1 a V5 e desligar o que pesar mais que o ganho.
 - Detectar a perda do contexto WebGL e mostrar um aviso, em vez de quebrar a página.
 
+Estado em 06/11/2026: `/mirror?stats=1` mostra o fps e a média de cada camada do VRM a cada 5 s, na tela e no console (`[mirror-stats]`). A medição no computador do espelho é do responsável. A perda do contexto WebGL já tem aviso.
+
 ### F5 — Visão
 
 - Reagir a `evt/vision/detection` (pessoa detectada → o avatar olha e cumprimenta) e à saudação do facialrecog.
 - Só leitura. Nenhuma mudança na NeoAlice.
+
+Estado em 06/11/2026 (feito):
+
+- A ponte lê `neoalice/v1/+/evt/vision/detection` (forma do core, `detection.objects[].class`), `neoalice/v1/+/evt/vision/detections` (forma do satélite, `detections[].class_name`) e `neoalice/v1/facialrecog/evt/stt/final`.
+- Uma pessoa que chega depois de 60 s sem ninguém, ou uma saudação do facialrecog, faz o avatar sorrir e acenar. O intervalo mínimo entre dois cumprimentos é de 10 s.
+- A opção "React to the NeoAlice cameras" fica na página da ponte e começa ligada.
+- Teste no navegador: uma pessoa em `vision-entrada` levou o `happy` a 0,7, e o aceno tocou.
 
 ### F6 — Troca do espelho (S16)
 

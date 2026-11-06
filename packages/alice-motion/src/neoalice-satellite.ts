@@ -71,6 +71,23 @@ export function neoAliceSttFinalEvent(input: { site: string, userId: string, ses
 }
 
 /**
+ * The wake word of the avatar as `evt/wake`, QoS 1. NeoAlice answers with `cmd/tts/stop` on the site,
+ * so the wake word also stops the speech of NeoAlice, like on the satellites.
+ */
+export function neoAliceWakeEvent(input: { site: string, userId: string, sessionId: string, word: string, confidence: number, nowMs: number }): NeoAliceSatelliteMessage {
+  const payload = {
+    v: 1,
+    type: 'evt.wake',
+    ts: new Date(input.nowMs).toISOString(),
+    site_id: input.site,
+    ...(input.userId.trim() ? { user_id: input.userId.trim() } : {}),
+    session_id: input.sessionId,
+    wake: { word: input.word, confidence: input.confidence },
+  }
+  return { topic: `${topicRoot}/${input.site}/evt/wake`, payload: JSON.stringify(payload), qos: 1 }
+}
+
+/**
  * The state of the avatar as `evt/state`, QoS 0. NeoAlice counts a site as active while it sees
  * these messages (120 s by default), so a heartbeat every 30 s keeps the avatar in the broadcasts.
  */

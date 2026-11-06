@@ -5,7 +5,7 @@ import { neoAliceBridgeTopics, NeoAliceTranslator } from './neoalice-bridge'
 
 const catalog = new MotionCatalog()
 
-function translator(options: { acceptAnySite?: boolean, moodSite?: string } = {}) {
+function translator(options: { acceptAnySite?: boolean, moodSite?: string, vision?: boolean } = {}) {
   return new NeoAliceTranslator({ site: 'mirror', catalog, ...options })
 }
 
@@ -133,5 +133,32 @@ describe('neoAliceTranslator', () => {
     expect(bridge.translate('neoalice/v1/magicmirror/evt/mood', '{"mood":"happy"}', 0).type).toBe('mood')
     expect(bridge.translate('neoalice/v1/magicmirror/cmd/avatar/gesture', '{"gesture":"wave"}', 0).type).toBe('intent')
     expect(bridge.translate('neoalice/v1/magicmirror/cmd/tts/say', '{"text":"oi"}', 0).type).toBe('ignored')
+  })
+
+  it('reads the final transcript of the v1 message in stt.text', () => {
+    expect(translator().translate('neoalice/v1/mirror/evt/stt/final', JSON.stringify({ v: 1, type: 'evt.stt.final', stt: { text: 'que horas sao', lang: 'pt' } }), 0))
+      .toEqual({ type: 'user-speech', site: 'mirror', text: 'que horas sao' })
+  })
+
+  it('reads people on the cameras and the face recognition greeting, only with vision on (F5)', () => {
+    const topics = neoAliceBridgeTopics({ site: 'mirror', vision: true })
+    expect(topics).toContain('neoalice/v1/+/evt/vision/detections')
+    expect(topics).toContain('neoalice/v1/facialrecog/evt/stt/final')
+    expect(neoAliceBridgeTopics({ site: 'mirror' }).some(topic => topic.includes('vision'))).toBe(false)
+
+    const bridge = translator({ vision: true })
+    const core = { v: 1, type: 'evt.vision.detection', detection: { camera: 'cam-entrada', objects: [{ class: 'person', confidence: 0.93 }, { class: 'person' }] } }
+    expect(bridge.translate('neoalice/v1/vision-entrada/evt/vision/detection', JSON.stringify(core), 0))
+      .toEqual({ type: 'presence', site: 'vision-entrada', people: 2, camera: 'cam-entrada' })
+    const satellite = { v: 1, type: 'evt.vision.detections', camera: 'cam-sala', detections: [{ class_name: 'person', confidence: 0.94 }, { class_name: 'cell phone' }] }
+    expect(bridge.translate('neoalice/v1/vision-sala/evt/vision/detections', JSON.stringify(satellite), 0))
+      .toEqual({ type: 'presence', site: 'vision-sala', people: 1, camera: 'cam-sala' })
+    expect(bridge.translate('neoalice/v1/vision-sala/evt/vision/detections', JSON.stringify({ detections: [{ class_name: 'cat' }] }), 0))
+      .toMatchObject({ type: 'ignored', reason: 'no person in the vision message' })
+    expect(bridge.translate('neoalice/v1/facialrecog/evt/stt/final', JSON.stringify({ stt: { text: 'Ola Ana' } }), 0))
+      .toEqual({ type: 'greeting', site: 'facialrecog', text: 'Ola Ana' })
+
+    expect(translator().translate('neoalice/v1/vision-sala/evt/vision/detections', JSON.stringify(satellite), 0))
+      .toMatchObject({ type: 'ignored' })
   })
 })
