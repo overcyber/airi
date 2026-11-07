@@ -104,6 +104,11 @@ const props = withDefaults(defineProps<{
   showAxes?: boolean
   idleAnimation?: string
   paused?: boolean
+  /**
+   * How the camera frames a model that loads. `full-body` shows the whole body with room above and below, like the
+   * `full` view of TalkingHead, for example on the mirror, where the avatar also sits and raises her arms.
+   */
+  framing?: 'default' | 'full-body'
 }>(), {
   presence: () => presenceBubbleIdle,
   enableOrbitControls: true,
@@ -473,6 +478,21 @@ function applySceneBootstrap(value: SceneBootstrap) {
   const previousTargetOffset = toVector3(lookAtTarget.value).sub(previousOrigin)
   const nextOrigin = toVector3(value.modelOrigin)
   const bootstrapCameraOffset = toVector3(value.cameraPosition).sub(nextOrigin)
+
+  if (props.framing === 'full-body') {
+    // The middle of the body, and a distance that fits 1.3 times its height in the view.
+    const center = { ...value.modelOrigin, y: value.modelOrigin.y - value.modelSize.y / 5 }
+    const halfFov = ((camera.value?.fov ?? 40) / 2) * Math.PI / 180
+    const distance = (value.modelSize.y * 0.65) / Math.tan(halfFov)
+    modelOrigin.value = center
+    modelSize.value = { ...value.modelSize }
+    eyeHeight.value = value.eyeHeight
+    modelOffset.value = { ...value.modelOffset }
+    cameraDistance.value = distance
+    cameraPosition.value = { x: center.x, y: center.y, z: center.z - distance }
+    lookAtTarget.value = { ...value.lookAtTarget }
+    return
+  }
 
   modelOrigin.value = { ...value.modelOrigin }
   modelSize.value = { ...value.modelSize }
@@ -1050,6 +1070,7 @@ defineExpose({
   setExpression: (expression: string, intensity = 1) => {
     modelRef.value?.setExpression(expression, intensity)
   },
+  reactEmoji: (emoji: string) => modelRef.value?.reactEmoji(emoji) ?? false,
   reactExpression: (expression: string, intensity = 1) => {
     modelRef.value?.reactExpression(expression, intensity)
   },

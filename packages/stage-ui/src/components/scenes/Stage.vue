@@ -61,6 +61,8 @@ const props = withDefaults(defineProps<{
   cursorPosition?: { x: number, y: number }
   enableOrbitControls?: boolean
   paused?: boolean
+  /** Camera framing of a VRM model. See `framing` of `ThreeScene`. */
+  vrmFraming?: 'default' | 'full-body'
 }>(), {
   enableOrbitControls: true,
   paused: false,
@@ -553,6 +555,7 @@ const { thinking: neoAliceThinking, restoreMood: restoreNeoAliceMood } = useNeoA
     neoAliceGroup?.stop({ fadeMs: 120 }).catch(() => {})
   },
   showCaption: showBridgeCaption,
+  reactEmoji: emoji => stageModelRenderer.value === 'vrm' && (vrmViewerRef.value?.reactEmoji(emoji) ?? false),
   reactEmotion: (emotion) => {
     if (stageModelRenderer.value === 'vrm') {
       vrmViewerRef.value?.reactExpression(emotion, 1)
@@ -842,6 +845,7 @@ defineExpose({
         :speech-active="nowSpeaking"
         :thinking="(chatSending || neoAliceThinking) && !nowSpeaking"
         :motion-library="vrmMotions.motionLibrary"
+        :framing="props.vrmFraming"
         @error="reportStageRenderError"
         @vrm-interact="onVRMInteract"
         @model-ready="restoreNeoAliceMood()"

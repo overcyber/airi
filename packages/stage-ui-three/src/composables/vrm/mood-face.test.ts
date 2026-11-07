@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { findHappyExpression, MoodFace, releaseMoodOverrides } from './mood-face'
+import { talkingHeadEmojiFaces } from './talkinghead-emoji-faces'
 
 const vrm1Names = ['happy', 'sad', 'angry', 'surprised', 'relaxed', 'neutral', 'blink', 'aa']
 
@@ -153,5 +154,29 @@ describe('moodFace (Utsuwa composer)', () => {
 
   it('finds the happy expression by keyword', () => {
     expect(findHappyExpression(['Fcl_ALL_Joy', 'blink'])).toBe('Fcl_ALL_Joy')
+  })
+})
+
+describe('moodFace emoji faces', () => {
+  it('gives each emoji its own face, with ARKit shapes and with presets only', () => {
+    const arkit = new MoodFace([...vrm1Names, 'blinkLeft', 'blinkRight', 'mouthSmileLeft', 'tongueOut', 'eyeBlinkLeft'], noEarlyBlink)
+    arkit.showFace(talkingHeadEmojiFaces['\u{1F61C}'])
+    const wink = run(arkit, 0.5)
+    expect(wink.get('tongueOut')).toBeCloseTo(1, 2)
+    expect(wink.get('happy')).toBeGreaterThan(0.5)
+
+    // A VRoid-like model with presets only: the laugh closes the eyes, the heart eyes do not.
+    const presets = ['joy', 'sorrow', 'angry', 'surprised', 'Blink', 'A', 'neutral']
+    const laugh = new MoodFace(presets, noEarlyBlink)
+    laugh.showFace(talkingHeadEmojiFaces['\u{1F602}'])
+    const hearts = new MoodFace(presets, noEarlyBlink)
+    hearts.showFace(talkingHeadEmojiFaces['\u{1F60D}'])
+    const laughFace = run(laugh, 0.5)
+    const heartsFace = run(hearts, 0.5)
+    expect(laughFace.get('Blink')).toBeGreaterThan(0.4)
+    expect(heartsFace.get('Blink') ?? 0).toBe(0)
+    expect(laughFace).not.toEqual(heartsFace)
+    // The face goes away after about 3 s.
+    expect(run(laugh, 3).get('joy')).toBe(0)
   })
 })

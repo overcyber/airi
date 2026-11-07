@@ -13,6 +13,11 @@ import { onMounted, onUnmounted, ref } from 'vue'
  * There is no header, no chat, and no onboarding.
  */
 const modelState = ref<'pending' | 'loading' | 'mounted'>('pending')
+/**
+ * The whole body, like the `full` view of TalkingHead: she also sits on the floor and raises her arms.
+ * `/mirror?view=bust` keeps the usual framing of the head and the chest.
+ */
+const framing = new URLSearchParams(location.search).get('view') === 'bust' ? 'default' : 'full-body'
 
 // The mirror shows the page over its black screen, so the page itself has no background.
 const saved = { html: '', body: '' }
@@ -61,6 +66,7 @@ if (new URLSearchParams(location.search).has('stats')) {
       h-full w-full
       :enable-orbit-controls="false"
       :paused="false"
+      :vrm-framing="framing"
     />
     <pre
       v-if="stats"

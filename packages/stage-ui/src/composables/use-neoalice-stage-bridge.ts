@@ -35,6 +35,8 @@ export interface NeoAliceStageBridgeOptions {
   applyEmotion: (emotion: string, intensity: number) => void
   /** Shows a short face reaction that does not change the resting mood, for example for an emoji. */
   reactEmotion?: (emotion: string) => void
+  /** Shows the own face of an emoji, as TalkingHead does. Returns `false` when the stage cannot. */
+  reactEmoji?: (emoji: string) => boolean
 }
 
 /** The bridge stops thinking after this time without speech, so a lost reply cannot freeze the pose. */
@@ -219,7 +221,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
       case 'intent':
       {
         // NeoAlice sends an emoji to show on the face. The VRM has no emoji, so the face reacts with its emotion.
-        const reaction = event.emoji ? emotionOfEmoji(event.emoji) : undefined
+        const reaction = event.emoji && !options.reactEmoji?.(event.emoji) ? emotionOfEmoji(event.emoji) : undefined
         if (reaction)
           options.reactEmotion?.(reaction)
         const result = runtime.submit({ ...event.intent, timestampMs: Math.round(now) }, now)

@@ -69,6 +69,16 @@ const arkitMoodShapes: Record<string, Record<string, number>> = {
   think: { browInnerUp: 0.35, browOuterUpLeft: 0.4, browDownRight: 0.3, mouthPressLeft: 0.4, mouthRollLower: 0.2, mouthLeft: 0.25, eyeSquintRight: 0.25 },
 }
 
+/** Other names of the preset expressions, in lower case: VRM 0.x and common model names. */
+const presetAliases: Record<string, string[]> = {
+  happy: ['joy'],
+  sad: ['sorrow'],
+  blink: ['blink'],
+  blinkLeft: ['blinkleft', 'blink_l'],
+  blinkRight: ['blinkright', 'blink_r'],
+  aa: ['a'],
+}
+
 /** The VRM 1.0 expressions that hold a mood. See {@link releaseMoodOverrides}. */
 const moodExpressionNames = ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'joy', 'sorrow', 'fun']
 
@@ -119,6 +129,8 @@ export class MoodFace {
   private readonly blink: BlinkState
   private readonly emoteFace: string | null
   private emoteFaceActive = false
+  /** An emoji face: its expression weights and its time on the frame clock. */
+  private emojiFace: { weights: Map<string, number>, t: number } | null = null
   /** The ARKit shapes that the last frame wrote, so a mood change sets them back to 0. */
   private arkitWritten = new Set<string>()
 
@@ -149,6 +161,24 @@ export class MoodFace {
     if (!target)
       return
     this.flash = { name: target.name, weight: weightOverride ?? target.weight, key: target.key, t: 0, holdUntil: null }
+  }
+
+  /**
+   * Shows the face of an emoji for about 3 s: ARKit shape weights (see `talkinghead-emoji-faces.ts`) on a model
+   * that has them, plus the preset expressions of the same face, so a model with presets only shows it too.
+   * Returns `false` when the model has none of the expressions of the face.
+   */
+  showFace(shapes: Readonly<Record<string, number>>) {
+    const weights = new Map<string, number>()
+    for (const [name, weight] of [...Object.entries(shapes), ...Object.entries(presetsOfFace(shapes))]) {
+      const own = pickCandidate([name.toLowerCase(), ...(presetAliases[name] ?? [])], this.expressionNames)
+      if (own)
+        weights.set(own, Math.max(weights.get(own) ?? 0, weight))
+    }
+    if (weights.size === 0)
+      return false
+    this.emojiFace = { weights, t: 0 }
+    return true
   }
 
   /** Advances one frame and returns the expression weights to write. */
@@ -233,12 +263,25 @@ export class MoodFace {
           arkit.set(name, Math.max(arkit.get(name) ?? 0, Math.round(weight * Math.max(0, shape) * 1000) / 1000))
       }
     }
+    // Emoji face: attack 0.2 s, hold 2.2 s, release 0.6 s. It goes over the mood, never under it.
+    const emoji = this.emojiFace
+    if (emoji) {
+      emoji.t += delta
+      const shape = emoji.t < 0.2 ? emoji.t / 0.2 : emoji.t < 2.4 ? 1 : 1 - (emoji.t - 2.4) / 0.6
+      if (shape <= 0) {
+        this.emojiFace = null
+      }
+      else if (!input.emotePlaying) {
+        for (const [name, weight] of emoji.weights)
+          arkit.set(name, Math.max(arkit.get(name) ?? 0, Math.round(weight * shape * 1000) / 1000))
+      }
+    }
     for (const name of this.arkitWritten) {
-      if (!arkit.has(name))
+      if (!arkit.has(name) && !face.has(name))
         face.set(name, 0)
     }
     for (const [name, weight] of arkit)
-      face.set(name, weight)
+      face.set(name, Math.max(face.get(name) ?? 0, weight))
     this.arkitWritten = new Set(arkit.keys())
 
     // Blink, idle only, off during emotes: about 0.125 s, quick close (30%), slow open (70%).
@@ -281,6 +324,37 @@ export class MoodFace {
   private nextBlinkIn() {
     return this.random() * 4 + 2
   }
+}
+
+/**
+ * The preset expressions of a face of ARKit shapes, for a model without ARKit shapes: a smile is `happy`,
+ * a frown with low brows is `angry`, closed eyes are `blink` (or a wink), an open jaw is `aa`.
+ */
+export function presetsOfFace(shapes: Readonly<Record<string, number>>): Record<string, number> {
+  const max = (...names: string[]) => Math.max(0, ...names.map(name => shapes[name] ?? 0))
+  const smile = max('mouthSmileLeft', 'mouthSmileRight')
+  const frown = max('mouthFrownLeft', 'mouthFrownRight')
+  const browDown = max('browDownLeft', 'browDownRight')
+  const wide = max('eyeWideLeft', 'eyeWideRight')
+  const jaw = max('jawOpen', 'mouthOpen')
+  const left = shapes.eyeBlinkLeft ?? 0
+  const right = shapes.eyeBlinkRight ?? 0
+  const presets: Record<string, number> = {}
+  if (smile >= 0.3)
+    presets.happy = Math.min(0.9, smile)
+  if (browDown >= 0.5 && frown >= 0.5)
+    presets.angry = 0.8
+  else if (frown >= 0.5)
+    presets.sad = 0.8
+  if ((wide >= 0.4 || jaw >= 0.5) && smile < 0.3)
+    presets.surprised = 0.7
+  if (Math.abs(left - right) >= 0.4)
+    presets[left > right ? 'blinkLeft' : 'blinkRight'] = Math.max(left, right) * 0.9
+  else if (Math.min(left, right) >= 0.3)
+    presets.blink = Math.min(left, right) * 0.9
+  if (jaw >= 0.2)
+    presets.aa = Math.min(0.6, jaw * 0.8)
+  return presets
 }
 
 /** Picks the expression of a mood, or `null` for neutral or no match. */

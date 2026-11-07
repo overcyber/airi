@@ -90,6 +90,7 @@ import { MoodBody } from '../../composables/vrm/mood-body'
 import { MoodFace, releaseMoodOverrides } from '../../composables/vrm/mood-face'
 import { emoteLayerBones, inferEmoteLayering } from '../../composables/vrm/motion-layers'
 import { PerformanceDirector } from '../../composables/vrm/performance-director'
+import { talkingHeadEmojiFaces } from '../../composables/vrm/talkinghead-emoji-faces'
 import { createTalkingHeadClip, parseTalkingHeadClipId } from '../../composables/vrm/talkinghead-motion'
 import { createThinkingClip } from '../../composables/vrm/thinking-pose'
 import {
@@ -1316,6 +1317,14 @@ defineExpose({
     vrmMoodBody.value?.setMood(expression, intensity)
     if (intensity > 0)
       vrmMoodFace.value?.react(expression)
+  },
+  /**
+   * Shows the face of an emoji, as TalkingHead does for `cmd/avatar/emoji`. Each emoji has its own face.
+   * Returns `false` for an emoji without a face, or a model without any of its expressions.
+   */
+  reactEmoji(emoji: string): boolean {
+    const shapes = talkingHeadEmojiFaces[emoji.replace(/\uFE0F/g, '')] ?? talkingHeadEmojiFaces[emoji]
+    return shapes ? vrmMoodFace.value?.showFace(shapes) ?? false : false
   },
   /** Shows a short reaction, for example to a touch. The resting mood does not change. */
   reactExpression(expression: string, intensity = 1) {
