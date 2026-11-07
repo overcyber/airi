@@ -109,11 +109,6 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
   /** Reads the NeoAlice cameras and the face recognition: the avatar greets a person who arrives (F5). */
   const vision = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/vision', true)
   /**
-   * Minutes without a person on the NeoAlice cameras before the avatar sits down (Plan 08). A person who
-   * arrives makes her stand up and greet. 0 turns it off. It works only after a camera reported a person.
-   */
-  const absenceSitMinutes = useLocalStorageManualReset<number>('settings/neoalice-bridge/absence-sit-minutes', 3)
-  /**
    * The last mood of NeoAlice and when it arrived. NeoAlice publishes the mood only when it changes, and the
    * broker does not keep it, so a stage that loads later shows this mood until the next one.
    */
@@ -288,7 +283,6 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     announceState.reset()
     wakeWord.reset()
     vision.reset()
-    absenceSitMinutes.reset()
     lastMood.reset()
   }
 
@@ -308,7 +302,6 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     announceState,
     wakeWord,
     vision,
-    absenceSitMinutes,
     lastMood,
     voiceStatus,
     voiceError,

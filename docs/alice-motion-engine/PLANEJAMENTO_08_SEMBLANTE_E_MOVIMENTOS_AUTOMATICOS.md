@@ -76,7 +76,11 @@ Evidência do teste no navegador (Eva, VRM 1.0), comparada com o TalkingHead rea
 - **FBX:** os 10 movimentos do responsável (`new_moves.py`) estão no repositório, em `packages/stage-ui-three/src/assets/vrm/animations/neoalice/`, e vêm com o app (Web, desktop e Android, sem servidor). Uma URL ou um nome do TalkingHead com o mesmo arquivo toca a cópia do app.
 - **FBX de terceiros:** os 9 da biblioteca do Ready Player Me e os 2 do Mixamo não entram neste repositório público. O `airi-web` os pega de `deploy/alice/animacoes`, ou, se faltarem, do servidor TalkingHead (`AIRI_TALKINGHEAD_UPSTREAM=http://<ip>:8081`), no mesmo caminho. Teste: `Rumba.fbx`, `Terrified.fbx` e `dance.fbx` vieram do TalkingHead.
 
-## 8. Verificação no espelho
+## 8. Decisão do responsável (07/11): as poses vêm só da NeoAlice
+
+O "sentar sem ninguém" do AIRI foi removido. O AIRI não decide sentar nem levantar: com presença nos sensores do Home Assistant, que não chegam ao AIRI, ela ficava sentada. Sentar e levantar por presença é o componente 2 da seção 2 (NeoAlice, `door_sensor_vision.py`), que manda `cmd/avatar/pose` e o AIRI executa. As linhas das seções 3 e 4 sobre sentar no AIRI ficam substituídas por esta decisão.
+
+## 9. Verificação no espelho
 
 1. Rodar `deploy/alice/scripts/preparar.sh`. Ele copia as pastas `animations`, `animations_arkit` e `poses` do TalkingHead para `deploy/alice/animacoes/`.
 2. Reconstruir o `airi-web` e recarregar a página `/mirror`.

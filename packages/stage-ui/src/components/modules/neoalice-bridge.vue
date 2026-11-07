@@ -29,7 +29,6 @@ const {
   userId,
   wakeWord,
   vision,
-  absenceSitMinutes,
   announceState,
   voiceStatus,
   voiceError,
@@ -213,14 +212,6 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
       v-model="vision"
       :label="t('settings.pages.modules.neoalice-bridge.vision')"
       :description="t('settings.pages.modules.neoalice-bridge.vision-description')"
-    />
-
-    <FieldInput
-      v-if="vision"
-      v-model="absenceSitMinutes"
-      type="number"
-      :label="t('settings.pages.modules.neoalice-bridge.absence-sit')"
-      :description="t('settings.pages.modules.neoalice-bridge.absence-sit-description')"
     />
 
     <Alert v-if="enabled && !configured" tone="warning">

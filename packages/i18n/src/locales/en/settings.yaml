@@ -1227,8 +1227,6 @@ pages:
       announce-state-description: Publishes evt/state on the site every 30 seconds, so NeoAlice lists the avatar as an active satellite and sends it broadcasts, for example alarms
       vision: React to the NeoAlice cameras
       vision-description: Reads evt/vision/detection of the NeoAlice cameras and the greetings of the face recognition (site facialrecog). The avatar smiles and waves when a person arrives or is greeted by name. It only reads.
-      absence-sit: Minutes without anyone before she sits down
-      absence-sit-description: When the NeoAlice cameras see nobody for this time, the avatar sits down. A person who arrives makes her stand up and raise her hand. 0 turns it off. It starts after a camera reports a person.
       voice:
         enable: Send the microphone to NeoAlice
         enable-description: Each spoken phrase goes to NeoAlice as evt/audio on the site of the avatar, like a satellite. NeoAlice answers with cmd/tts/audio. Set Speech to "Play the audio that NeoAlice sends", and turn off Hearing, so AIRI does not answer the same phrase.
