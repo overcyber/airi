@@ -30,7 +30,7 @@ describe('fetchServerDefaults', () => {
       'openai-compatible-audio-speech': { apiKey: 'local', baseUrl: 'https://192.0.2.10:4443/proxy/tts/v1/', model: 'kokoro', voice: 'pf_dora' },
     })
     expect(defaults?.modules.speech).toEqual({ provider: 'openai-compatible-audio-speech', model: 'kokoro', voice: 'pf_dora' })
-    expect(defaults?.neoalice).toEqual({ site: 'mirror', enabled: true, speechMode: 'neoalice-audio', voiceInput: true, userId: 'user-1', announceState: true, brokerUrl: 'wss://192.0.2.10:4443/mqtt', brainMode: false, moodSite: '', wakeWord: '' })
+    expect(defaults?.neoalice).toEqual({ site: 'mirror', enabled: true, speechMode: 'neoalice-audio', voiceInput: true, userId: 'user-1', announceState: true, brokerUrl: 'wss://192.0.2.10:4443/mqtt', brainMode: false, moodSite: '', mirrorSpeech: true, wakeWord: '' })
   })
 
   it('returns nothing for the HTML page of a dev server, a failed request, or a page outside HTTP', async () => {

@@ -54,6 +54,12 @@ export interface NeoAliceTranslatorOptions {
    * The bridge reads only the mood and the avatar commands of this site, never its speech.
    */
   moodSite?: string
+  /**
+   * Plays the speech of the mood site too (`cmd/tts/audio`, `cmd/tts/say`, `cmd/tts/stop`). NeoAlice sends what
+   * Alice says on her own, for example after a camera sees a person, to the active satellites and the mirror site.
+   * Turn it on when this avatar is the mirror (it replaces the TalkingHead avatar), so it says the same.
+   */
+  moodSiteSpeech?: boolean
   /** Site where the companion service publishes its state and affect. Default: `companion`. */
   companionSite?: string
   /**
@@ -68,14 +74,18 @@ export interface NeoAliceTranslatorOptions {
 
 /** The actions of the mood site: mood and avatar commands, no speech. */
 const moodActions = ['evt/mood', 'cmd/evt/mood', 'cmd/avatar/gesture', 'cmd/avatar/pose', 'cmd/avatar/animation', 'cmd/avatar/emoji']
+/** The speech actions, read from the mood site with `moodSiteSpeech`. */
+const speechActions = ['cmd/tts/say', 'cmd/tts/audio', 'cmd/tts/stop']
+/** The same speech on two sites (a broadcast) within this window plays once. */
+const sameSpeechWindowMs = 30_000
 
 /** The topics to subscribe to. All of them are read-only for the bridge. */
-export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 'site' | 'acceptAnySite' | 'companionSite' | 'moodSite' | 'vision' | 'facialSite'>) {
+export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 'site' | 'acceptAnySite' | 'companionSite' | 'moodSite' | 'moodSiteSpeech' | 'vision' | 'facialSite'>) {
   const site = options.acceptAnySite ? '+' : options.site
   const companionSite = options.companionSite ?? 'companion'
   const moodSite = options.moodSite?.trim()
   const moodTopics = !options.acceptAnySite && moodSite && moodSite !== options.site
-    ? moodActions.map(action => `${topicRoot}/${moodSite}/${action}`)
+    ? [...moodActions, ...(options.moodSiteSpeech ? speechActions : [])].map(action => `${topicRoot}/${moodSite}/${action}`)
     : []
   return [
     ...moodTopics,
@@ -162,6 +172,8 @@ export class NeoAliceTranslator {
   private catalog: MotionCatalog
   private readonly companionSite: string
   private readonly recent = new Map<string, { payload: string, atMs: number }>()
+  /** Speech that played, by session or text, so a broadcast to two read sites plays once. */
+  private readonly recentSpeech = new Map<string, { atMs: number, site: string }>()
   private sequence = 0
 
   constructor(options: NeoAliceTranslatorOptions) {
@@ -195,7 +207,8 @@ export class NeoAliceTranslator {
       const text = parsed.success ? parsed.output.stt?.text ?? parsed.output.text : undefined
       return text?.trim() ? { type: 'greeting', site, text: text.trim() } : ignored(topic, 'no greeting text')
     }
-    const fromMoodSite = !!this.options.moodSite && site === this.options.moodSite && moodActions.includes(action)
+    const fromMoodSite = !!this.options.moodSite && site === this.options.moodSite
+      && (moodActions.includes(action) || (!!this.options.moodSiteSpeech && speechActions.includes(action)))
     if (!this.options.acceptAnySite && site !== this.options.site && !fromMoodSite)
       return ignored(topic, `site "${site}" is not the bridge site`)
 
@@ -211,7 +224,7 @@ export class NeoAliceTranslator {
     switch (action) {
       case 'cmd/tts/say':
       case 'cmd/tts/audio':
-        return this.translateSpeech(topic, site, isAudio, data)
+        return this.translateSpeech(topic, site, isAudio, data, nowMs)
       case 'cmd/tts/stop':
         return { type: 'speech-stop', site }
       case 'evt/stt/final': {
@@ -239,12 +252,23 @@ export class NeoAliceTranslator {
     }
   }
 
-  private translateSpeech(topic: string, site: string, isAudio: boolean, data: unknown): NeoAliceBridgeEvent {
+  private translateSpeech(topic: string, site: string, isAudio: boolean, data: unknown, nowMs: number): NeoAliceBridgeEvent {
     const parsed = safeParse(SpeechPayload, data)
     if (!parsed.success)
       return ignored(topic, 'speech payload is not an object')
     const text = parsed.output.tts?.text ?? parsed.output.text ?? ''
     const sessionId = parsed.output.session_id || undefined
+    const key = sessionId ? `session:${sessionId}` : text.trim() ? `text:${text.trim()}` : undefined
+    if (key) {
+      for (const [seen, entry] of this.recentSpeech) {
+        if (nowMs - entry.atMs > sameSpeechWindowMs)
+          this.recentSpeech.delete(seen)
+      }
+      const earlier = this.recentSpeech.get(key)
+      if (earlier && earlier.site !== site)
+        return ignored(topic, 'the same speech came on another site')
+      this.recentSpeech.set(key, { atMs: nowMs, site })
+    }
     if (isAudio) {
       const audioBase64 = parsed.output.audio?.b64 ?? parsed.output.audio_base64
       if (!audioBase64)

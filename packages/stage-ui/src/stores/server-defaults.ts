@@ -37,6 +37,8 @@ const ServerDefaultsSchema = v.object({
     /** NeoAlice answers the chat. See `useNeoAliceBrainStore`. */
     brainMode: v.optional(v.boolean(), false),
     moodSite: v.optional(v.string(), ''),
+    /** Plays the speech of the mirror site. See `mirrorSpeech` of the bridge store. */
+    mirrorSpeech: v.optional(v.boolean(), true),
     /** The wake word of the microphone. Empty: every phrase goes to NeoAlice. */
     wakeWord: v.optional(v.string(), ''),
   })),
@@ -238,6 +240,7 @@ export async function applyServerDefaults(
     if (defaults.neoalice.moodSite)
       bridge.moodSite = defaults.neoalice.moodSite
     bridge.wakeWord = defaults.neoalice.wakeWord
+    bridge.mirrorSpeech = defaults.neoalice.mirrorSpeech
   }
 
   const providerStore = useProviderStore()

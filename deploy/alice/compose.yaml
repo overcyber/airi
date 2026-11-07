@@ -28,6 +28,7 @@ services:
       - ${AIRI_HTTPS_PORT:-4443}:443
     environment:
       AIRI_MQTT_WS_UPSTREAM: ${AIRI_MQTT_WS_UPSTREAM:-host.docker.internal:9001}
+      AIRI_TALKINGHEAD_UPSTREAM: ${AIRI_TALKINGHEAD_UPSTREAM:-}
       AIRI_LLM_UPSTREAM: ${AIRI_LLM_UPSTREAM:-http://host.docker.internal:11434}
       AIRI_TTS_UPSTREAM: ${AIRI_TTS_UPSTREAM:-http://host.docker.internal:8880}
       AIRI_STT_UPSTREAM: ${AIRI_STT_UPSTREAM:-http://host.docker.internal:9100}
@@ -51,6 +52,7 @@ services:
       AIRI_DEFAULT_NEOALICE_ANNOUNCE_STATE: ${AIRI_DEFAULT_NEOALICE_ANNOUNCE_STATE:-false}
       AIRI_DEFAULT_NEOALICE_BRAIN: ${AIRI_DEFAULT_NEOALICE_BRAIN:-false}
       AIRI_DEFAULT_NEOALICE_MOOD_SITE: ${AIRI_DEFAULT_NEOALICE_MOOD_SITE:-magicmirror}
+      AIRI_DEFAULT_NEOALICE_MIRROR_SPEECH: ${AIRI_DEFAULT_NEOALICE_MIRROR_SPEECH:-true}
       # Origins that can call the proxies from another origin. "null" is the desktop app (file://).
       AIRI_CORS_ORIGINS: ${AIRI_CORS_ORIGINS-null,file://}
     extra_hosts:

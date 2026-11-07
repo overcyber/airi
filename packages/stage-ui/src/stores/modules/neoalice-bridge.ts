@@ -87,6 +87,11 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
   const companionSite = useLocalStorageManualReset<string>('settings/neoalice-bridge/companion-site', 'companion')
   /** Site where NeoAlice publishes the mood and the avatar commands. NeoAlice uses the mirror site for them. */
   const moodSite = useLocalStorageManualReset<string>('settings/neoalice-bridge/mood-site', 'magicmirror')
+  /**
+   * Plays what Alice says on the mirror site too, for example after a camera sees a person. NeoAlice sends that
+   * speech to the mirror and the active satellites, not to the avatar site. On: AIRI is the mirror avatar.
+   */
+  const mirrorSpeech = useLocalStorageManualReset<boolean>('settings/neoalice-bridge/mirror-speech', true)
   const username = useLocalStorageManualReset<string>('settings/neoalice-bridge/username', '')
   const password = useLocalStorageManualReset<string>('settings/neoalice-bridge/password', '')
   const speechMode = useLocalStorageManualReset<NeoAliceSpeechMode>('settings/neoalice-bridge/speech-mode', 'silent')
@@ -151,7 +156,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     // In the brain mode, AIRI is one satellite: it follows its own site only. Every site would bring the
     // broadcasts of the other satellites, so the same reply arrives once for each site.
     const followAnySite = acceptAnySite.value && !brain.brainMode
-    const options = { site: site.value.trim(), acceptAnySite: followAnySite, companionSite: companionSite.value.trim() || 'companion', moodSite: moodSite.value.trim() || undefined, vision: vision.value }
+    const options = { site: site.value.trim(), acceptAnySite: followAnySite, companionSite: companionSite.value.trim() || 'companion', moodSite: moodSite.value.trim() || undefined, moodSiteSpeech: mirrorSpeech.value, vision: vision.value }
     // Imported VRMA and FBX motions are part of the catalog, so `cmd/avatar/animation` can name them.
     const translator = new NeoAliceTranslator({ ...options, catalog: catalogWithEmotes(vrmMotions.motionLibrary.emotes) })
     activeTranslator = translator
@@ -261,7 +266,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
 
   // Typing in a settings field changes these values on each key. The bridge reconnects once, after a pause.
   // A manual reset ref triggers on every assignment, even with the same value. The key changes only with a real change.
-  const connectionKey = computed(() => JSON.stringify([enabled.value, brokerUrl.value, site.value, acceptAnySite.value, brain.brainMode, companionSite.value, moodSite.value, vision.value, username.value, password.value]))
+  const connectionKey = computed(() => JSON.stringify([enabled.value, brokerUrl.value, site.value, acceptAnySite.value, brain.brainMode, companionSite.value, moodSite.value, mirrorSpeech.value, vision.value, username.value, password.value]))
   watchDebounced(connectionKey, () => {
     if (holders > 0)
       void connect()
@@ -274,6 +279,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     acceptAnySite.reset()
     companionSite.reset()
     moodSite.reset()
+    mirrorSpeech.reset()
     username.reset()
     password.reset()
     speechMode.reset()
@@ -293,6 +299,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     acceptAnySite,
     companionSite,
     moodSite,
+    mirrorSpeech,
     username,
     password,
     speechMode,

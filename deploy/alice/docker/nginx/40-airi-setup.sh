@@ -111,7 +111,8 @@ cat > /etc/airi-runtime/airi-defaults.json <<JSON
     "wakeWord": $(json "${AIRI_DEFAULT_NEOALICE_WAKE_WORD:-}"),
     "announceState": $(bool "${AIRI_DEFAULT_NEOALICE_ANNOUNCE_STATE:-false}"),
     "brainMode": $(bool "${AIRI_DEFAULT_NEOALICE_BRAIN:-false}"),
-    "moodSite": $(json "${AIRI_DEFAULT_NEOALICE_MOOD_SITE:-magicmirror}")
+    "moodSite": $(json "${AIRI_DEFAULT_NEOALICE_MOOD_SITE:-magicmirror}"),
+    "mirrorSpeech": $(bool "${AIRI_DEFAULT_NEOALICE_MIRROR_SPEECH:-true}")
   }
 }
 JSON

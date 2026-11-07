@@ -107,7 +107,8 @@ describe('useNeoAliceBridgeStore', () => {
     expect(topics).toEqual(expect.arrayContaining(vision))
     expect(topics.filter(topic => !vision.includes(topic)).every(topic => topic.startsWith('neoalice/v1/mirror/') || topic.startsWith('neoalice/v1/companion/') || topic.startsWith('neoalice/v1/magicmirror/'))).toBe(true)
     expect(topics).toContain('neoalice/v1/magicmirror/evt/mood')
-    expect(topics).not.toContain('neoalice/v1/magicmirror/cmd/tts/audio')
+    // The avatar is the mirror (mirrorSpeech on by default): it also says what Alice says on the mirror site.
+    expect(topics).toContain('neoalice/v1/magicmirror/cmd/tts/audio')
 
     client.emit('message', 'neoalice/v1/mirror/cmd/tts/say', new TextEncoder().encode('{"text":"Oi"}'))
     client.emit('message', 'neoalice/v1/mirror/cmd/avatar/gesture', new TextEncoder().encode('{"gesture":"index"}'))

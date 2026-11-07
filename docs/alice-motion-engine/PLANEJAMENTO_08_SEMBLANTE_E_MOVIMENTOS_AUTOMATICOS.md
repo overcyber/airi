@@ -70,7 +70,13 @@ Evidência do teste no navegador (Eva, VRM 1.0), comparada com o TalkingHead rea
 - Torção do corpo nos gestos: os idles `idle-2` e `idle-4` viravam a cabeça de 37° a 65°. Com um gesto por cima, o avatar parecia torto. Ficaram só os três idles que olham para a frente.
 - Mensagens de câmera sem pessoa não aparecem mais no console, porque as câmeras publicam muitos quadros por segundo.
 
-## 7. Verificação no espelho
+## 7. Mudanças de 07/11 (F6 aprovada: o AIRI é o avatar do espelho)
+
+- **Fala do espelho:** a NeoAlice manda o que a Alice fala sozinha (saudação da câmera, avisos) para o site `magicmirror` e os satélites ativos, nunca para `airi-avatar`. Antes, o AIRI só lia humor e gestos do `magicmirror`. Agora ele também toca a fala de lá (`mirrorSpeech`, ligado por padrão, `AIRI_DEFAULT_NEOALICE_MIRROR_SPEECH`). A mesma fala que chega em dois sites dentro de 30 s toca uma vez só. Teste: `magicmirror/cmd/tts/audio` tocou, e a cópia em `airi-avatar` foi descartada.
+- **FBX:** os 10 movimentos do responsável (`new_moves.py`) estão no repositório, em `packages/stage-ui-three/src/assets/vrm/animations/neoalice/`, e vêm com o app (Web, desktop e Android, sem servidor). Uma URL ou um nome do TalkingHead com o mesmo arquivo toca a cópia do app.
+- **FBX de terceiros:** os 9 da biblioteca do Ready Player Me e os 2 do Mixamo não entram neste repositório público. O `airi-web` os pega de `deploy/alice/animacoes`, ou, se faltarem, do servidor TalkingHead (`AIRI_TALKINGHEAD_UPSTREAM=http://<ip>:8081`), no mesmo caminho. Teste: `Rumba.fbx`, `Terrified.fbx` e `dance.fbx` vieram do TalkingHead.
+
+## 8. Verificação no espelho
 
 1. Rodar `deploy/alice/scripts/preparar.sh`. Ele copia as pastas `animations`, `animations_arkit` e `poses` do TalkingHead para `deploy/alice/animacoes/`.
 2. Reconstruir o `airi-web` e recarregar a página `/mirror`.

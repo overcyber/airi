@@ -159,3 +159,21 @@ describe('neoAliceTranslator', () => {
       .toMatchObject({ type: 'ignored' })
   })
 })
+
+describe('neoAliceTranslator speech of the mirror site', () => {
+  it('plays what Alice says on the mirror site when the avatar is the mirror, once per broadcast', () => {
+    const topics = neoAliceBridgeTopics({ site: 'airi-avatar', moodSite: 'magicmirror', moodSiteSpeech: true })
+    expect(topics).toContain('neoalice/v1/magicmirror/cmd/tts/audio')
+    expect(neoAliceBridgeTopics({ site: 'airi-avatar', moodSite: 'magicmirror' })).not.toContain('neoalice/v1/magicmirror/cmd/tts/audio')
+
+    const bridge = new NeoAliceTranslator({ site: 'airi-avatar', moodSite: 'magicmirror', moodSiteSpeech: true, catalog })
+    const speech = JSON.stringify({ audio: { b64: 'UklGRg==' }, tts: { text: 'Ola, bem-vindo' }, session_id: 'greet-1' })
+    expect(bridge.translate('neoalice/v1/magicmirror/cmd/tts/audio', speech, 0)).toMatchObject({ type: 'speech-audio', site: 'magicmirror', text: 'Ola, bem-vindo' })
+    // The same broadcast also comes on the site of the avatar. It plays once.
+    expect(bridge.translate('neoalice/v1/airi-avatar/cmd/tts/audio', speech, 100)).toMatchObject({ type: 'ignored', reason: 'the same speech came on another site' })
+    expect(bridge.translate('neoalice/v1/magicmirror/cmd/tts/stop', '{}', 200)).toMatchObject({ type: 'speech-stop' })
+
+    const off = new NeoAliceTranslator({ site: 'airi-avatar', moodSite: 'magicmirror', catalog })
+    expect(off.translate('neoalice/v1/magicmirror/cmd/tts/audio', speech, 0)).toMatchObject({ type: 'ignored' })
+  })
+})

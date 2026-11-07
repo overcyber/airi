@@ -21,6 +21,7 @@ const {
   acceptAnySite,
   companionSite,
   moodSite,
+  mirrorSpeech,
   username,
   password,
   speechMode,
@@ -139,6 +140,12 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
       v-model="moodSite"
       :label="t('settings.pages.modules.neoalice-bridge.mood-site')"
       :description="t('settings.pages.modules.neoalice-bridge.mood-site-description')"
+    />
+
+    <FieldCheckbox
+      v-model="mirrorSpeech"
+      :label="t('settings.pages.modules.neoalice-bridge.mirror-speech')"
+      :description="t('settings.pages.modules.neoalice-bridge.mirror-speech-description')"
     />
 
     <FieldInput v-model="username" :label="t('settings.pages.modules.neoalice-bridge.username')" />

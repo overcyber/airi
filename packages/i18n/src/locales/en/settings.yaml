@@ -1192,6 +1192,8 @@ pages:
       companion-site-description: Site where the companion service publishes its state. The default is companion.
       mood-site: Mood site
       mood-site-description: Site where NeoAlice publishes the mood and the avatar commands (gestures, poses, animations). NeoAlice sends them to the mirror site, magicmirror. The bridge reads only the mood and the avatar commands of this site, never its speech.
+      mirror-speech: Say what Alice says on the mirror
+      mirror-speech-description: NeoAlice sends what Alice says on her own, for example when a camera sees a person, to the mirror site and the active satellites. On, the avatar says it too. Turn it off when the TalkingHead avatar still runs on the mirror, or both speak.
       username: User name
       password: Password
       speech-mode:

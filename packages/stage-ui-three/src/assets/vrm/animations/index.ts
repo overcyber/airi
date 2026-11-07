@@ -61,5 +61,17 @@ export const defaultVrmMotionLibrary: VrmMotionLibrary = {
     { id: 'spin', name: 'Spin', description: 'Spin around once', url: new URL('./utsuwa/emote-spin.vrma', import.meta.url).toString() },
     { id: 'model_pose', name: 'Model Pose', description: 'Strike a confident model pose', url: new URL('./utsuwa/emote-model-pose.vrma', import.meta.url).toString() },
     { id: 'squat', name: 'Squat', description: 'Squat down briefly', url: new URL('./utsuwa/emote-squat.vrma', import.meta.url).toString() },
+
+    // The NeoAlice motions of the owner (FBX, see neoalice/NOTICE.md), the same files as the mirror.
+    { id: 'neoalice-arms-open', name: 'Arms Open', description: 'Open both arms toward the viewer', url: new URL('./neoalice/arms-open.fbx', import.meta.url).toString(), format: 'fbx' },
+    { id: 'neoalice-bow', name: 'Bow', description: 'Bow politely', url: new URL('./neoalice/bow.fbx', import.meta.url).toString(), format: 'fbx' },
+    { id: 'neoalice-breathing-idle', name: 'Breathing Idle', description: 'Breathe calmly while standing', url: new URL('./neoalice/breathing-idle.fbx', import.meta.url).toString(), format: 'fbx' },
+    { id: 'neoalice-celebrate', name: 'Celebrate', description: 'Celebrate with both arms', url: new URL('./neoalice/celebrate.fbx', import.meta.url).toString(), format: 'fbx' },
+    { id: 'neoalice-head-nod', name: 'Head Nod', description: 'Nod yes', url: new URL('./neoalice/head-nod.fbx', import.meta.url).toString(), format: 'fbx' },
+    { id: 'neoalice-head-shake', name: 'Head Shake', description: 'Shake the head no', url: new URL('./neoalice/head-shake.fbx', import.meta.url).toString(), format: 'fbx' },
+    { id: 'neoalice-look-around', name: 'Look Around', description: 'Look around the room', url: new URL('./neoalice/look-around.fbx', import.meta.url).toString(), format: 'fbx' },
+    { id: 'neoalice-point-forward', name: 'Point Forward', description: 'Point forward with the hand', url: new URL('./neoalice/point-forward.fbx', import.meta.url).toString(), format: 'fbx' },
+    { id: 'neoalice-thinking', name: 'Thinking', description: 'Think with a hand to the chin', url: new URL('./neoalice/thinking.fbx', import.meta.url).toString(), format: 'fbx' },
+    { id: 'neoalice-wave-hello', name: 'Wave Hello', description: 'Wave hello with the hand', url: new URL('./neoalice/wave-hello.fbx', import.meta.url).toString(), format: 'fbx' },
   ],
 }

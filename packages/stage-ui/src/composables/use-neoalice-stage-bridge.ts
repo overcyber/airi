@@ -13,7 +13,7 @@ import { StageMotionRuntime } from '../libs/alice-motion/stage-motion'
 import { useChatSessionStore } from '../stores/chat/session-store'
 import { useNeoAliceBrainStore } from '../stores/modules/neoalice-brain'
 import { useNeoAliceBridgeStore } from '../stores/modules/neoalice-bridge'
-import { aliceServerOrigin } from '../stores/vrm-motions'
+import { aliceServerOrigin, useVrmMotionsStore } from '../stores/vrm-motions'
 import { useNeoAliceBrainTools } from './use-neoalice-brain-tools'
 import { useNeoAlicePhraseTranscriber } from './use-neoalice-phrase-transcriber'
 
@@ -98,6 +98,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   const brain = useNeoAliceBrainStore()
   const chatSession = useChatSessionStore()
   const brainTools = useNeoAliceBrainTools()
+  const vrmMotions = useVrmMotionsStore()
   const runtime = new StageMotionRuntime({
     playClip: options.playClip,
     log: message => console.info(`[neoalice-bridge] ${message}`),
@@ -227,7 +228,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         break
       }
       case 'animation': {
-        const url = resolveNeoAliceAnimationUrl(event, aliceServerOrigin())
+        const url = resolveNeoAliceAnimationUrl(event, aliceServerOrigin(), vrmMotions.motionLibrary.emotes)
         if (!url || !options.playAnimation) {
           console.info(`[neoalice-bridge] no animation to play for ${event.url ?? event.name}`)
           break
