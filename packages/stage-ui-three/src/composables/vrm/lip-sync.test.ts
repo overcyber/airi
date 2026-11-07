@@ -20,7 +20,7 @@ describe('useVRMLipSync', () => {
     const scope = effectScope()
     const lipSync = scope.run(() => useVRMLipSync(shallowRef(undefined), shallowRef(undefined), speechActive))!
     // eslint-disable-next-line slop/no-chained-type-assertions
-    const vrm = { expressionManager: { setValue } } as unknown as Parameters<typeof lipSync.update>[0]
+    const vrm = { expressionManager: { setValue, getExpression: () => null, getValue: () => 0 } } as unknown as Parameters<typeof lipSync.update>[0]
 
     lipSync.update(vrm, 0.016)
 
@@ -34,7 +34,7 @@ describe('useVRMLipSync', () => {
     const scope = effectScope()
     const lipSync = scope.run(() => useVRMLipSync(shallowRef({} as AudioContext), shallowRef(undefined), speechActive))!
     // eslint-disable-next-line slop/no-chained-type-assertions
-    const vrm = { expressionManager: { setValue } } as unknown as Parameters<typeof lipSync.update>[0]
+    const vrm = { expressionManager: { setValue, getExpression: () => null, getValue: () => 0 } } as unknown as Parameters<typeof lipSync.update>[0]
 
     await vi.waitFor(() => {
       lipSync.update(vrm, 0.016)
@@ -47,6 +47,41 @@ describe('useVRMLipSync', () => {
 
     expect(setValue).toHaveBeenCalledWith('aa', 0)
     expect(setValue).toHaveBeenCalledWith('ou', 0)
+    scope.stop()
+  })
+
+  it('opens the mouth wide on a loud syllable and closes it in a quieter gap', async () => {
+    // ROOT CAUSE:
+    //
+    // The node volume stayed at 1 for all TTS speech, and `aa` stopped at 0.49. The VRM lips hardly moved.
+    //
+    // We fixed this with a speech envelope and a VRM vowel weight up to 0.9.
+    const values = new Map<string, number>()
+    const setValue = vi.fn((name: string, value: number) => void values.set(name, value))
+    const scope = effectScope()
+    const lipSync = scope.run(() => useVRMLipSync(shallowRef({} as AudioContext), shallowRef(undefined), shallowRef(true)))!
+    const expressionManager = { setValue, getExpression: (name: string) => name === 'jawOpen' ? {} : null, getValue: (name: string) => values.get(name) ?? 0 }
+    // eslint-disable-next-line slop/no-chained-type-assertions
+    const vrm = { expressionManager } as unknown as Parameters<typeof lipSync.update>[0]
+
+    // A stressed syllable: RMS 0.1, that is log10 -1.
+    lipSyncNode.volume = 2 / 3
+    await vi.waitFor(() => {
+      lipSync.update(vrm, 0.016)
+      expect(setValue).toHaveBeenCalled()
+    })
+    for (let frame = 0; frame < 30; frame++)
+      lipSync.update(vrm, 0.016)
+    expect(values.get('aa')).toBeGreaterThan(0.8)
+    expect(values.get('jawOpen')).toBeCloseTo((values.get('aa') ?? 0) * 0.2, 5)
+
+    // A gap 15 dB under the syllable: the mouth closes.
+    lipSyncNode.volume = 1.25 / 3
+    for (let frame = 0; frame < 30; frame++)
+      lipSync.update(vrm, 0.016)
+    expect(values.get('aa')).toBeLessThan(0.05)
+
+    lipSyncNode.volume = 1
     scope.stop()
   })
 

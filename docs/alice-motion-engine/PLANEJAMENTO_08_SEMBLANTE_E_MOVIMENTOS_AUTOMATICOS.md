@@ -86,3 +86,16 @@ O "sentar sem ninguém" do AIRI foi removido. O AIRI não decide sentar nem leva
 2. Reconstruir o `airi-web` e recarregar a página `/mirror`.
 3. Publicar no site `magicmirror` os comandos do responsável: `namaste` (6 s), `handup`, `shrug`, `wave` com `mirror`, `thumbup`, as poses `arms_open`, `bow`, `thinking`, `sitting` e `straight`, e as animações `Wave_Hello`, `Talking_1`, `Rumba`, `Terrified` e `poses/dance.fbx`.
 4. Com as câmeras ligadas, sair da sala por 3 minutos: o avatar senta. Voltar: ela levanta e levanta a mão.
+
+## 10. Lip sync visível (07/11)
+
+O responsável relatou que a boca não se movia na fala. A medição com fala real (8 s, PT-BR) achou duas causas:
+
+| Causa | Medida antes | Correção |
+| --- | --- | --- |
+| O nó wLipSync mede o volume de -2,5 a -1,5 em log10 do RMS. A fala do TTS fica de -1,6 a -0,7, então o volume ficava em 1 a frase toda. A boca não fechava entre as sílabas. | 5 ciclos de abrir e fechar em 8 s | `SpeechEnvelope`: o volume é relativo ao pico recente da voz. Uma queda de 10 dB fecha a boca. Depois: 21 ciclos em 8 s. |
+| O driver de vogais limitava a vogal a 0,49. No VRM, `aa` a 0,49 abre os lábios poucos milímetros. Com o sorriso do humor `happy`, a boca da Eva quase não abria. | Eva: 5 mm (mediana), 1 mm com `happy` | No VRM, a vogal vai até 0,9 (`maxWeight`). Um modelo com `jawOpen` (ARKit) abre também a mandíbula a 20% da vogal. Depois: 11 mm, 7 mm com `happy`. |
+
+O excesso de gestos na fala também mudou: os clipes `Talking_*` somam metade do movimento ao idle (mistura aditiva), em vez de trocar o corpo inteiro. A mão direita oscilava 0,38 m e agora oscila 0,2 m.
+
+O MMD usa o mesmo driver com os valores antigos.

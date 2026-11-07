@@ -25,6 +25,14 @@ describe('wLipSync vowel driver', () => {
     expect(weights.U).toBe(0)
   })
 
+  it('scales the vowels to the largest weight of the renderer', () => {
+    const driver = createWLipSyncVowelDriver(() => 1000, { maxWeight: 0.9 })
+
+    const weights = driver.update({ volume: 1, weights: { A: 1 } }, 1)
+
+    expect(weights.A).toBeCloseTo(0.9)
+  })
+
   it('uses the release rate when the audio becomes silent', () => {
     let now = 1000
     const driver = createWLipSyncVowelDriver(() => now)

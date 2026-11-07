@@ -46,10 +46,23 @@ const RAW_TO_VOWEL: Record<WLipSyncRawViseme, WLipSyncVowel> = {
   U: 'U',
 }
 
+/** Options of {@link createWLipSyncVowelDriver}. */
+export interface WLipSyncVowelDriverOptions {
+  /**
+   * The largest weight of a vowel. The default 0.49 fits the MMD morphs. A VRM mouth needs about 1 to be visible,
+   * because a VRM `aa` at 0.49 opens the lips only a few millimeters.
+   */
+  maxWeight?: number
+}
+
+/** The largest smoothed target weight of a vowel, before the scale to `maxWeight`. */
+const maxTargetWeight = 0.7
+
 /**
  * Creates the shared vowel driver used by the VRM and MMD renderers.
  *
  * @param now - Returns the current monotonic time in milliseconds.
+ * @param options - The weight range of the output.
  *
  * @example
  * const driver = createWLipSyncVowelDriver()
@@ -58,7 +71,9 @@ const RAW_TO_VOWEL: Record<WLipSyncRawViseme, WLipSyncVowel> = {
  */
 export function createWLipSyncVowelDriver(
   now: () => number = () => performance.now(),
+  options: WLipSyncVowelDriverOptions = {},
 ): WLipSyncVowelDriver {
+  const outputScale = (options.maxWeight ?? 0.49) / maxTargetWeight
   const smoothWeights = emptyVowelWeights()
   let lastActiveAt = 0
 
@@ -106,7 +121,7 @@ export function createWLipSyncVowelDriver(
 
     const targetWeights = emptyVowelWeights()
     if (!silent) {
-      targetWeights[winner] = Math.min(0.7, winnerWeight)
+      targetWeights[winner] = Math.min(maxTargetWeight, winnerWeight)
       targetWeights[runner] = Math.min(0.35, runnerWeight * 0.6)
     }
 
@@ -116,7 +131,7 @@ export function createWLipSyncVowelDriver(
       const to = targetWeights[vowel]
       const rate = 1 - Math.exp(-(to > from ? 50 : 30) * deltaSeconds)
       smoothWeights[vowel] = from + (to - from) * rate
-      result[vowel] = (smoothWeights[vowel] <= 0.01 ? 0 : smoothWeights[vowel]) * 0.7
+      result[vowel] = (smoothWeights[vowel] <= 0.01 ? 0 : smoothWeights[vowel]) * outputScale
     }
 
     return result

@@ -43,6 +43,12 @@ const fadeSeconds = {
   emoteOut: 0.3,
 }
 
+/**
+ * Weight of a talking clip of the pool. It adds to the idle, so she gestures with half the arm motion of the
+ * clip and the mouth stays the focus of the speech.
+ */
+const talkingOverlayWeight = 0.5
+
 /** Emotes play faster than recorded, so a gesture reads as a quick reaction. */
 const emoteTimeScale = 1.5
 
@@ -80,6 +86,8 @@ export class AvatarAnimator {
   private talkingClip: AnimationClip | null = null
   private talkingPool: string[] = []
   private lastTalkingUrl: string | null = null
+  /** The talking clip adds to the idle (a clip of the pool) instead of replacing it (the single talking clip). */
+  private talkingIsOverlay = false
   private talkingToken = 0
   private thinkingClip: { url: string, clip: AnimationClip } | null = null
   private thinkingToken = 0
@@ -167,6 +175,7 @@ export class AvatarAnimator {
     if (!speaking)
       this.talkingToken++
     if (speaking && this.talkingClip) {
+      this.talkingIsOverlay = false
       this.idle?.fadeOut(fadeSeconds.talkOrThink)
       if (!this.talking) {
         this.talking = this.mixer.clipAction(this.talkingClip)
@@ -176,7 +185,9 @@ export class AvatarAnimator {
     }
     else if (!speaking) {
       this.talking?.fadeOut(fadeSeconds.talkOrThink)
-      if (!this.emotePlaying)
+      if (this.talkingIsOverlay)
+        this.ensureIdle()
+      else if (!this.emotePlaying)
         this.idle?.reset().fadeIn(fadeSeconds.talkOrThink).play()
     }
   }
@@ -192,13 +203,17 @@ export class AvatarAnimator {
         if (this.disposed || token !== this.talkingToken || !this.hooks.isTalking() || this.pose || this.emotePlaying)
           return
         this.lastTalkingUrl = url
-        const action = this.mixer.clipAction(clip)
+        // The clip adds to the idle at half weight. The idle stays the base, so it must run, for example after thinking.
+        const action = this.mixer.clipAction(additiveClip(clip))
+        action.blendMode = AdditiveAnimationBlendMode
         action.setLoop(LoopRepeat, Infinity)
-        this.idle?.fadeOut(fadeSeconds.talkOrThink)
+        action.weight = talkingOverlayWeight
+        this.ensureIdle()
         if (this.talking && this.talking !== action)
           this.talking.fadeOut(fadeSeconds.talkOrThink)
         action.reset().fadeIn(fadeSeconds.talkOrThink).play()
         this.talking = action
+        this.talkingIsOverlay = true
       })
       .catch(error => console.warn('[vrm-animator] talking clip failed to load, staying idle:', error))
   }
@@ -279,6 +294,9 @@ export class AvatarAnimator {
         next.enabled = true
         next.reset().fadeIn(fadeOut).play()
       }
+      // The talking clip of the pool adds to the idle, so it comes back over it while she still speaks.
+      if (this.talkingIsOverlay && this.talking && this.hooks.isTalking() && !this.pose)
+        this.talking.reset().fadeIn(fadeOut).play()
       onFinished?.()
     }
     this.whenDone(action, options, finish)
@@ -355,7 +373,17 @@ export class AvatarAnimator {
   private baseAction() {
     if (this.pose)
       return this.pose
-    return this.hooks.isTalking() && this.talking ? this.talking : this.idle
+    return this.hooks.isTalking() && this.talking && !this.talkingIsOverlay ? this.talking : this.idle
+  }
+
+  /** Fades the idle in when it does not hold the body now. A running idle goes on, so it does not jump to its start. */
+  private ensureIdle() {
+    const idle = this.idle
+    if (!idle || this.emotePlaying || this.pose)
+      return
+    if (idle.enabled && idle.isRunning() && idle.getEffectiveWeight() > 0.99)
+      return
+    idle.reset().fadeIn(fadeSeconds.talkOrThink).play()
   }
 
   private playAdditive(clip: AnimationClip, onFinished?: () => void) {

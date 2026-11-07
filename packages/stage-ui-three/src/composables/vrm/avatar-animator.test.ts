@@ -246,14 +246,19 @@ describe('avatarAnimator layers (V6)', () => {
     state.talking = true
     animator.setTalking(true)
     await flushLoads()
+    animator.update(1)
     const first = animator.talking?.getClip().name
+    // The talking clip adds half its motion to the idle, so she does not gesture with the full clip.
+    expect(animator.idle?.getEffectiveWeight()).toBeCloseTo(1, 5)
+    expect(animator.talking?.blendMode).toBe(AdditiveAnimationBlendMode)
+    expect(animator.talking?.getEffectiveWeight()).toBeCloseTo(0.5, 5)
     state.talking = false
     animator.setTalking(false)
     state.talking = true
     animator.setTalking(true)
     await flushLoads()
     expect(animator.talking?.getClip().name).not.toBe(first)
-    expect(['talk-0', 'talk-1']).toContain(first)
+    expect(['talk-0:additive', 'talk-1:additive']).toContain(first)
 
     state.talking = false
     animator.setTalking(false)
