@@ -31,6 +31,7 @@ const {
   modelSize,
   maxFps,
   lipSyncMouthOpening,
+  lipSyncMode,
   modelOffset,
   cameraFOV,
   modelRotationY,
@@ -53,6 +54,10 @@ const {
 } = storeToRefs(modelStore)
 const controlsLocked = computed(() => props.runtimeSnapshot.controlsLocked)
 // Bare numbers and an i18n'd unlimited label, matching the Live2D and Spine frame-rate controls.
+const lipSyncModeOptions = computed(() => [
+  { value: 'pt-BR', label: t('settings.vrm.lip-sync.modes.pt-br') },
+  { value: 'audio', label: t('settings.vrm.lip-sync.modes.audio') },
+])
 const fpsOptions = computed(() => [
   { value: 0, label: t('settings.vrm.fps.options.unlimited') },
   { value: 60, label: '60' },
@@ -103,6 +108,7 @@ const envOptions = computed(() => [
     <p :class="['text-xs', 'text-neutral-500 dark:text-neutral-400']">
       {{ t('settings.vrm.lip-sync.description') }}
     </p>
+    <SelectTab v-model="lipSyncMode" :options="lipSyncModeOptions" size="sm" :class="['shrink-0']" />
     <PropertyNumber
       v-model="lipSyncMouthOpening"
       :config="{ min: 0.2, max: 1, step: 0.05, label: t('settings.vrm.lip-sync.mouth-opening'), formatValue: val => val?.toFixed(2) }"

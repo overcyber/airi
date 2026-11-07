@@ -116,6 +116,9 @@ const {
 const { mouthOpenSize, nowSpeaking } = storeToRefs(useSpeakingStore())
 /** `voicing` of `SpeechOutputPlaybackState` in the speech bus. The voice output below keeps it. */
 const speechVoicing = shallowRef(false)
+/** The text of the speech clip that started playing. The VRM moves the mouth with it, like TalkingHead. */
+const speechText = shallowRef<{ id: number, text: string }>()
+let speechTextId = 0
 const disposePlaybackStateHandler = defineInvokeHandler(
   getSpeechBusContext(),
   speechOutputGetPlaybackState,
@@ -461,6 +464,7 @@ const disconnectVoiceOutput = voice.connectOutput((turn) => {
       playingCount += 1
       nowSpeaking.value = true
       speechVoicing.value = true
+      speechText.value = { id: ++speechTextId, text }
       assistantCaption.value += ` ${text}`
       try {
         postCaption({ type: 'caption-assistant', text })
@@ -541,6 +545,7 @@ const { thinking: neoAliceThinking, restoreMood: restoreNeoAliceMood } = useNeoA
         started = true
         playingCount += 1
         nowSpeaking.value = true
+        speechText.value = { id: ++speechTextId, text }
         showBridgeCaption(text)
       },
     })
@@ -847,6 +852,7 @@ defineExpose({
         :audio-context="audioContext"
         :connect-speech="connectSpeech"
         :speech-active="nowSpeaking"
+        :speech-text="speechText"
         :thinking="(chatSending || neoAliceThinking) && !nowSpeaking"
         :motion-library="vrmMotions.motionLibrary"
         :framing="props.vrmFraming"

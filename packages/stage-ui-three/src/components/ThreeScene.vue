@@ -14,6 +14,7 @@ import type { DirectionalLight, SphericalHarmonics3, Texture, WebGLRenderer, Web
 
 import type { VrmMotionLibrary } from '../assets/vrm/animations'
 import type { VrmInteractionTarget } from '../composables/vrm/interaction'
+import type { VRMSpeechText } from '../composables/vrm/lip-sync'
 import type { SceneBootstrap, ScenePhase, Vec3 } from '../stores/model-store'
 import type { VrmLifecycleReason } from '../trace'
 import type { WebGLState } from '../utils/webgl'
@@ -72,6 +73,8 @@ const props = withDefaults(defineProps<{
   connectSpeech?: (node: AudioNode) => () => void
   /** Whether speech is currently audible. Required when `connectSpeech` is set. */
   speechActive?: boolean
+  /** The text of the speech clip that started playing, for the text lip sync. */
+  speechText?: VRMSpeechText
   /** Whether the character waits for a reply. Forwarded to the VRM motion layer. */
   thinking?: boolean
   /** Idle pool, talking clip, and emotes of the VRM. Defaults to the bundled motions. */
@@ -195,6 +198,7 @@ const {
   sceneMutationLocked,
   maxFps,
   lipSyncMouthOpening,
+  lipSyncMode,
   scenePhase,
   sceneTransactionDepth,
 
@@ -1178,6 +1182,8 @@ defineExpose({
         :connect-speech="props.connectSpeech"
         :speech-active="props.speechActive"
         :lip-sync-mouth-opening="lipSyncMouthOpening"
+        :lip-sync-mode="lipSyncMode"
+        :speech-text="props.speechText"
         :thinking="props.thinking"
         :motion-library="props.motionLibrary ?? defaultVrmMotionLibrary"
         :cursor-position="props.cursorPosition"

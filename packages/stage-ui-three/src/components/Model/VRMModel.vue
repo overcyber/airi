@@ -30,6 +30,7 @@ import type {
   VrmMaterialHookContext,
 } from '../../composables/vrm/hooks'
 import type { VrmInteractionColliderSet } from '../../composables/vrm/interaction'
+import type { VRMLipSyncMode, VRMSpeechText } from '../../composables/vrm/lip-sync'
 import type { SceneBootstrap, TrackingMode, Vec3 } from '../../stores/model-store'
 import type { VrmLifecycleReason } from '../../trace'
 import type { ManagedVrmInstance } from './vrm-instance-cache'
@@ -132,6 +133,10 @@ const props = withDefaults(defineProps<{
   speechActive?: boolean
   /** The largest mouth opening of the lip sync, from 0.2 to 1. */
   lipSyncMouthOpening?: number
+  /** `pt-BR` moves the mouth with the text of the speech. `audio` uses the audio alone. */
+  lipSyncMode?: VRMLipSyncMode
+  /** The text of the speech clip that started playing. */
+  speechText?: VRMSpeechText
   /**
    * Whether the character waits for a reply. The head turns away while she thinks,
    * and the thinking clip of `motionLibrary` plays when one is set.
@@ -248,7 +253,11 @@ const idleEyeSaccades = useIdleEyeSaccades()
 // deep-unwraps nested refs/computed (e.g. isEmoteActive) and breaks reads
 // like vrmEmote.value.isEmoteActive.value in the render loop.
 const vrmEmote = shallowRef<ReturnType<typeof useVRMEmote>>()
-const vrmLipSync = useVRMLipSync(audioContext, connectSpeech, toRef(props, 'speechActive'), toRef(props, 'lipSyncMouthOpening'))
+const vrmLipSync = useVRMLipSync(audioContext, connectSpeech, toRef(props, 'speechActive'), {
+  mouthOpening: toRef(props, 'lipSyncMouthOpening'),
+  speechText: toRef(props, 'speechText'),
+  mode: toRef(props, 'lipSyncMode'),
+})
 
 // For sky box update
 const nprProgramVersion = ref(0)

@@ -88,6 +88,8 @@ const trackingMode = useLocalStorage<TrackingMode>('settings/stage-ui-three/trac
 const maxFps = useLocalStorage('settings/stage-ui-three/max-fps', 0)
 /** The largest mouth opening of the VRM lip sync, from 0.2 to 1. 0.6 opens the mouth about 1 cm on a human-size model. */
 const lipSyncMouthOpening = useLocalStorage('settings/stage-ui-three/lip-sync-mouth-opening', 0.6)
+/** `pt-BR` moves the mouth with the text of the speech in Brazilian Portuguese. `audio` uses the audio alone. */
+const lipSyncMode = useLocalStorage<'pt-BR' | 'audio'>('settings/stage-ui-three/lip-sync-mode', 'pt-BR')
 
 export const useModelStore = defineStore('modelStore', () => {
   const { post, data } = useBroadcastChannel<BroadcastChannelEvents, BroadcastChannelEvents>({ name: 'airi-stores-stage-ui-three-vrm' })
@@ -260,6 +262,7 @@ export const useModelStore = defineStore('modelStore', () => {
     trackingMode,
     maxFps,
     lipSyncMouthOpening,
+    lipSyncMode,
     eyeHeight,
     renderScale,
     multisampling,

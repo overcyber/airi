@@ -60,7 +60,7 @@ describe('useVRMLipSync', () => {
     const setValue = vi.fn((name: string, value: number) => void values.set(name, value))
     const scope = effectScope()
     const mouthOpening = shallowRef<number | undefined>(undefined)
-    const lipSync = scope.run(() => useVRMLipSync(shallowRef({} as AudioContext), shallowRef(undefined), shallowRef(true), mouthOpening))!
+    const lipSync = scope.run(() => useVRMLipSync(shallowRef({} as AudioContext), shallowRef(undefined), shallowRef(true), { mouthOpening }))!
     const expressionManager = { setValue, getExpression: () => null, getValue: (name: string) => values.get(name) ?? 0 }
     // eslint-disable-next-line slop/no-chained-type-assertions
     const vrm = { expressionManager } as unknown as Parameters<typeof lipSync.update>[0]
@@ -87,6 +87,41 @@ describe('useVRMLipSync', () => {
       lipSync.update(vrm, 0.016)
     expect(values.get('aa')).toBeLessThan(0.05)
 
+    lipSyncNode.volume = 1
+    scope.stop()
+  })
+
+  it('closes the lips on p and opens them on the vowel of the Portuguese text', async () => {
+    // ROOT CAUSE:
+    //
+    // The audio vowels never close the lips, so speech did not look like Portuguese. TalkingHead read the text.
+    //
+    // We fixed this with a text track of Brazilian Portuguese mouth shapes that follows the voice of the audio.
+    const values = new Map<string, number>()
+    const setValue = vi.fn((name: string, value: number) => void values.set(name, value))
+    const expressionManager = { setValue, getExpression: () => null, getValue: (name: string) => values.get(name) ?? 0 }
+    // eslint-disable-next-line slop/no-chained-type-assertions
+    const vrm = { expressionManager } as unknown as Parameters<ReturnType<typeof useVRMLipSync>['update']>[0]
+    const speechText = shallowRef<{ id: number, text: string }>()
+    const scope = effectScope()
+    const lipSync = scope.run(() => useVRMLipSync(shallowRef({} as AudioContext), shallowRef(undefined), shallowRef(true), { speechText }))!
+    lipSyncNode.volume = 2 / 3
+    await vi.waitFor(() => {
+      lipSync.update(vrm, 0.016)
+      expect(setValue).toHaveBeenCalled()
+    })
+
+    speechText.value = { id: 1, text: 'papapapa' }
+    await nextTick()
+    const mouth: number[] = []
+    for (let frame = 0; frame < 40; frame++) {
+      lipSync.update(vrm, 0.016)
+      mouth.push(values.get('aa') ?? 0)
+    }
+
+    // Each p closes the mouth, and each a opens it.
+    expect(Math.min(...mouth.slice(5))).toBeLessThan(0.1)
+    expect(Math.max(...mouth)).toBeGreaterThan(0.3)
     lipSyncNode.volume = 1
     scope.stop()
   })

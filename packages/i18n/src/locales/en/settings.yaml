@@ -2831,8 +2831,11 @@ vrm:
       unlimited: Unlimited
   lip-sync:
     title: Lip sync
-    description: How wide the mouth opens on a loud vowel. A higher value makes speech easier to see from far away.
+    description: How the mouth follows the speech, and how wide it opens on a loud vowel. Brazilian Portuguese reads the spoken text and closes the lips on p, b, and m.
     mouth-opening: Mouth opening
+    modes:
+      pt-br: Brazilian Portuguese text
+      audio: Audio only
   change-model:
     from-file: Load from File
     from-file-select: Select
