@@ -194,6 +194,7 @@ const {
 const {
   sceneMutationLocked,
   maxFps,
+  lipSyncMouthOpening,
   scenePhase,
   sceneTransactionDepth,
 
@@ -1176,6 +1177,7 @@ defineExpose({
         :audio-context="props.audioContext"
         :connect-speech="props.connectSpeech"
         :speech-active="props.speechActive"
+        :lip-sync-mouth-opening="lipSyncMouthOpening"
         :thinking="props.thinking"
         :motion-library="props.motionLibrary ?? defaultVrmMotionLibrary"
         :cursor-position="props.cursorPosition"

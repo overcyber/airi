@@ -94,8 +94,9 @@ O responsável relatou que a boca não se movia na fala. A medição com fala re
 | Causa | Medida antes | Correção |
 | --- | --- | --- |
 | O nó wLipSync mede o volume de -2,5 a -1,5 em log10 do RMS. A fala do TTS fica de -1,6 a -0,7, então o volume ficava em 1 a frase toda. A boca não fechava entre as sílabas. | 5 ciclos de abrir e fechar em 8 s | `SpeechEnvelope`: o volume é relativo ao pico recente da voz. Uma queda de 10 dB fecha a boca. Depois: 21 ciclos em 8 s. |
-| O driver de vogais limitava a vogal a 0,49. No VRM, `aa` a 0,49 abre os lábios poucos milímetros. Com o sorriso do humor `happy`, a boca da Eva quase não abria. | Eva: 5 mm (mediana), 1 mm com `happy` | No VRM, a vogal vai até 0,9 (`maxWeight`). Um modelo com `jawOpen` (ARKit) abre também a mandíbula a 20% da vogal. Depois: 11 mm, 7 mm com `happy`. |
+| O driver de vogais limitava a vogal a 0,49. No VRM, `aa` a 0,49 abre os lábios poucos milímetros. | Eva: 5 mm (mediana) | A abertura máxima é uma configuração: "Mouth opening" na página do VRM, padrão 0,6. No espelho, `/mirror?mouth=0.7` muda o valor. |
+| O sorriso do humor `happy` puxava os lábios e fechava a boca, ou abria um sorriso largo com a fala. | Eva com `happy`: 1 mm | Enquanto ela fala, o rosto tira as formas da boca (`mouth*`, `jaw*`, visemas e o preset do humor) em 0,3 s. Olhos e sobrancelhas ficam. Num modelo sem ARKit (VRoid), 30% do preset do humor fica. Depois, com `happy`: igual ao neutro. |
 
 O excesso de gestos na fala também mudou: os clipes `Talking_*` somam metade do movimento ao idle (mistura aditiva), em vez de trocar o corpo inteiro. A mão direita oscilava 0,38 m e agora oscila 0,2 m.
 
-O MMD usa o mesmo driver com os valores antigos.
+O MMD usa o mesmo driver com os valores antigos. A abertura extra da mandíbula (`jawOpen`) do primeiro ajuste foi removida.

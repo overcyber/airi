@@ -30,6 +30,7 @@ const modelStore = useModelStore()
 const {
   modelSize,
   maxFps,
+  lipSyncMouthOpening,
   modelOffset,
   cameraFOV,
   modelRotationY,
@@ -97,6 +98,16 @@ const envOptions = computed(() => [
       {{ t('settings.vrm.fps.description') }}
     </p>
     <SelectTab v-model="maxFps" :options="fpsOptions" size="sm" :class="['shrink-0']" />
+  </Container>
+  <Container :title="t('settings.vrm.lip-sync.title')" icon="i-solar:soundwave-bold-duotone">
+    <p :class="['text-xs', 'text-neutral-500 dark:text-neutral-400']">
+      {{ t('settings.vrm.lip-sync.description') }}
+    </p>
+    <PropertyNumber
+      v-model="lipSyncMouthOpening"
+      :config="{ min: 0.2, max: 1, step: 0.05, label: t('settings.vrm.lip-sync.mouth-opening'), formatValue: val => val?.toFixed(2) }"
+      :label="t('settings.vrm.lip-sync.mouth-opening')"
+    />
   </Container>
   <VrmMotions />
   <Container

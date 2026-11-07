@@ -66,8 +66,29 @@ describe('moodFace (Utsuwa composer)', () => {
     const face = new MoodFace(vrm1Names, noEarlyBlink)
     face.react('surprised')
 
-    expect(run(face, 6, { speaking: true }).get('surprised')).toBeGreaterThan(0.5)
+    // While she speaks, 30% of a mood preset stays on a model without ARKit shapes. The lip sync owns the mouth.
+    expect(run(face, 6, { speaking: true }).get('surprised')).toBeGreaterThan(0.15)
     expect(run(face, 3, { speaking: true }).get('surprised')).toBe(0)
+  })
+
+  it('moves the smile out of the mouth while she speaks, and back after', () => {
+    // ROOT CAUSE:
+    //
+    // The smile of the happy mood stayed on the mouth during speech, so the lip sync opened a wide grin.
+    //
+    // We fixed this by fading the mouth shapes of the face out while she speaks.
+    const names = [...vrm1Names, 'mouthSmileLeft', 'mouthSmileRight', 'eyeSquintLeft', 'cheekSquintLeft']
+    const face = new MoodFace(names, noEarlyBlink)
+    face.setMood('happy', 1)
+    const rest = run(face, 2)
+    expect(rest.get('mouthSmileLeft')).toBeGreaterThan(0.3)
+
+    const speaking = run(face, 1, { speaking: true })
+    expect(speaking.get('mouthSmileLeft')).toBeLessThan(0.01)
+    expect(speaking.get('happy')).toBeLessThan(0.01)
+    expect(speaking.get('eyeSquintLeft')).toBeCloseTo(rest.get('eyeSquintLeft') ?? 0, 1)
+
+    expect(run(face, 1).get('mouthSmileLeft')).toBeCloseTo(rest.get('mouthSmileLeft') ?? 0, 1)
   })
 
   it('wears a happy face at 0.7 and does not blink while an emote plays', () => {

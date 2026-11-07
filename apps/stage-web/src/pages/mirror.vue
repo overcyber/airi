@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { VrmFrameCostSummary } from '@proj-airi/stage-ui-three/trace'
 
+import { useModelStore } from '@proj-airi/stage-ui-three'
 import { acquireStageThreeRuntimeTrace, getStageThreeRuntimeTraceContext, stageThreeTraceVrmUpdateFrameEvent, VrmFrameCostWindow } from '@proj-airi/stage-ui-three/trace'
 import { WidgetStage } from '@proj-airi/stage-ui/components/scenes'
 import { onMounted, onUnmounted, ref } from 'vue'
@@ -18,6 +19,14 @@ const modelState = ref<'pending' | 'loading' | 'mounted'>('pending')
  * `/mirror?view=bust` keeps the usual framing of the head and the chest.
  */
 const framing = new URLSearchParams(location.search).get('view') === 'bust' ? 'default' : 'full-body'
+
+/**
+ * `/mirror?mouth=0.7` sets the mouth opening of the lip sync, from 0.2 to 1, like the VRM settings page.
+ * The browser keeps the value, so the next load without the parameter uses it too.
+ */
+const mouth = Number.parseFloat(new URLSearchParams(location.search).get('mouth') ?? '')
+if (Number.isFinite(mouth))
+  useModelStore().lipSyncMouthOpening = Math.min(Math.max(mouth, 0.2), 1)
 
 // The mirror shows the page over its black screen, so the page itself has no background.
 const saved = { html: '', body: '' }

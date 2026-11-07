@@ -106,6 +106,27 @@ export function releaseMoodOverrides(expressionManager: MoodExpressionManager | 
 
 const blinkNames = ['blink', 'Blink', 'eyeBlinkLeft', 'eyeBlinkRight']
 
+/** Expressions that hold a mood, a reaction, or the emote face. Their presets can move the mouth. */
+const moodPresetNames = new Set(['happy', 'angry', 'sad', 'relaxed', 'surprised', 'joy', 'sorrow', 'fun'])
+const visemeNames = new Set(['aa', 'ih', 'ou', 'ee', 'oh'])
+
+/**
+ * The share of an expression that stays while she speaks. The lip sync owns the mouth, so a smile or a frown
+ * must not pull the lips together. ARKit mouth and jaw shapes and the visemes go to 0. A mood preset goes to 0
+ * on a model with ARKit shapes, because its eyes and brows are separate shapes there. On other models (for
+ * example VRoid) the preset is the whole face, so 30% of it stays.
+ */
+export function speechShareOf(name: string, hasArkit: boolean): number {
+  if (/^(?:mouth|jaw)/.test(name) || visemeNames.has(name))
+    return 0
+  if (moodPresetNames.has(name))
+    return hasArkit ? 0 : 0.3
+  return 1
+}
+
+/** Rate of the change between the speech face and the resting face, per second (about 0.3 s). */
+const speechFaceRate = 10
+
 /** Weight of the happy face while a body emote plays. */
 const emoteFaceWeight = 0.7
 
@@ -135,6 +156,9 @@ export class MoodFace {
   private emojiFace: { weights: Map<string, number>, t: number } | null = null
   /** The ARKit shapes that the last frame wrote, so a mood change sets them back to 0. */
   private arkitWritten = new Set<string>()
+  /** How far the mouth shapes of the face have moved out for the lip sync: 0 at rest, 1 while she speaks. */
+  private speechFace = 0
+  private readonly hasArkit: boolean
 
   constructor(
     private readonly expressionNames: readonly string[],
@@ -142,6 +166,7 @@ export class MoodFace {
   ) {
     this.blink = { timerSeconds: 0, nextSeconds: this.nextBlinkIn(), active: false, progress: 0 }
     this.emoteFace = findHappyExpression(expressionNames)
+    this.hasArkit = expressionNames.includes('mouthSmileLeft')
   }
 
   /** The current resting mood name, or `null` for neutral. */
@@ -305,6 +330,16 @@ export class MoodFace {
     for (const [name, weight] of arkit)
       face.set(name, Math.max(face.get(name) ?? 0, weight))
     this.arkitWritten = new Set(arkit.keys())
+
+    // While she speaks, the mouth shapes of the mood, the reactions, and the emoji faces move out for the lip sync.
+    this.speechFace += ((input.speaking ? 1 : 0) - this.speechFace) * Math.min(1, delta * speechFaceRate)
+    if (this.speechFace > 0.001) {
+      for (const [name, weight] of face) {
+        const share = speechShareOf(name, this.hasArkit)
+        if (share < 1)
+          face.set(name, weight * (1 - this.speechFace * (1 - share)))
+      }
+    }
 
     // Blink, idle only, off during emotes: about 0.125 s, quick close (30%), slow open (70%).
     const blink = this.blink

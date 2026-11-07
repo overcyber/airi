@@ -130,6 +130,8 @@ const props = withDefaults(defineProps<{
   connectSpeech?: (node: AudioNode) => () => void
   /** Whether speech is currently audible. Required when `connectSpeech` is set. */
   speechActive?: boolean
+  /** The largest mouth opening of the lip sync, from 0.2 to 1. */
+  lipSyncMouthOpening?: number
   /**
    * Whether the character waits for a reply. The head turns away while she thinks,
    * and the thinking clip of `motionLibrary` plays when one is set.
@@ -246,7 +248,7 @@ const idleEyeSaccades = useIdleEyeSaccades()
 // deep-unwraps nested refs/computed (e.g. isEmoteActive) and breaks reads
 // like vrmEmote.value.isEmoteActive.value in the render loop.
 const vrmEmote = shallowRef<ReturnType<typeof useVRMEmote>>()
-const vrmLipSync = useVRMLipSync(audioContext, connectSpeech, toRef(props, 'speechActive'))
+const vrmLipSync = useVRMLipSync(audioContext, connectSpeech, toRef(props, 'speechActive'), toRef(props, 'lipSyncMouthOpening'))
 
 // For sky box update
 const nprProgramVersion = ref(0)

@@ -86,6 +86,8 @@ const { cameraDistance, cameraFOV, cameraPosition } = useThreeCamera()
 const modelRotationY = useLocalStorage('settings/stage-ui-three/modelRotationY', 0)
 const trackingMode = useLocalStorage<TrackingMode>('settings/stage-ui-three/trackingMode', 'none')
 const maxFps = useLocalStorage('settings/stage-ui-three/max-fps', 0)
+/** The largest mouth opening of the VRM lip sync, from 0.2 to 1. 0.6 opens the mouth about 1 cm on a human-size model. */
+const lipSyncMouthOpening = useLocalStorage('settings/stage-ui-three/lip-sync-mouth-opening', 0.6)
 
 export const useModelStore = defineStore('modelStore', () => {
   const { post, data } = useBroadcastChannel<BroadcastChannelEvents, BroadcastChannelEvents>({ name: 'airi-stores-stage-ui-three-vrm' })
@@ -257,6 +259,7 @@ export const useModelStore = defineStore('modelStore', () => {
     lookAtTarget,
     trackingMode,
     maxFps,
+    lipSyncMouthOpening,
     eyeHeight,
     renderScale,
     multisampling,

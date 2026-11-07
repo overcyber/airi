@@ -20,15 +20,10 @@ const VRM_EXPRESSION_BY_VOWEL: Record<WLipSyncVowel, string> = {
 }
 
 /**
- * The largest vowel weight on a VRM. The shared default (0.49) opens the lips of a VRM only a few millimeters,
- * so the speech was not visible, mostly in the full-body view of the mirror.
+ * The default largest vowel weight on a VRM. The shared default (0.49) hardly opens the lips of a VRM.
+ * The user changes it in the VRM settings (Lip sync, Mouth opening).
  */
-const vrmMaxVowelWeight = 0.9
-/**
- * Share of the vowel weight that also opens the jaw, on a model with the ARKit `jawOpen` shape (for example a
- * converted Ready Player Me avatar). A smile of the mood face pulls the lips together, and the jaw keeps the mouth open.
- */
-const jawShare = 0.2
+const defaultMouthOpening = 0.6
 
 /**
  * Applies shared wLipSync vowel weights to a VRM expression manager.
@@ -40,14 +35,14 @@ export function useVRMLipSync(
   audioContext: Readonly<Ref<AudioContext | undefined>>,
   connectSpeech: Readonly<Ref<((node: AudioNode) => () => void) | undefined>>,
   speechActive: Readonly<Ref<boolean | undefined>>,
+  mouthOpening: Readonly<Ref<number | undefined>> = ref(undefined),
 ) {
   const isLipSyncActive = ref(false)
   const lipSyncNode = shallowRef<WLipSyncAudioNode>()
   const ownsVisemes = ref(false)
-  const vowelDriver = createWLipSyncVowelDriver(undefined, { maxWeight: vrmMaxVowelWeight })
+  // The driver gives 0 to 1. The mouth opening setting scales it in each frame, so a change applies at once.
+  const vowelDriver = createWLipSyncVowelDriver(undefined, { maxWeight: 1 })
   const envelope = new SpeechEnvelope()
-  /** The `jawOpen` weight that the last frame wrote, so the next frame can tell it from a mood or emoji face. */
-  let writtenJaw = 0
 
   watch(audioContext, (context, _, onCleanup) => {
     lipSyncNode.value = undefined
@@ -97,9 +92,6 @@ export function useVRMLipSync(
       return
     for (const vowel of WLIP_SYNC_VOWELS)
       vrm.expressionManager.setValue(VRM_EXPRESSION_BY_VOWEL[vowel], 0)
-    if (writtenJaw > 0 && vrm.expressionManager.getValue('jawOpen') === writtenJaw)
-      vrm.expressionManager.setValue('jawOpen', 0)
-    writtenJaw = 0
   }
 
   function releaseVisemes(vrm?: VRMCore) {
@@ -124,21 +116,13 @@ export function useVRMLipSync(
 
     ownsVisemes.value = true
     const weights = vowelDriver.update({ volume: envelope.update(node.volume, delta), weights: node.weights }, delta)
+    const opening = Math.min(Math.max(mouthOpening.value ?? defaultMouthOpening, 0.2), 1)
     let hasActiveVisemes = false
-    let mouth = 0
     for (const vowel of WLIP_SYNC_VOWELS) {
-      const weight = weights[vowel]
+      const weight = weights[vowel] * opening
       if (weight > 0.01)
         hasActiveVisemes = true
-      mouth = Math.max(mouth, weight)
       vrm.expressionManager.setValue(VRM_EXPRESSION_BY_VOWEL[vowel], weight)
-    }
-    if (vrm.expressionManager.getExpression('jawOpen')) {
-      // A value other than the one of the last frame comes from the mood or emoji face of this frame. Keep the larger one.
-      const current = vrm.expressionManager.getValue('jawOpen') ?? 0
-      const face = current === writtenJaw ? 0 : current
-      writtenJaw = Math.max(face, mouth * jawShare)
-      vrm.expressionManager.setValue('jawOpen', writtenJaw)
     }
 
     isLipSyncActive.value = hasActiveVisemes

@@ -55,12 +55,13 @@ describe('useVRMLipSync', () => {
     //
     // The node volume stayed at 1 for all TTS speech, and `aa` stopped at 0.49. The VRM lips hardly moved.
     //
-    // We fixed this with a speech envelope and a VRM vowel weight up to 0.9.
+    // We fixed this with a speech envelope and a mouth opening setting (default 0.6).
     const values = new Map<string, number>()
     const setValue = vi.fn((name: string, value: number) => void values.set(name, value))
     const scope = effectScope()
-    const lipSync = scope.run(() => useVRMLipSync(shallowRef({} as AudioContext), shallowRef(undefined), shallowRef(true)))!
-    const expressionManager = { setValue, getExpression: (name: string) => name === 'jawOpen' ? {} : null, getValue: (name: string) => values.get(name) ?? 0 }
+    const mouthOpening = shallowRef<number | undefined>(undefined)
+    const lipSync = scope.run(() => useVRMLipSync(shallowRef({} as AudioContext), shallowRef(undefined), shallowRef(true), mouthOpening))!
+    const expressionManager = { setValue, getExpression: () => null, getValue: (name: string) => values.get(name) ?? 0 }
     // eslint-disable-next-line slop/no-chained-type-assertions
     const vrm = { expressionManager } as unknown as Parameters<typeof lipSync.update>[0]
 
@@ -72,8 +73,13 @@ describe('useVRMLipSync', () => {
     })
     for (let frame = 0; frame < 30; frame++)
       lipSync.update(vrm, 0.016)
-    expect(values.get('aa')).toBeGreaterThan(0.8)
-    expect(values.get('jawOpen')).toBeCloseTo((values.get('aa') ?? 0) * 0.2, 5)
+    expect(values.get('aa')).toBeCloseTo(0.6, 1)
+    expect(values.has('jawOpen')).toBe(false)
+
+    // The mouth opening setting applies in the next frame.
+    mouthOpening.value = 0.9
+    lipSync.update(vrm, 0.016)
+    expect(values.get('aa')).toBeCloseTo(0.9, 1)
 
     // A gap 15 dB under the syllable: the mouth closes.
     lipSyncNode.volume = 1.25 / 3

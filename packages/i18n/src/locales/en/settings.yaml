@@ -2829,6 +2829,10 @@ vrm:
     description: Limit VRM rendering in the stage and model preview. Lower limits reduce GPU use without changing animation speed.
     options:
       unlimited: Unlimited
+  lip-sync:
+    title: Lip sync
+    description: How wide the mouth opens on a loud vowel. A higher value makes speech easier to see from far away.
+    mouth-opening: Mouth opening
   change-model:
     from-file: Load from File
     from-file-select: Select
