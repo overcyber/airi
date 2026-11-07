@@ -100,3 +100,10 @@ O responsável relatou que a boca não se movia na fala. A medição com fala re
 O excesso de gestos na fala também mudou: os clipes `Talking_*` somam metade do movimento ao idle (mistura aditiva), em vez de trocar o corpo inteiro. A mão direita oscilava 0,38 m e agora oscila 0,2 m.
 
 O MMD usa o mesmo driver com os valores antigos. A abertura extra da mandíbula (`jawOpen`) do primeiro ajuste foi removida.
+
+## 11. Lip sync em português e movimentos embutidos (07/11)
+
+- **Lip sync em português do Brasil.** Os arquivos `lipsync-pt-br.mjs` e `lipsync-pt.mjs` do TalkingHead são cópias do inglês. O TalkingHead lia o texto da fala, e as consoantes mexiam a boca. O AIRI ouvia só o áudio e reconhecia só 5 vogais. Agora o AIRI converte o `text` do `cmd/tts/audio` em formas de boca com regras do português do Brasil (`model-driver-lipsync/src/shared/visemes/pt-br.ts`). A boca fecha em p, b e m, e o "ti" soa "tchi". A trilha avança só enquanto o áudio tem voz, espera a pausa do áudio no fim de cada frase e pula para a pausa quando atrasa. Teste com uma frase de 8,11 s: as três pausas da frase caíram nas pausas do áudio, e a trilha terminou em 8,29 s. Configuração "Lip sync" na página do VRM: "Brazilian Portuguese text" (padrão) ou "Audio only".
+- **Movimentos embutidos com a NeoAlice.** A NeoAlice manda só nomes de gestos do TalkingHead, então os movimentos embutidos do AIRI nunca tocavam. Agora o texto da fala escolhe um movimento ("Olá" faz Wave Hello, "Obrigada" faz Bow, "Sim" faz Head Nod, "Não" faz Head Shake) e alguns emojis também (`libs/alice-motion/builtin-gestures.ts`). A saudação da câmera usa o Wave Hello. A NeoAlice pode pedir um movimento pelo nome em `cmd/avatar/gesture`.
+- **Botão Play no desktop.** O botão Play das configurações só avisava a própria janela. No desktop, o avatar fica na janela principal, então nada tocava. Agora o pedido também vai por um `BroadcastChannel`. Teste no Electron: a mensagem saiu da janela de onboarding e chegou à janela principal.
+- **Migração do espelho e mudanças na NeoAlice:** `PLANEJAMENTO_09_MIGRACAO_MAGICMIRROR_E_NEOALICE.md`.
