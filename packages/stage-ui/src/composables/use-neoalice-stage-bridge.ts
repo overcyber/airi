@@ -7,6 +7,7 @@ import { isPublishableSite, matchWakeWord, neoAliceAudioEvent, neoAliceStateEven
 import { number, object, safeParse, string } from 'valibot'
 import { onScopeDispose, ref, watch } from 'vue'
 
+import { builtinGestureOfEmoji, builtinGestureOfSpeech } from '../libs/alice-motion/builtin-gestures'
 import { resolveNeoAliceAnimationUrl } from '../libs/alice-motion/neoalice-animation-url'
 import { runNeoAliceTool, widgetToolInput } from '../libs/alice-motion/neoalice-tools'
 import { NeoAliceMicrophone, neoAliceVoiceSampleRate, segmentToWavBase64 } from '../libs/alice-motion/neoalice-voice'
@@ -144,6 +145,8 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     sessionsOfConnection.add(sessionId)
     thinking.value = false
     runtime.speechStarted(sessionId, now)
+    if (text)
+      playBuiltinGesture(builtinGestureOfSpeech(text), 'speech', now)
     try {
       const blob = await audio()
       if (blob && currentSession === sessionId)
@@ -163,6 +166,16 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         announce(microphone.running ? 'listening' : 'idle')
       }
     }
+  }
+
+  let builtinSequence = 0
+  /** Plays a built-in motion of the stage, when the motion library has it. */
+  function playBuiltinGesture(action: string | undefined, reason: string, now: number) {
+    if (!action || !runtime.actions.has(action))
+      return
+    const result = runtime.submit({ schemaVersion: 1, id: `neoalice-builtin-${++builtinSequence}`, timestampMs: Math.round(now), source: 'llm', semanticAction: action }, now)
+    if (!result.ok)
+      console.info(`[neoalice-bridge] refused the ${reason} motion ${action}: ${result.reason}`)
   }
 
   function stopCurrentSpeech() {
@@ -232,6 +245,12 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         const reaction = event.emoji && !options.reactEmoji?.(event.emoji) ? emotionOfEmoji(event.emoji) : undefined
         if (reaction)
           options.reactEmotion?.(reaction)
+        // An emoji with a built-in motion, for example a wave or a bow, plays that motion.
+        const builtin = event.emoji ? builtinGestureOfEmoji(event.emoji) : undefined
+        if (builtin && runtime.actions.has(builtin)) {
+          playBuiltinGesture(builtin, 'emoji', now)
+          break
+        }
         const result = runtime.submit({ ...event.intent, timestampMs: Math.round(now) }, now)
         if (!result.ok)
           console.info(`[neoalice-bridge] refused ${event.intent.semanticAction}: ${result.reason}`)
@@ -282,7 +301,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
       return
     lastGreetingMs = now
     options.reactEmotion?.('happy')
-    const result = runtime.submit({ schemaVersion: 1, id: `neoalice-vision-${++greetingSequence}`, timestampMs: Math.round(now), source: 'vision', semanticAction: 'wave_right' }, now)
+    const result = runtime.submit({ schemaVersion: 1, id: `neoalice-vision-${++greetingSequence}`, timestampMs: Math.round(now), source: 'vision', semanticAction: runtime.actions.has('wave_hello') ? 'wave_hello' : 'wave_right' }, now)
     if (!result.ok)
       console.info(`[neoalice-bridge] refused the greeting wave: ${result.reason}`)
   }

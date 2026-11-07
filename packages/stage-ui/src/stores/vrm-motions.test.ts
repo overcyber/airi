@@ -109,6 +109,24 @@ describe('useVrmMotionsStore', () => {
 
     expect(listener).toHaveBeenCalledWith('greeting')
   })
+
+  it('plays a motion that the Play button of another window requested', async () => {
+    // ROOT CAUSE:
+    //
+    // The desktop app shows the settings in another window than the stage. The play request stayed in the
+    // settings window, so the Play buttons did nothing there.
+    //
+    // We fixed this by sending the request over a broadcast channel too.
+    const store = useVrmMotionsStore()
+    const listener = vi.fn()
+    store.onPlayRequest(listener)
+    const settingsWindow = new BroadcastChannel('airi-stores-vrm-motions-play')
+
+    settingsWindow.postMessage({ type: 'vrm-motion-play', id: 'bow' })
+
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledWith('bow'))
+    settingsWindow.close()
+  })
 })
 
 describe('fetchServerMotions', () => {

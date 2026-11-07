@@ -95,6 +95,13 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
   /** One object URL per imported file, revoked when the motion is removed. */
   const objectUrls = new Map<string, string>()
   const playRequest = createEventHook<string>()
+  // The desktop app shows the settings in another window than the stage. A Play button there reaches the stage
+  // through this channel. The web settings page plays on its own preview, through the local hook.
+  const playChannel = typeof BroadcastChannel === 'undefined' ? undefined : new BroadcastChannel('airi-stores-vrm-motions-play')
+  playChannel?.addEventListener('message', (event: MessageEvent<{ type?: string, id?: unknown }>) => {
+    if (event.data?.type === 'vrm-motion-play' && typeof event.data.id === 'string')
+      void playRequest.trigger(event.data.id)
+  })
 
   function urlOf(record: VrmMotionRecord) {
     let url = objectUrls.get(record.id)
@@ -181,6 +188,7 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
   /** Asks the VRM stage to play an emote, for example the preview button of the settings. */
   function requestPlay(id: string) {
     void playRequest.trigger(id)
+    playChannel?.postMessage({ type: 'vrm-motion-play', id })
   }
 
   return {
