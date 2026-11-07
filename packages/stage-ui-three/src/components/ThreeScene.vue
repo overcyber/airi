@@ -1071,6 +1071,7 @@ defineExpose({
     modelRef.value?.setExpression(expression, intensity)
   },
   reactEmoji: (emoji: string) => modelRef.value?.reactEmoji(emoji) ?? false,
+  setBond: (bond: { warmth: number, energy: number }) => modelRef.value?.setBond(bond),
   reactExpression: (expression: string, intensity = 1) => {
     modelRef.value?.reactExpression(expression, intensity)
   },

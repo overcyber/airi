@@ -229,7 +229,7 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
     const ownSite = site.value.trim()
     if (!current || status.value !== 'connected' || !isPublishableSite(ownSite))
       return false
-    const permitted = ['evt/audio', 'evt/state', 'evt/stt/final', 'evt/wake'].map(action => `neoalice/v1/${ownSite}/${action}`)
+    const permitted = ['evt/audio', 'evt/state', 'evt/stt/final', 'evt/wake', 'evt/avatar/tool_result'].map(action => `neoalice/v1/${ownSite}/${action}`)
     if (!permitted.includes(message.topic))
       throw new Error(`The bridge does not publish on ${message.topic}`)
     await current.publishAsync(message.topic, message.payload, { qos: message.qos })

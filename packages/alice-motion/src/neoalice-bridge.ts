@@ -1,8 +1,10 @@
+import type { InferOutput } from 'valibot'
+
 import type { MotionCatalog } from './catalog'
 import type { MotionIntent, MotionSource } from './contracts'
 import type { ResolvedMood } from './mood-vocabulary'
 
-import { array, boolean, fallback, finite, looseObject, maxLength, maxValue, minValue, number, optional, pipe, safeParse, string } from 'valibot'
+import { array, boolean, fallback, finite, looseObject, maxLength, maxValue, minValue, nullable, number, optional, picklist, pipe, record, safeParse, string, unknown } from 'valibot'
 
 import { maxMessageBytes, motionSources, parseMotionIntent } from './contracts'
 import { resolveMood } from './mood-vocabulary'
@@ -30,18 +32,34 @@ export type NeoAliceBridgeEvent
     | { type: 'speech-audio', site: string, audioBase64: string, text: string, sessionId?: string }
     | { type: 'speech-stop', site: string }
     | { type: 'user-speech', site: string, text: string }
-    | { type: 'mood', site: string, mood: ResolvedMood, intensity?: number, origin: 'neoalice' | 'companion' }
+    | { type: 'mood', site: string, mood: ResolvedMood, intensity?: number, origin: 'neoalice' | 'companion', bond?: NeoAliceBond }
+    /** The bond of the companion state without a mood. */
+    | { type: 'bond', site: string, bond: NeoAliceBond }
     | { type: 'intent', site: string, intent: MotionIntent, emoji?: string }
     /**
      * `cmd/avatar/animation`: an FBX or VRMA file to play on the whole body, like TalkingHead `playAnimation`.
      * `url` is the URL of the message, `name` a TalkingHead animation name. The stage resolves both.
      */
     | { type: 'animation', site: string, url?: string, name?: string, durationMs?: number }
+    /** `cmd/avatar/widget` (Plan 07, W4): open, update, or close a widget of the desktop app. */
+    | { type: 'widget', site: string, action: 'spawn' | 'update' | 'remove' | 'clear', widget?: string, id?: string, props: Record<string, unknown>, ttlSeconds?: number }
+    /** `cmd/avatar/tool` (Plan 07, W4): run a permitted tool of the avatar. The stage answers with `evt/avatar/tool_result`. */
+    | { type: 'tool', site: string, tool: string, args: Record<string, unknown>, requestId: string }
     /** A camera of NeoAlice sees people (F5). `people` is above 0. */
     | { type: 'presence', site: string, people: number, camera?: string }
     /** The face recognition greets someone by name, for example "Ola Ana" (F5). */
     | { type: 'greeting', site: string, text: string }
     | { type: 'ignored', topic: string, reason: string }
+
+/**
+ * The bond of Alice with her owner, from the companion state, from 0 to 1.
+ * `warmth` is the mean of affection, comfort, and intimacy. `energy` is her energy.
+ */
+export interface NeoAliceBond {
+  warmth: number
+  trust: number
+  energy: number
+}
 
 export interface NeoAliceTranslatorOptions {
   /** Site whose messages the AIRI reacts to, for example the site of the mirror. */
@@ -73,7 +91,7 @@ export interface NeoAliceTranslatorOptions {
 }
 
 /** The actions of the mood site: mood and avatar commands, no speech. */
-const moodActions = ['evt/mood', 'cmd/evt/mood', 'cmd/avatar/gesture', 'cmd/avatar/pose', 'cmd/avatar/animation', 'cmd/avatar/emoji']
+const moodActions = ['evt/mood', 'cmd/evt/mood', 'cmd/avatar/gesture', 'cmd/avatar/pose', 'cmd/avatar/animation', 'cmd/avatar/emoji', 'cmd/avatar/widget', 'cmd/avatar/tool']
 /** The speech actions, read from the mood site with `moodSiteSpeech`. */
 const speechActions = ['cmd/tts/say', 'cmd/tts/audio', 'cmd/tts/stop']
 /** The same speech on two sites (a broadcast) within this window plays once. */
@@ -99,6 +117,8 @@ export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 's
     `${topicRoot}/${site}/cmd/avatar/pose`,
     `${topicRoot}/${site}/cmd/avatar/animation`,
     `${topicRoot}/${site}/cmd/avatar/emoji`,
+    `${topicRoot}/${site}/cmd/avatar/widget`,
+    `${topicRoot}/${site}/cmd/avatar/tool`,
     `${topicRoot}/${companionSite}/evt/companion/state`,
     `${topicRoot}/${companionSite}/evt/companion/affect`,
     ...(options.vision
@@ -158,7 +178,26 @@ const CompanionMood = looseObject({
   airiEmotion: Name,
   intensity: fallback(optional(Percent), undefined),
 })
-const CompanionStatePayload = looseObject({ mood: fallback(optional(CompanionMood), undefined) })
+const Metric = fallback(optional(pipe(number(), finite())), undefined)
+const CompanionStatePayload = looseObject({
+  mood: fallback(optional(nullable(CompanionMood)), undefined),
+  metrics: fallback(optional(looseObject({ affection: Metric, trust: Metric, intimacy: Metric, comfort: Metric })), undefined),
+  energy: fallback(optional(looseObject({ value: Metric })), undefined),
+})
+
+/** The bond of a companion state, or `undefined` without metrics. Affection is 0 to 1000, the others 0 to 100. */
+function bondOf(state: InferOutput<typeof CompanionStatePayload>): NeoAliceBond | undefined {
+  const metrics = state.metrics
+  if (!metrics)
+    return undefined
+  const unit = (value: number | undefined, scale: number) => Math.min(1, Math.max(0, (value ?? 0) / scale))
+  const round = (value: number) => Math.round(value * 1000) / 1000
+  return {
+    warmth: round((unit(metrics.affection, 1000) + unit(metrics.comfort, 100) + unit(metrics.intimacy, 100)) / 3),
+    trust: round(unit(metrics.trust, 100)),
+    energy: round(state.energy?.value === undefined ? 0.7 : unit(state.energy.value, 100)),
+  }
+}
 const CompanionAffectPayload = looseObject({ emotion: Name, airiEmotion: Name, intensity: fallback(optional(Percent), undefined) })
 
 /**
@@ -243,6 +282,10 @@ export class NeoAliceTranslator {
       }
       case 'cmd/avatar/animation':
         return translateAnimation(topic, site, data)
+      case 'cmd/avatar/widget':
+        return translateWidget(topic, site, data)
+      case 'cmd/avatar/tool':
+        return translateTool(topic, site, data)
       case 'cmd/avatar/gesture':
       case 'cmd/avatar/pose':
       case 'cmd/avatar/emoji':
@@ -339,10 +382,13 @@ export class NeoAliceTranslator {
       return ignored(topic, 'payload is not JSON')
     if (action === 'evt/companion/state') {
       const parsed = safeParse(CompanionStatePayload, data)
-      const mood = parsed.success ? parsed.output.mood : undefined
+      if (!parsed.success)
+        return ignored(topic, 'companion state is not an object')
+      const mood = parsed.output.mood
+      const bond = bondOf(parsed.output)
       if (!mood?.primary)
-        return ignored(topic, 'no mood in the companion state')
-      return { type: 'mood', site, mood: resolveMood(mood.primary), intensity: toUnit(mood.intensity), origin: 'companion' }
+        return bond ? { type: 'bond', site, bond } : ignored(topic, 'no mood and no metrics in the companion state')
+      return { type: 'mood', site, mood: resolveMood(mood.primary), intensity: toUnit(mood.intensity ?? undefined), origin: 'companion', ...(bond && { bond }) }
     }
     if (action === 'evt/companion/affect') {
       const parsed = safeParse(CompanionAffectPayload, data)
@@ -357,6 +403,41 @@ export class NeoAliceTranslator {
   private known(semanticAction: string) {
     return this.catalog.get(semanticAction) ? semanticAction : undefined
   }
+}
+
+const WidgetPayload = looseObject({
+  action: fallback(optional(picklist(['spawn', 'update', 'remove', 'clear'])), undefined),
+  widget: Name,
+  id: Name,
+  props: fallback(optional(record(string(), unknown())), undefined),
+  ttl_s: fallback(optional(pipe(number(), finite(), minValue(0), maxValue(3600))), undefined),
+})
+
+const ToolPayload = looseObject({
+  tool: Name,
+  args: fallback(optional(record(string(), unknown())), undefined),
+  request_id: fallback(optional(pipe(string(), maxLength(128))), undefined),
+})
+
+/** `cmd/avatar/widget`: `{"action": "spawn", "widget": "weather", "props": {...}, "ttl_s": 30}`. */
+function translateWidget(topic: string, site: string, data: unknown): NeoAliceBridgeEvent {
+  const parsed = safeParse(WidgetPayload, data)
+  if (!parsed.success || !parsed.output.action)
+    return ignored(topic, 'no widget action')
+  const { action, widget, id, props, ttl_s: ttl } = parsed.output
+  if (action === 'spawn' && !widget)
+    return ignored(topic, 'a widget spawn needs a widget name')
+  if ((action === 'update' || action === 'remove') && !id)
+    return ignored(topic, `a widget ${action} needs an id`)
+  return { type: 'widget', site, action, ...(widget && { widget }), ...(id && { id }), props: props ?? {}, ...(ttl !== undefined && { ttlSeconds: ttl }) }
+}
+
+/** `cmd/avatar/tool`: `{"tool": "get_weather", "args": {...}, "request_id": "..."}`. */
+function translateTool(topic: string, site: string, data: unknown): NeoAliceBridgeEvent {
+  const parsed = safeParse(ToolPayload, data)
+  if (!parsed.success || !parsed.output.tool)
+    return ignored(topic, 'no tool name')
+  return { type: 'tool', site, tool: parsed.output.tool, args: parsed.output.args ?? {}, requestId: parsed.output.request_id || `tool-${Date.now()}` }
 }
 
 /** `cmd/avatar/animation`: `{"url": "...", "duration": 5}` of the mirror, or `{"name": "Wave"}`. */

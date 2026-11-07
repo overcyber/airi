@@ -129,6 +129,8 @@ export class MoodFace {
   private readonly blink: BlinkState
   private readonly emoteFace: string | null
   private emoteFaceActive = false
+  /** The bond from the companion state: warmth and energy, 0 to 1. Neutral until it arrives. */
+  private bond = { warmth: 0.5, energy: 0.7 }
   /** An emoji face: its expression weights and its time on the frame clock. */
   private emojiFace: { weights: Map<string, number>, t: number } | null = null
   /** The ARKit shapes that the last frame wrote, so a mood change sets them back to 0. */
@@ -161,6 +163,14 @@ export class MoodFace {
     if (!target)
       return
     this.flash = { name: target.name, weight: weightOverride ?? target.weight, key: target.key, t: 0, holdUntil: null }
+  }
+
+  /**
+   * Sets the bond of Alice with the owner (companion state, 0 to 1). A warm bond keeps a light smile at rest,
+   * never over a sad, angry, or surprised mood. Low energy makes the eyelids heavy. NeoAlice decides the bond.
+   */
+  setBond(bond: { warmth: number, energy: number }) {
+    this.bond = { warmth: Math.min(1, Math.max(0, bond.warmth)), energy: Math.min(1, Math.max(0, bond.energy)) }
   }
 
   /**
@@ -275,6 +285,18 @@ export class MoodFace {
         for (const [name, weight] of emoji.weights)
           arkit.set(name, Math.max(arkit.get(name) ?? 0, Math.round(weight * shape * 1000) / 1000))
       }
+    }
+    // The bond: a light smile at rest when the bond is warm, heavy eyelids when her energy is low.
+    const moodKey = this.mood?.key ?? this.moodTarget?.key
+    if (this.bond.warmth > 0.5 && !['sad', 'angry', 'surprised'].includes(moodKey ?? '')) {
+      const smile = pickCandidate(['relaxed', 'fun'], this.expressionNames)
+      if (smile)
+        arkit.set(smile, Math.max(arkit.get(smile) ?? 0, Math.round((this.bond.warmth - 0.5) * 0.5 * 1000) / 1000))
+    }
+    if (this.bond.energy < 0.4 && !input.emotePlaying) {
+      const lids = pickCandidate(['blink'], this.expressionNames)
+      if (lids)
+        arkit.set(lids, Math.max(arkit.get(lids) ?? 0, Math.round((0.4 - this.bond.energy) * 0.6 * 1000) / 1000))
     }
     for (const name of this.arkitWritten) {
       if (!arkit.has(name) && !face.has(name))

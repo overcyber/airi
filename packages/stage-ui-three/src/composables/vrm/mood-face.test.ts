@@ -180,3 +180,16 @@ describe('moodFace emoji faces', () => {
     expect(run(laugh, 3).get('joy')).toBe(0)
   })
 })
+
+describe('moodFace bond', () => {
+  it('smiles lightly at rest with a warm bond, never over a sad mood, and droops the eyelids with low energy', () => {
+    const face = new MoodFace(vrm1Names, noEarlyBlink)
+    face.setBond({ warmth: 0.9, energy: 0.1 })
+    const rest = run(face, 1)
+    expect(rest.get('relaxed')).toBeCloseTo(0.2, 2)
+    expect(rest.get('blink')).toBeCloseTo(0.18, 2)
+
+    face.setMood('sad', 1)
+    expect(run(face, 6).get('relaxed') ?? 0).toBe(0)
+  })
+})

@@ -88,6 +88,24 @@ export function neoAliceWakeEvent(input: { site: string, userId: string, session
 }
 
 /**
+ * The answer to a `cmd/avatar/tool` (Plan 07, W4) as `evt/avatar/tool_result`, QoS 1. `requestId` is the
+ * `request_id` of the command, so NeoAlice can match the answer.
+ */
+export function neoAliceToolResultEvent(input: { site: string, requestId: string, tool: string, ok: boolean, result?: unknown, error?: string, nowMs: number }): NeoAliceSatelliteMessage {
+  const payload = {
+    v: 1,
+    type: 'evt.avatar.tool_result',
+    ts: new Date(input.nowMs).toISOString(),
+    site_id: input.site,
+    request_id: input.requestId,
+    tool: input.tool,
+    ok: input.ok,
+    ...(input.ok ? { result: input.result ?? null } : { error: input.error ?? 'failed' }),
+  }
+  return { topic: `${topicRoot}/${input.site}/evt/avatar/tool_result`, payload: JSON.stringify(payload), qos: 1 }
+}
+
+/**
  * The state of the avatar as `evt/state`, QoS 0. NeoAlice counts a site as active while it sees
  * these messages (120 s by default), so a heartbeat every 30 s keeps the avatar in the broadcasts.
  */

@@ -555,6 +555,10 @@ const { thinking: neoAliceThinking, restoreMood: restoreNeoAliceMood } = useNeoA
     neoAliceGroup?.stop({ fadeMs: 120 }).catch(() => {})
   },
   showCaption: showBridgeCaption,
+  applyBond: (bond) => {
+    if (stageModelRenderer.value === 'vrm')
+      vrmViewerRef.value?.setBond(bond)
+  },
   reactEmoji: emoji => stageModelRenderer.value === 'vrm' && (vrmViewerRef.value?.reactEmoji(emoji) ?? false),
   reactEmotion: (emotion) => {
     if (stageModelRenderer.value === 'vrm') {

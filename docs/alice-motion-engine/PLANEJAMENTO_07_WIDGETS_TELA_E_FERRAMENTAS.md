@@ -87,6 +87,21 @@ A W3 foi feita antes da W1 e da W2, porque o responsável relatou que nenhum wid
 - Teste no Electron: um modelo falso pediu `stage_widgets` com o componente `weather`, e a janela do widget abriu.
 - Uma pergunta por voz chega à NeoAlice como áudio, então o passe vê só a resposta dela.
 
+### Estado da W4 (07/11/2026)
+
+Feita. O AIRI ouve, no site do avatar e no site do espelho:
+
+| Tópico | Payload | O que o AIRI faz |
+| --- | --- | --- |
+| `cmd/avatar/widget` | `{"action":"spawn","widget":"weather","props":{...},"ttl_s":30}`; `update` e `remove` com `id`; `clear` | Abre, atualiza ou fecha o widget pelo `stage_widgets` do desktop |
+| `cmd/avatar/tool` | `{"tool":"get_weather","args":{...},"request_id":"..."}` | Roda a ferramenta se estiver na lista de permitidas e responde |
+| `evt/avatar/tool_result` (publicado pelo AIRI, no site do avatar) | `{"request_id":"...","tool":"...","ok":true,"result":{...}}` ou `{"ok":false,"error":"..."}` | A resposta à NeoAlice |
+
+- Lista de permitidas: `get_weather`, `stage_widgets` e `image_journal` (`libs/alice-motion/neoalice-tools.ts`). `computer_use` nunca roda por MQTT.
+- Uma ferramenta fora da lista é recusada, registrada no console e respondida com `ok: false`.
+- Na Web não há widgets: a resposta diz que a ferramenta precisa do app desktop.
+- A NeoAlice continua sem mudança. Publicar esses tópicos é a W5.
+
 ## 6. Critérios de aceite
 
 - W2: com a tela compartilhada, "o que tem na minha tela?" recebe uma resposta da NeoAlice que cita o conteúdo da tela. Com o compartilhamento desligado, nenhuma captura acontece.

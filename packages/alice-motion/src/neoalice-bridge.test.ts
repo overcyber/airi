@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { MotionCatalog } from './catalog'
 import { neoAliceBridgeTopics, NeoAliceTranslator } from './neoalice-bridge'
+import { neoAliceToolResultEvent } from './neoalice-satellite'
 
 const catalog = new MotionCatalog()
 
@@ -122,6 +123,15 @@ describe('neoAliceTranslator', () => {
     expect(bridge.translate('neoalice/v1/companion/evt/companion/state', JSON.stringify({ mood: null }), 0)).toMatchObject({ type: 'ignored' })
   })
 
+  it('reads the bond of the companion state, also without a mood', () => {
+    const state = { mood: null, metrics: { affection: 800, trust: 70, intimacy: 60, comfort: 90, respect: 80 }, energy: { value: 30 } }
+    expect(translator().translate('neoalice/v1/companion/evt/companion/state', JSON.stringify(state), 0))
+      .toEqual({ type: 'bond', site: 'companion', bond: { warmth: 0.767, trust: 0.7, energy: 0.3 } })
+    const withMood = { ...state, mood: { primary: 'happy', airiEmotion: 'happy', intensity: null } }
+    expect(translator().translate('neoalice/v1/companion/evt/companion/state', JSON.stringify(withMood), 0))
+      .toMatchObject({ type: 'mood', mood: { airiEmotion: 'happy' }, bond: { warmth: 0.767 } })
+  })
+
   it('reads the mood and the avatar commands of the mood site, but not its speech', () => {
     const bridge = translator({ moodSite: 'magicmirror' })
     expect(neoAliceBridgeTopics({ site: 'mirror', moodSite: 'magicmirror' })).toContain('neoalice/v1/magicmirror/evt/mood')
@@ -175,5 +185,28 @@ describe('neoAliceTranslator speech of the mirror site', () => {
 
     const off = new NeoAliceTranslator({ site: 'airi-avatar', moodSite: 'magicmirror', catalog })
     expect(off.translate('neoalice/v1/magicmirror/cmd/tts/audio', speech, 0)).toMatchObject({ type: 'ignored' })
+  })
+})
+
+describe('neoAliceTranslator widgets and tools (Plan 07, W4)', () => {
+  it('reads widget and tool commands of the avatar site and of the mirror site', () => {
+    const topics = neoAliceBridgeTopics({ site: 'airi-avatar', moodSite: 'magicmirror' })
+    expect(topics).toEqual(expect.arrayContaining(['neoalice/v1/airi-avatar/cmd/avatar/widget', 'neoalice/v1/airi-avatar/cmd/avatar/tool', 'neoalice/v1/magicmirror/cmd/avatar/widget']))
+
+    const bridge = new NeoAliceTranslator({ site: 'airi-avatar', moodSite: 'magicmirror', catalog })
+    expect(bridge.translate('neoalice/v1/airi-avatar/cmd/avatar/widget', JSON.stringify({ action: 'spawn', widget: 'weather', props: { city: 'Sao Paulo' }, ttl_s: 30 }), 0))
+      .toEqual({ type: 'widget', site: 'airi-avatar', action: 'spawn', widget: 'weather', props: { city: 'Sao Paulo' }, ttlSeconds: 30 })
+    expect(bridge.translate('neoalice/v1/magicmirror/cmd/avatar/widget', '{"action":"clear"}', 0)).toMatchObject({ type: 'widget', action: 'clear' })
+    expect(bridge.translate('neoalice/v1/airi-avatar/cmd/avatar/widget', '{"action":"spawn"}', 0)).toMatchObject({ type: 'ignored', reason: 'a widget spawn needs a widget name' })
+    expect(bridge.translate('neoalice/v1/airi-avatar/cmd/avatar/tool', JSON.stringify({ tool: 'get_weather', args: { city: 'Rio' }, request_id: 'r1' }), 0))
+      .toEqual({ type: 'tool', site: 'airi-avatar', tool: 'get_weather', args: { city: 'Rio' }, requestId: 'r1' })
+  })
+
+  it('builds the evt/avatar/tool_result answer', () => {
+    const ok = neoAliceToolResultEvent({ site: 'airi-avatar', requestId: 'r1', tool: 'get_weather', ok: true, result: { temp: 25 }, nowMs: 0 })
+    expect(ok.topic).toBe('neoalice/v1/airi-avatar/evt/avatar/tool_result')
+    expect(JSON.parse(ok.payload)).toMatchObject({ type: 'evt.avatar.tool_result', request_id: 'r1', ok: true, result: { temp: 25 } })
+    const refused = neoAliceToolResultEvent({ site: 'airi-avatar', requestId: 'r2', tool: 'computer_use', ok: false, error: 'not permitted', nowMs: 0 })
+    expect(JSON.parse(refused.payload)).toMatchObject({ ok: false, error: 'not permitted' })
   })
 })

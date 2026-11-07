@@ -1326,6 +1326,10 @@ defineExpose({
     const shapes = talkingHeadEmojiFaces[emoji.replace(/\uFE0F/g, '')] ?? talkingHeadEmojiFaces[emoji]
     return shapes ? vrmMoodFace.value?.showFace(shapes) ?? false : false
   },
+  /** Sets the bond from the companion state (warmth and energy, 0 to 1). See `MoodFace.setBond`. */
+  setBond(bond: { warmth: number, energy: number }) {
+    vrmMoodFace.value?.setBond(bond)
+  },
   /** Shows a short reaction, for example to a touch. The resting mood does not change. */
   reactExpression(expression: string, intensity = 1) {
     if (intensity > 0)

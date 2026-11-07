@@ -3,13 +3,15 @@ import type { NeoAliceBridgeEvent, SpeechSegment } from '@proj-airi/alice-motion
 import type { StageEmote } from '../libs/alice-motion/stage-motion'
 
 import { errorMessageFrom } from '@moeru/std'
-import { isPublishableSite, matchWakeWord, neoAliceAudioEvent, neoAliceStateEvent, neoAliceSttFinalEvent, neoAliceWakeEvent, parseWakeWords } from '@proj-airi/alice-motion'
+import { isPublishableSite, matchWakeWord, neoAliceAudioEvent, neoAliceStateEvent, neoAliceSttFinalEvent, neoAliceToolResultEvent, neoAliceWakeEvent, parseWakeWords } from '@proj-airi/alice-motion'
 import { number, object, safeParse, string } from 'valibot'
 import { onScopeDispose, ref, watch } from 'vue'
 
 import { resolveNeoAliceAnimationUrl } from '../libs/alice-motion/neoalice-animation-url'
+import { runNeoAliceTool, widgetToolInput } from '../libs/alice-motion/neoalice-tools'
 import { NeoAliceMicrophone, neoAliceVoiceSampleRate, segmentToWavBase64 } from '../libs/alice-motion/neoalice-voice'
 import { StageMotionRuntime } from '../libs/alice-motion/stage-motion'
+import { useLlmToolsStore } from '../stores/ai/chat-llm/tools'
 import { useChatSessionStore } from '../stores/chat/session-store'
 import { useNeoAliceBrainStore } from '../stores/modules/neoalice-brain'
 import { useNeoAliceBridgeStore } from '../stores/modules/neoalice-bridge'
@@ -35,6 +37,8 @@ export interface NeoAliceStageBridgeOptions {
   applyEmotion: (emotion: string, intensity: number) => void
   /** Shows a short face reaction that does not change the resting mood, for example for an emoji. */
   reactEmotion?: (emotion: string) => void
+  /** Shows the bond of the companion state on the face (warmth and energy, 0 to 1). */
+  applyBond?: (bond: { warmth: number, energy: number }) => void
   /** Shows the own face of an emoji, as TalkingHead does. Returns `false` when the stage cannot. */
   reactEmoji?: (emoji: string) => boolean
 }
@@ -101,6 +105,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   const chatSession = useChatSessionStore()
   const brainTools = useNeoAliceBrainTools()
   const vrmMotions = useVrmMotionsStore()
+  const llmTools = useLlmToolsStore()
   const runtime = new StageMotionRuntime({
     playClip: options.playClip,
     log: message => console.info(`[neoalice-bridge] ${message}`),
@@ -211,7 +216,12 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         thinking.value = true
         thinkingSinceMs = now
         return
+      case 'bond':
+        options.applyBond?.(event.bond)
+        return
       case 'mood':
+        if (event.bond)
+          options.applyBond?.(event.bond)
         runtime.director.setAffect(event.mood.airiEmotion, event.intensity)
         options.applyEmotion(event.mood.airiEmotion, event.intensity ?? 1)
         bridge.lastMood = JSON.stringify({ emotion: event.mood.airiEmotion, intensity: event.intensity ?? 1, atMs: Date.now() } satisfies StoredMood)
@@ -238,6 +248,20 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         })
         break
       }
+      case 'widget':
+        void runNeoAliceTool(name => llmTools.getToolsByNames(name)[0], 'stage_widgets', widgetToolInput(event), `widget-${Date.now()}`)
+          .then(result => console.info(`[neoalice-bridge] widget ${event.action}${event.widget ? ` ${event.widget}` : ''}: ${result.ok ? 'done' : result.error}`))
+        break
+      case 'tool':
+        void runNeoAliceTool(name => llmTools.getToolsByNames(name)[0], event.tool, event.args, event.requestId).then((result) => {
+          console.info(`[neoalice-bridge] tool ${event.tool}: ${result.ok ? 'done' : result.error}`)
+          const site = bridge.site.trim()
+          if (!isPublishableSite(site))
+            return
+          void bridge.publish(neoAliceToolResultEvent({ site, requestId: event.requestId, tool: event.tool, nowMs: Date.now(), ...result }))
+            .catch(error => console.warn('[neoalice-bridge] evt/avatar/tool_result failed:', errorMessageFrom(error) ?? 'unknown error'))
+        })
+        break
       case 'presence':
         // A person who arrives after a quiet time gets a wave and a smile. A person who stays does not.
         if (now - lastPresenceMs > presenceGapMs)
