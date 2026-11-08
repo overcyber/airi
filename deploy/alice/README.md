@@ -165,6 +165,24 @@ Rode na raiz do repositório.
 
 6. Em cada aparelho que vai abrir o HTTPS, instale a autoridade local uma vez. Baixe em `http://<ip>:4173/airi-local-ca.crt` e instale como autoridade confiável. Sem isso, o navegador mostra um aviso; "Avançado" e "Continuar" também funcionam.
 
+## Migrar o espelho
+
+O passo a passo para trocar o avatar do MagicMirror está em [`MIGRACAO_MAGICMIRROR.md`](MIGRACAO_MAGICMIRROR.md).
+
+## App Android
+
+O script `scripts/android-apk.sh` instala o Android SDK, se ele não existir, e gera o APK de depuração. O SDK fica em `/mnt/dockers/Android/Sdk`, ou no caminho de `ANDROID_SDK_ROOT`. Ele precisa do JDK 21 e de uns 6 GB livres.
+
+```bash
+deploy/alice/scripts/android-apk.sh
+```
+
+```bash
+ANDROID_SDK_ROOT=$HOME/Android/Sdk deploy/alice/scripts/android-apk.sh
+```
+
+O APK sai em `apps/stage-pocket/android/app/build/outputs/apk/debug/`.
+
 ## Configurar no AIRI
 
 Com os padrões do servidor (seção "Configurações padrão do AIRI"), os provedores abaixo já vêm configurados. Estes passos servem para conferir ou mudar.
