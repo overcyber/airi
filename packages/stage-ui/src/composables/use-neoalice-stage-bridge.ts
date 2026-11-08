@@ -8,7 +8,7 @@ import { number, object, safeParse, string } from 'valibot'
 import { onScopeDispose, ref, watch } from 'vue'
 
 import { builtinGestureOfEmoji, builtinGestureOfSpeech } from '../libs/alice-motion/builtin-gestures'
-import { resolveNeoAliceAnimationUrl } from '../libs/alice-motion/neoalice-animation-url'
+import { resolveNeoAliceAnimationUrls } from '../libs/alice-motion/neoalice-animation-url'
 import { runNeoAliceTool, widgetToolInput } from '../libs/alice-motion/neoalice-tools'
 import { NeoAliceMicrophone, neoAliceVoiceSampleRate, segmentToWavBase64 } from '../libs/alice-motion/neoalice-voice'
 import { StageMotionRuntime } from '../libs/alice-motion/stage-motion'
@@ -168,6 +168,17 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     }
   }
 
+  /** Tries each URL of an animation until one plays. The logs name each URL that failed. */
+  async function playFirstAnimation(urls: readonly string[], durationMs: number | undefined) {
+    for (const url of urls) {
+      if (await options.playAnimation?.(url, durationMs)) {
+        console.info(`[neoalice-bridge] played the animation ${url}`)
+        return
+      }
+      console.warn(`[neoalice-bridge] could not play the animation ${url}`)
+    }
+  }
+
   let builtinSequence = 0
   /** Plays a built-in motion of the stage, when the motion library has it. */
   function playBuiltinGesture(action: string | undefined, reason: string, now: number) {
@@ -257,14 +268,12 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         break
       }
       case 'animation': {
-        const url = resolveNeoAliceAnimationUrl(event, aliceServerOrigin(), vrmMotions.motionLibrary.emotes)
-        if (!url || !options.playAnimation) {
+        const urls = resolveNeoAliceAnimationUrls(event, aliceServerOrigin(), vrmMotions.motionLibrary.emotes)
+        if (urls.length === 0 || !options.playAnimation) {
           console.info(`[neoalice-bridge] no animation to play for ${event.url ?? event.name}`)
           break
         }
-        void options.playAnimation(url, event.durationMs).then((played) => {
-          console.info(`[neoalice-bridge] ${played ? 'played' : 'could not play'} the animation ${url}`)
-        })
+        void playFirstAnimation(urls, event.durationMs)
         break
       }
       case 'widget':

@@ -10,6 +10,12 @@ const audioPauseSeconds = 0.15
 /** When the audio pauses, a pause of the text this many units ahead is the same pause: the track jumps to it. */
 const catchUpUnits = 4
 
+/** Each sync at a pause moves the rate by this factor, toward the speed of the voice. */
+const rateStep = 1.12
+/** Range of the rate, in units per second of voiced speech. */
+const minUnitsPerSecond = 6
+const maxUnitsPerSecond = 20
+
 /** The mouth shape of one frame of a {@link TextVisemeTrack}, and the next one for the blend. */
 export interface VisemeFrame {
   current: Viseme
@@ -37,10 +43,23 @@ export class TextVisemeTrack {
   /** The audio was silent during the current pause of the text, so that pause is in step. */
   private pauseHeard = false
 
+  private unitsPerSecond: number
+
   constructor(
     private readonly steps: readonly VisemeStep[],
-    private readonly unitsPerSecond = defaultUnitsPerSecond,
-  ) {}
+    unitsPerSecond = defaultUnitsPerSecond,
+  ) {
+    this.unitsPerSecond = unitsPerSecond
+  }
+
+  /** The current rate, in units per second of voiced speech. It adapts to the voice at each pause. */
+  get rate() {
+    return this.unitsPerSecond
+  }
+
+  private adapt(factor: number) {
+    this.unitsPerSecond = Math.min(maxUnitsPerSecond, Math.max(minUnitsPerSecond, this.unitsPerSecond * factor))
+  }
 
   /** All steps played. The caller can go back to the audio lip sync. */
   get finished() {
@@ -79,8 +98,12 @@ export class TextVisemeTrack {
     }
 
     // A sound of the text waits while the audio is silent. A pause of the text goes on.
-    if (!voiced && this.steps[this.index].viseme === 'sil')
+    if (!voiced && this.steps[this.index].viseme === 'sil' && !this.pauseHeard) {
       this.pauseHeard = true
+      // The text waited at this pause for the audio: the voice is slower than the text.
+      if (this.waitedSeconds > 0.15)
+        this.adapt(1 / rateStep)
+    }
     if (voiced || this.steps[this.index].viseme === 'sil') {
       this.waitedSeconds = 0
       this.offset += delta * this.unitsPerSecond
@@ -111,6 +134,8 @@ export class TextVisemeTrack {
       if (this.steps[i].viseme === 'sil') {
         this.index = i
         this.offset = 0
+        // The audio reached the pause before the text: the voice is faster than the text.
+        this.adapt(rateStep)
         return
       }
       units += this.steps[i].units

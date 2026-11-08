@@ -37,6 +37,19 @@ else
   echo "preparar: kept $env_file"
 fi
 
+# The TalkingHead server of the mirror (port 8081) gives the FBX files that are not in deploy/alice/animacoes.
+# When AIRI_TALKINGHEAD_UPSTREAM is empty and this machine answers on port 8081, the script sets it.
+if grep -qE '^AIRI_TALKINGHEAD_UPSTREAM=$' "$env_file"; then
+  for ip in $(hostname -I 2>/dev/null); do
+    case "$ip" in *:*|172.1[7-9].*|172.2[0-9].*|172.3[01].*) continue ;; esac
+    if curl -fsS -o /dev/null --max-time 3 "http://$ip:8081/"; then
+      sed -i "s|^AIRI_TALKINGHEAD_UPSTREAM=$|AIRI_TALKINGHEAD_UPSTREAM=http://$ip:8081|" "$env_file"
+      echo "preparar: AIRI_TALKINGHEAD_UPSTREAM=http://$ip:8081 (the TalkingHead server answered)"
+      break
+    fi
+  done
+fi
+
 names="localhost,127.0.0.1,$(grep -E '^AIRI_TLS_NAMES=' "$env_file" | cut -d= -f2- | tr -d ' ')"
 san=""
 for name in $(echo "$names" | tr ',' ' '); do

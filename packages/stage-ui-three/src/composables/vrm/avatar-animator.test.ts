@@ -272,6 +272,24 @@ describe('avatarAnimator layers (V6)', () => {
     expect(animator.talking?.isRunning() && animator.talking.getEffectiveWeight() > 0.5).toBeFalsy()
   })
 
+  it('goes back to the idle when the hold time of a pose ends', () => {
+    // ROOT CAUSE:
+    //
+    // A pose stayed until the next pose, so she stayed sitting or thinking. In TalkingHead the mood idle replaces it.
+    //
+    // We fixed this with a hold time on the frame clock.
+    const { animator } = createAnimator()
+    animator.start(clip('idle-a', 2))
+    animator.holdPose(clip('sitting', 1), 1, 10)
+
+    animator.update(9)
+    expect(animator.pose?.getClip().name).toBe('sitting')
+    animator.update(1.5)
+    expect(animator.pose).toBeNull()
+    animator.update(1.5)
+    expect(animator.idle?.getEffectiveWeight()).toBeCloseTo(1, 2)
+  })
+
   it('plays a timed emote in a loop for its duration on the frame clock, then returns to the held pose', () => {
     const { animator } = createAnimator()
     animator.start(clip('idle-a', 2))

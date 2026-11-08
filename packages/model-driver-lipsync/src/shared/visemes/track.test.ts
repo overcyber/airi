@@ -53,4 +53,17 @@ describe('textVisemeTrack', () => {
 
     expect(track.update(0.16, false)?.current).toBe('sil')
   })
+  it('slows down when it waits for the audio, and speeds up when it is late', () => {
+    const steps = [{ viseme: 'aa', units: 0.5 }, { viseme: 'sil', units: 2 }, { viseme: 'O', units: 1 }, { viseme: 'E', units: 1 }, { viseme: 'sil', units: 2 }, { viseme: 'I', units: 1 }] as const
+    const slow = new TextVisemeTrack(steps, 10)
+    slow.update(0.06, true)
+    slow.update(0.3, true)
+    slow.update(0.05, false)
+    expect(slow.rate).toBeLessThan(10)
+
+    const fast = new TextVisemeTrack(steps.slice(2), 10)
+    fast.update(0.02, true)
+    fast.update(0.16, false)
+    expect(fast.rate).toBeGreaterThan(10)
+  })
 })

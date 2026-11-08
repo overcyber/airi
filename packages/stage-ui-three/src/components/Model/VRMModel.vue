@@ -112,18 +112,6 @@ import {
   takeManagedVrmInstance,
 } from './vrm-instance-cache'
 
-/*
-  * Props:
-  * - modelId: stable display model identity
-  * - modelSrc: model src string to load model asset
-  * - idleAnimation: animation src for model
-  * - loadAnimations: TBC
-  * - paused: if the animation is paused
-  * - nprIrrSH: Spherical Harmonics computed from the sky box, used for IBL
-  *
-  * - modelOffset: The placing offset of model (x, y, z)
-  * - modelRotationY: The rotation of the model (y-axis)
-*/
 const props = withDefaults(defineProps<{
   /** The context that creates the lip sync node. It must be the context of the played speech. */
   audioContext?: AudioContext
@@ -186,6 +174,22 @@ const emit = defineEmits<{
   (e: 'error', value: unknown): void
   (e: 'loaded', value: string): void
 }>()
+/*
+  * Props:
+  * - modelId: stable display model identity
+  * - modelSrc: model src string to load model asset
+  * - idleAnimation: animation src for model
+  * - loadAnimations: TBC
+  * - paused: if the animation is paused
+  * - nprIrrSH: Spherical Harmonics computed from the sky box, used for IBL
+  *
+  * - modelOffset: The placing offset of model (x, y, z)
+  * - modelRotationY: The rotation of the model (y-axis)
+*/
+/** A pose cue without a `duration` from NeoAlice lasts this long (`poseCueMs` of the motion catalog). */
+const poseCueDefaultMs = 1500
+/** Time that a pose holds before she goes back to the idle, when NeoAlice gives no `duration`. */
+const defaultPoseHoldMs = 10_000
 
 const {
   audioContext,
@@ -1362,7 +1366,8 @@ defineExpose({
     const template = parseTalkingHeadClipId(id)
     if (template) {
       if (template.kind === 'pose') {
-        // The poses stay until the next pose, like `setPoseFromTemplate` of the mirror. `straight` is the idle.
+        // In TalkingHead, the mood idle replaces a pose after some seconds, so a pose does not stay. Here a pose
+        // goes back to the idle after its `duration`, or after 10 s without one. `straight` is the idle at once.
         if (template.name === 'straight') {
           animator.holdPose(null)
           return true
@@ -1370,7 +1375,8 @@ defineExpose({
         const clip = createTalkingHeadClip(targetVrm, template, { durationSeconds: 4 })
         if (!clip)
           return false
-        animator.holdPose(clip)
+        const requestedMs = options.durationMs !== undefined && options.durationMs > poseCueDefaultMs ? options.durationMs : defaultPoseHoldMs
+        animator.holdPose(clip, 1, requestedMs / 1000)
         return true
       }
       // A gesture holds for its duration (3 s by default in TalkingHead) and fades in and out over 1 s.

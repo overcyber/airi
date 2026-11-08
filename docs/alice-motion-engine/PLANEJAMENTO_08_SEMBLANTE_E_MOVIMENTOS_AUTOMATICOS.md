@@ -107,3 +107,11 @@ O MMD usa o mesmo driver com os valores antigos. A abertura extra da mandíbula 
 - **Movimentos embutidos com a NeoAlice.** A NeoAlice manda só nomes de gestos do TalkingHead, então os movimentos embutidos do AIRI nunca tocavam. Agora o texto da fala escolhe um movimento ("Olá" faz Wave Hello, "Obrigada" faz Bow, "Sim" faz Head Nod, "Não" faz Head Shake) e alguns emojis também (`libs/alice-motion/builtin-gestures.ts`). A saudação da câmera usa o Wave Hello. A NeoAlice pode pedir um movimento pelo nome em `cmd/avatar/gesture`.
 - **Botão Play no desktop.** O botão Play das configurações só avisava a própria janela. No desktop, o avatar fica na janela principal, então nada tocava. Agora o pedido também vai por um `BroadcastChannel`. Teste no Electron: a mensagem saiu da janela de onboarding e chegou à janela principal.
 - **Migração do espelho e mudanças na NeoAlice:** `PLANEJAMENTO_09_MIGRACAO_MAGICMIRROR_E_NEOALICE.md`.
+
+## 12. Correções de 08/11 depois do teste do responsável
+
+- **Pose que não voltava.** A pose ficava até a próxima, então ela continuava sentada ou pensando. No TalkingHead, o idle do humor troca a pose depois de alguns segundos. Agora uma pose volta ao idle depois do `duration` da mensagem, ou depois de 10 s sem `duration`. `straight` volta na hora. Teste no desktop: com `sitting`, o quadril foi a 0,11 m e voltou a 0,99 m. `thinking` também voltou.
+- **Animação por URL no desktop.** O desktop trocava a URL do TalkingHead pela do servidor Alice salvo, e esse servidor não tinha `/poses/`. O servidor do TalkingHead manda CORS, então agora o AIRI tenta o servidor Alice e depois a URL da mensagem. Teste no desktop: o `poses/dance.fbx` tocou pela URL do TalkingHead. O `dance.fbx` é uma pose parada, de um quadro só.
+- **Docker.** O `preparar.sh` preenche o `AIRI_TALKINGHEAD_UPSTREAM` quando ele está vazio e a porta 8081 da máquina responde.
+- **Lip sync.** Os números viram palavras ("25 graus" vira "vinte e cinco graus"), e a velocidade da boca se ajusta à voz a cada pausa. Teste: a boca terminou em 8,10 s, num áudio de 8,11 s.
+- **Play no desktop.** Teste no desktop reconstruído: o Play de "Wave Hello" levantou a mão do avatar da janela principal.

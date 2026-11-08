@@ -51,34 +51,38 @@ function fileStem(path: string) {
 const servedFolders = /^\/(?:animations|animations_arkit|poses)\//i
 
 /**
- * The URL that the stage loads for a `cmd/avatar/animation` of NeoAlice.
+ * The URLs that the stage tries, in order, for a `cmd/avatar/animation` of NeoAlice.
  *
  * The mirror sends the URL of the TalkingHead server, for example `http://192.0.2.10:8081/poses/dance.fbx`.
- * A page on HTTPS cannot load it, and that server sends no CORS headers. The Alice Docker server serves the
- * same folders (`animations`, `animations_arkit`, `poses`), so a URL in them loads from the Alice server.
- * Another HTTP URL stays as it is.
+ * 1. A file with the name of a motion in `bundled` plays that motion, from the app.
+ * 2. A URL in `animations`, `animations_arkit`, or `poses` loads from the Alice server, at the same path. A page on
+ *    HTTPS cannot load the HTTP URL of the TalkingHead server.
+ * 3. The URL of the message. The TalkingHead server sends CORS headers, so the desktop app can load it when the
+ *    Alice server does not serve the file, for example when the saved server is the NeoAlice API.
  *
- * A file with the name of a motion in `bundled` plays that motion, from the app.
- *
- * Returns `undefined` when there is nothing to load.
+ * Returns an empty list when there is nothing to load.
  */
-export function resolveNeoAliceAnimationUrl(input: { url?: string, name?: string }, serverOrigin: string | undefined, bundled: readonly BundledMotion[] = []): string | undefined {
-  // A file that AIRI ships (the NeoAlice motions of the owner) plays from the app, also without a server.
+export function resolveNeoAliceAnimationUrls(input: { url?: string, name?: string }, serverOrigin: string | undefined, bundled: readonly BundledMotion[] = []): string[] {
   const path = input.url ?? (input.name ? talkingHeadAnimations[input.name.toLowerCase().replace(/[\s_-]+/g, '')] : undefined)
   const own = path ? bundled.find(motion => motionKey(motion.name) === motionKey(fileStem(path))) : undefined
   if (own)
-    return own.url
-  if (input.url) {
-    let parsed: URL
-    try {
-      parsed = new URL(input.url, serverOrigin ?? 'http://localhost/')
-    }
-    catch {
-      return undefined
-    }
-    if (serverOrigin && servedFolders.test(parsed.pathname))
-      return new URL(parsed.pathname, serverOrigin).href
-    return /^https?:$/.test(parsed.protocol) ? parsed.href : undefined
+    return [own.url]
+  if (!input.url)
+    return path && serverOrigin ? [new URL(`/${path}`, serverOrigin).href] : []
+
+  let parsed: URL
+  try {
+    parsed = new URL(input.url, serverOrigin ?? 'http://localhost/')
   }
-  return path && serverOrigin ? new URL(`/${path}`, serverOrigin).href : undefined
+  catch {
+    return []
+  }
+  if (!/^https?:$/.test(parsed.protocol))
+    return []
+  const urls: string[] = []
+  if (serverOrigin && servedFolders.test(parsed.pathname))
+    urls.push(new URL(parsed.pathname, serverOrigin).href)
+  if (!urls.includes(parsed.href))
+    urls.push(parsed.href)
+  return urls
 }

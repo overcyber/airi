@@ -179,10 +179,40 @@ function wordVisemes(word: string): VisemeStep[] {
   return steps
 }
 
+const numberUnits = ['zero', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove']
+const tens = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa']
+const hundreds = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos']
+
+/** Words of a number from 0 to 999999 in Brazilian Portuguese, as a TTS voice reads it. */
+function numberWords(value: number): string {
+  if (value < 20)
+    return numberUnits[value]
+  if (value < 100)
+    return tens[Math.floor(value / 10)] + (value % 10 ? ` e ${numberUnits[value % 10]}` : '')
+  if (value === 100)
+    return 'cem'
+  if (value < 1000)
+    return hundreds[Math.floor(value / 100)] + (value % 100 ? ` e ${numberWords(value % 100)}` : '')
+  const thousands = Math.floor(value / 1000)
+  const rest = value % 1000
+  return `${thousands === 1 ? 'mil' : `${numberWords(thousands)} mil`}${rest ? ` e ${numberWords(rest)}` : ''}`
+}
+
+/** The text with its numbers in words, for example "25 graus" gives "vinte e cinco graus". */
+function spellNumbers(text: string) {
+  return text.replace(/\d+(?:[.,]\d+)?/g, (match) => {
+    const [whole, fraction] = match.split(/[.,]/)
+    const value = Number(whole)
+    if (!Number.isSafeInteger(value) || value > 999_999)
+      return match.split('').map(digit => numberUnits[Number(digit)] ?? '').join(' ')
+    return fraction ? `${numberWords(value)} vírgula ${fraction.split('').map(digit => numberUnits[Number(digit)]).join(' ')}` : numberWords(value)
+  })
+}
+
 /**
  * Converts Brazilian Portuguese text to a sequence of mouth shapes with relative lengths.
  *
- * A comma adds a short pause and the end of a sentence a longer one. The lengths are relative, so the caller
+ * Numbers become words, as the voice reads them. A comma adds a short pause and the end of a sentence a longer one. The lengths are relative, so the caller
  * scales them to the speech.
  *
  * @example
@@ -191,7 +221,7 @@ function wordVisemes(word: string): VisemeStep[] {
  */
 export function ptBrVisemes(text: string): VisemeStep[] {
   const steps: VisemeStep[] = []
-  for (const token of text.toLowerCase().match(/\p{L}+|[,;:]|[.!?]+/gu) ?? []) {
+  for (const token of spellNumbers(text).toLowerCase().match(/\p{L}+|[,;:]|[.!?]+/gu) ?? []) {
     if (/^[,;:]$/.test(token))
       steps.push({ viseme: 'sil', units: commaPauseUnits })
     else if (/^[.!?]+$/.test(token))

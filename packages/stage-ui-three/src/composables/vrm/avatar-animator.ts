@@ -80,6 +80,8 @@ export class AvatarAnimator {
    * {@link holdPose} releases it. Gestures play over it.
    */
   pose: AnimationAction | null = null
+  /** Time left of the held pose on the frame clock. `null` holds it until the next pose. */
+  private poseRemainingSeconds: number | null = null
   /** The emote of a timed play and its remaining time on the frame clock. */
   private timedEmote: { action: AnimationAction, remainingSeconds: number, finish: () => void } | null = null
 
@@ -303,11 +305,13 @@ export class AvatarAnimator {
   }
 
   /**
-   * Holds a body pose until the next call, like TalkingHead `setPoseFromTemplate`. `null` releases it,
-   * and the idle (or the talking clip) comes back. Fades take `fade` seconds, 1 s like TalkingHead.
+   * Holds a body pose, like TalkingHead `setPoseFromTemplate`. `null` releases it, and the idle (or the talking
+   * clip) comes back. Fades take `fade` seconds, 1 s like TalkingHead. With `holdSeconds`, the pose goes back to
+   * the idle after that time on the frame clock. Without it, the pose stays until the next call.
    */
-  holdPose(clip: AnimationClip | null, fade = 1) {
+  holdPose(clip: AnimationClip | null, fade = 1, holdSeconds: number | null = null) {
     const previous = this.pose
+    this.poseRemainingSeconds = clip ? holdSeconds : null
     if (!clip) {
       if (!previous)
         return
@@ -470,6 +474,13 @@ export class AvatarAnimator {
   /** Advances the mixer and the idle cycle by one frame of the render clock. */
   update(deltaSeconds: number) {
     this.mixer.update(deltaSeconds)
+
+    // A pose with a hold time goes back to the idle, like the mood idle of TalkingHead replaces a pose.
+    if (this.pose && this.poseRemainingSeconds !== null) {
+      this.poseRemainingSeconds -= deltaSeconds
+      if (this.poseRemainingSeconds <= 0)
+        this.holdPose(null)
+    }
 
     const timed = this.timedEmote
     if (timed) {

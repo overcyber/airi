@@ -27,6 +27,13 @@ describe('ptBrVisemes', () => {
     expect(shapes('não')).toBe('nn aa U')
   })
 
+  it('reads numbers as words, as the voice does', () => {
+    expect(shapes('25')).toBe(shapes('vinte e cinco'))
+    expect(shapes('São 21,5 graus')).toBe(shapes('São vinte e um vírgula cinco graus'))
+    expect(shapes('100')).toBe(shapes('cem'))
+    expect(shapes('2026')).toBe(shapes('dois mil e vinte e seis'))
+  })
+
   it('pauses on commas and at the end of a sentence', () => {
     const steps = ptBrVisemes('Olá, tudo bem?')
     expect(steps.filter(step => step.viseme === 'sil').map(step => step.units)).toEqual([2, 3.5])
