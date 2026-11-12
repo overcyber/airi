@@ -38,11 +38,11 @@ The VRM renderer plays a motion library on top of the model. The design follows 
 
 | Part | File | Behavior |
 | --- | --- | --- |
-| Motion library | `src/assets/vrm/animations/index.ts` | `defaultVrmMotionLibrary`: 5 idles, 1 talking clip, 7 emotes from Utsuwa (`utsuwa/NOTICE.md`), plus the stage idle. The thinking entry is `proceduralThinkingMotion`. |
-| Animator | `src/composables/vrm/avatar-animator.ts` | Cycles the idle pool after 1 to 2 loops with a 1.2 s crossfade. Fades the talking or thinking clip in over 0.3 s. Plays emotes once at 1.5x and returns to the idle. `requestIdleSwitch` brings the next idle forward. |
+| Motion library | `src/assets/vrm/animations/index.ts` | `defaultVrmMotionLibrary`: 3 idles, 1 talking clip, 7 emotes from Utsuwa (`utsuwa/NOTICE.md`), 11 NeoAlice FBX motions (`neoalice/NOTICE.md`), plus the stage idle. The thinking entry is `proceduralThinkingMotion`. An emote with `pose` is held: `lie_down` lies on the side for the asked time, then gets up. |
+| Animator | `src/composables/vrm/avatar-animator.ts` | Cycles the idle pool after 1 to 2 loops with a 1.2 s crossfade. Fades the talking or thinking clip in over 0.3 s. A talking clip of the pool starts 0.9 s into the speech, from a random point, at a weight of 0.3 to 0.45, and changes to another clip after 8 to 13 s. Plays emotes once at 1.5x and returns to the idle. `holdPoseClip` plays the entry of a pose clip once, loops the rest, and plays the entry backwards at the end. `requestIdleSwitch` brings the next idle forward. |
 | Thinking pose | `src/composables/vrm/thinking-pose.ts` | Builds the thinking clip from the stage idle. The right hand goes to the chin and the left arm crosses the body. The other bones keep the idle motion. |
 | Director | `src/composables/vrm/performance-director.ts` | Nods on speech accents, glances aside while speaking, turns the head away while thinking, and scans slowly while idle. It also reports beats: a speech beat every 3.4 to 6.2 s, an idle beat every 5 to 12 s, and an earlier idle switch after speech or thinking. |
-| Mood face | `src/composables/vrm/mood-face.ts` | `MoodFace` writes all face expressions. The resting mood stays until the next mood. The old mood fades out before the new mood starts. A reaction shows for 2.5 s (up to 8 s while speaking). During an emote, the face is happy at 0.7 and the eyes do not blink. Blinks come every 2 to 6 s. |
+| Mood face | `src/composables/vrm/mood-face.ts` | `MoodFace` writes all face expressions. The resting mood stays until the next mood. The old mood fades out before the new mood starts. A reaction shows for 2.5 s (up to 8 s while speaking) at 1.2 × the resting weight, at most 0.65. The ARKit shapes of a mood are about 60% of the TalkingHead values, and an emoji shape stops at 0.7. During an emote, the face is happy at 0.4 and the eyes do not blink. Blinks come every 2 to 6 s. |
 
 | Mood body | `src/composables/vrm/mood-body.ts` | Sprint V3. Breathing, spine lean, head pitch and tilt, shoulder lift, and side sway per mood, with concepts from TalkingHead (MIT). The body follows a new mood in about 2 s. Eye contact per mood: the look-at target moves away for a moment, for example down when sad, then comes back. |
 | FBX retarget | `src/composables/vrm/fbx-retarget.ts` | Sprint V5. `loadFbxClip` plays a Mixamo or Ready Player Me FBX animation on a VRM 0.x or 1.0. It uses the Mixamo method of three-vrm (MIT) and turns the A pose rest of Ready Player Me into a T pose. Imported `.fbx` motions use it. |
@@ -50,7 +50,7 @@ The VRM renderer plays a motion library on top of the model. The design follows 
 
 `VRMModel` and `ThreeScene` take `thinking` and `motionLibrary` props. They expose `setExpression` (mood face and mood body), `reactExpression` (touch reaction), `motions`, and `playMotion(cue)`. In `stage-ui`, `Stage.vue` plays the ACT `motion` of the LLM with `playMotion`, and passes the motion library of the `vrm-motions` store, which adds the imported VRMA and FBX files. The model settings preview plays the Play buttons of the motion settings. `VRMModel` starts the talking clip from `speechActive` and the thinking clip from `thinking`.
 
-The director beats drive the face: a speech beat shows a short reaction of the current mood, and an idle beat shows a smaller one.
+The director beats drive the face: a speech beat shows a short reaction of the current mood at 0.2, and an idle beat shows a smaller one at 0.12.
 
 All motion time comes from the frame delta of the render loop. The animator and the director never use timers.
 

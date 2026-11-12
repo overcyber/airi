@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { findHappyExpression, MoodFace, releaseMoodOverrides } from './mood-face'
+import { emojiShapeWeight, findHappyExpression, MoodFace, releaseMoodOverrides } from './mood-face'
 import { talkingHeadEmojiFaces } from './talkinghead-emoji-faces'
 
 const vrm1Names = ['happy', 'sad', 'angry', 'surprised', 'relaxed', 'neutral', 'blink', 'aa']
@@ -24,7 +24,7 @@ function run(face: MoodFace, seconds: number, options: { speaking?: boolean, emo
 }
 
 describe('moodFace (Utsuwa composer)', () => {
-  it('eases into the resting mood at 0.75 × intensity and keeps it', () => {
+  it('eases into the resting mood at 0.55 × intensity and keeps it', () => {
     const face = new MoodFace(vrm1Names, noEarlyBlink)
     face.setMood('happy', 1)
 
@@ -33,7 +33,7 @@ describe('moodFace (Utsuwa composer)', () => {
 
     expect(early.get('happy')).toBeGreaterThan(0)
     expect(early.get('happy')).toBeLessThan(0.3)
-    expect(settled.get('happy')).toBeCloseTo(0.75, 2)
+    expect(settled.get('happy')).toBeCloseTo(0.55, 2)
   })
 
   it('fades the old mood out fully before the new mood starts', () => {
@@ -48,7 +48,7 @@ describe('moodFace (Utsuwa composer)', () => {
     expect(fading.has('sad')).toBe(false)
 
     const switched = run(face, 6)
-    expect(switched.get('sad')).toBeCloseTo(0.8, 2)
+    expect(switched.get('sad')).toBeCloseTo(0.55, 2)
     expect(switched.get('happy') ?? 0).toBe(0)
   })
 
@@ -56,9 +56,10 @@ describe('moodFace (Utsuwa composer)', () => {
     const face = new MoodFace(vrm1Names, noEarlyBlink)
     face.react('happy')
 
-    expect(run(face, 0.25).get('happy')).toBeCloseTo(0.9, 2)
-    expect(run(face, 2).get('happy')).toBeCloseTo(0.9, 2)
-    expect(run(face, 0.65).get('happy')).toBeLessThan(0.9)
+    // A reaction is 1.2 × the resting weight, capped at 0.65. A full face reads as a grimace.
+    expect(run(face, 0.25).get('happy')).toBeCloseTo(0.65, 2)
+    expect(run(face, 2).get('happy')).toBeCloseTo(0.65, 2)
+    expect(run(face, 0.65).get('happy')).toBeLessThan(0.65)
     expect(run(face, 0.8).get('happy')).toBe(0)
   })
 
@@ -91,7 +92,7 @@ describe('moodFace (Utsuwa composer)', () => {
     expect(run(face, 1).get('mouthSmileLeft')).toBeCloseTo(rest.get('mouthSmileLeft') ?? 0, 1)
   })
 
-  it('wears a happy face at 0.7 and does not blink while an emote plays', () => {
+  it('wears a light happy face at 0.4 and does not blink while an emote plays', () => {
     const face = new MoodFace(vrm1Names, () => 0)
     face.setMood('sad', 1)
     run(face, 5)
@@ -104,7 +105,7 @@ describe('moodFace (Utsuwa composer)', () => {
         blinked = true
     }
 
-    expect(weights.get('happy')).toBe(0.7)
+    expect(weights.get('happy')).toBe(0.4)
     expect(blinked).toBe(false)
     // The mood yields during the emote.
     expect(weights.get('sad') ?? 0).toBeLessThan(0.05)
@@ -125,7 +126,7 @@ describe('moodFace (Utsuwa composer)', () => {
     const face = new MoodFace(['joy', 'sorrow', 'fun', 'Blink'], noEarlyBlink)
     face.setMood('sad', 1)
 
-    expect(run(face, 5).get('sorrow')).toBeCloseTo(0.8, 2)
+    expect(run(face, 5).get('sorrow')).toBeCloseTo(0.55, 2)
   })
 
   it('adds the ARKit shapes of the TalkingHead mood, and clears them when the mood changes', () => {
@@ -133,26 +134,26 @@ describe('moodFace (Utsuwa composer)', () => {
     face.setMood('sad', 1)
     const sad = run(face, 5)
 
-    expect(sad.get('browInnerUp')).toBeCloseTo(0.6, 2)
-    expect(sad.get('mouthFrownLeft')).toBeCloseTo(0.8, 2)
+    expect(sad.get('browInnerUp')).toBeCloseTo(0.45, 2)
+    expect(sad.get('mouthFrownLeft')).toBeCloseTo(0.5, 2)
     // A shape that the model does not have is never written.
     expect(sad.has('eyeSquintLeft')).toBe(false)
 
     face.setMood('happy', 0.5)
     const happy = run(face, 10)
     expect(happy.get('mouthFrownLeft')).toBe(0)
-    expect(happy.get('browInnerUp')).toBeCloseTo(0.075, 2)
-    expect(happy.get('mouthSmileLeft')).toBeCloseTo(0.3, 2)
+    expect(happy.get('browInnerUp')).toBeCloseTo(0.05, 2)
+    expect(happy.get('mouthSmileLeft')).toBeCloseTo(0.225, 2)
   })
 
   it('moves the ARKit shapes of a reaction too, and releases them with it', () => {
     const face = new MoodFace([...vrm1Names, 'mouthFrownLeft', 'browOuterUpLeft'], noEarlyBlink)
     face.react('sad')
-    expect(run(face, 0.5).get('mouthFrownLeft')).toBeCloseTo(0.8, 2)
+    expect(run(face, 0.5).get('mouthFrownLeft')).toBeCloseTo(0.5, 2)
     expect(run(face, 4).get('mouthFrownLeft')).toBe(0)
 
     face.react('think')
-    expect(run(face, 0.5).get('browOuterUpLeft')).toBeCloseTo(0.4, 2)
+    expect(run(face, 0.5).get('browOuterUpLeft')).toBeCloseTo(0.3, 2)
   })
 
   it('lets the lip sync and the blink run under a mood expression', () => {
@@ -183,7 +184,8 @@ describe('moodFace emoji faces', () => {
     const arkit = new MoodFace([...vrm1Names, 'blinkLeft', 'blinkRight', 'mouthSmileLeft', 'tongueOut', 'eyeBlinkLeft'], noEarlyBlink)
     arkit.showFace(talkingHeadEmojiFaces['\u{1F61C}'])
     const wink = run(arkit, 0.5)
-    expect(wink.get('tongueOut')).toBeCloseTo(1, 2)
+    // A TalkingHead shape at 1 stops at the cap of 0.7, then scales by 0.85.
+    expect(wink.get('tongueOut')).toBeCloseTo(0.595, 2)
     expect(wink.get('happy')).toBeGreaterThan(0.5)
 
     // A VRoid-like model with presets only: the laugh closes the eyes, the heart eyes do not.
@@ -199,6 +201,13 @@ describe('moodFace emoji faces', () => {
     expect(laughFace).not.toEqual(heartsFace)
     // The face goes away after about 3 s.
     expect(run(laugh, 3).get('joy')).toBe(0)
+  })
+
+  it('caps the strong shapes of a TalkingHead emoji face and keeps the light ones in proportion', () => {
+    expect(emojiShapeWeight(1)).toBeCloseTo(0.595, 3)
+    expect(emojiShapeWeight(0.7)).toBeCloseTo(0.595, 3)
+    expect(emojiShapeWeight(0.4)).toBeCloseTo(0.34, 3)
+    expect(emojiShapeWeight(0)).toBe(0)
   })
 })
 

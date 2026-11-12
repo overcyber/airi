@@ -11,17 +11,29 @@
 /** The end of a word. `\b` of JavaScript does not know accented letters. */
 const end = '(?=[\\s,.!?;:]|$)'
 
+/**
+ * A rule of a speech text. `actions` are the motions that fit the text, in order of preference: the picker
+ * takes the first one that is not the last motion that played. A `social` rule (a greeting, a goodbye, a thank
+ * you) always plays. Any other rule plays only now and then, so a reply that starts with "Sim" does not nod
+ * every time.
+ */
+interface SpeechRule {
+  pattern: RegExp
+  actions: readonly string[]
+  social?: boolean
+}
+
 /** Rules for a speech text, in order. The first rule that matches wins. */
-const speechRules: Array<[RegExp, string]> = [
-  [/^\s*(?:olá|ola|oi|bom dia|boa tarde|boa noite|seja bem|bem-vind)/i, 'wave_hello'],
-  [new RegExp(`(?:tchau|até logo|até mais|até amanhã|até já)${end}`, 'i'), 'wave_hello'],
-  [/obrigad|agradeç|com licença|desculp/i, 'bow'],
-  [/parabéns|que legal|incrível|maravilh|uhu|conseguimos|que ótimo|excelente/i, 'celebrate'],
-  [new RegExp(`^\\s*(?:sim|claro|com certeza|certo|isso mesmo|exatamente|pode deixar|perfeito)${end}`, 'i'), 'head_nod'],
-  [new RegExp(`^\\s*(?:não|nunca|de jeito nenhum)${end}`, 'i'), 'head_shake'],
-  [/deixa eu ver|vou verificar|vou pensar|hm{2,}|acho que|talvez|não sei/i, 'thinking'],
-  [/que bom te ver|senti sua falta|vem cá|um abraço/i, 'arms_open'],
-  [new RegExp(`(?:^|\\s)(?:olha|veja|aqui está|repare)${end}`, 'i'), 'point_forward'],
+const speechRules: SpeechRule[] = [
+  { pattern: /^\s*(?:olá|ola|oi|bom dia|boa tarde|boa noite|seja bem|bem-vind)/i, actions: ['wave_hello', 'arms_open'], social: true },
+  { pattern: new RegExp(`(?:tchau|até logo|até mais|até amanhã|até já)${end}`, 'i'), actions: ['wave_hello'], social: true },
+  { pattern: /obrigad|agradeç|com licença|desculp/i, actions: ['bow', 'head_nod'], social: true },
+  { pattern: /parabéns|que legal|incrível|maravilh|uhu|conseguimos|que ótimo|excelente/i, actions: ['celebrate', 'arms_open'] },
+  { pattern: new RegExp(`^\\s*(?:sim|claro|com certeza|certo|isso mesmo|exatamente|pode deixar|perfeito)${end}`, 'i'), actions: ['head_nod'] },
+  { pattern: new RegExp(`^\\s*(?:não|nunca|de jeito nenhum)${end}`, 'i'), actions: ['head_shake'] },
+  { pattern: /deixa eu ver|vou verificar|vou pensar|hm{2,}|acho que|talvez|não sei/i, actions: ['thinking', 'look_around'] },
+  { pattern: /que bom te ver|senti sua falta|vem cá|um abraço/i, actions: ['arms_open', 'wave_hello'] },
+  { pattern: new RegExp(`(?:^|\\s)(?:olha|veja|aqui está|repare)${end}`, 'i'), actions: ['point_forward'] },
 ]
 
 /** Rules for an emoji. */
@@ -38,12 +50,65 @@ const emojiRules: Array<[RegExp, string]> = [
   [/\u{1F440}/u, 'look_around'],
 ]
 
-/** The built-in motion for a speech text, or `undefined` when no rule matches. */
+/** The rule of a speech text, or `undefined` when no rule matches. */
+export function speechGestureRule(text: string): { actions: readonly string[], social: boolean } | undefined {
+  const rule = speechRules.find(({ pattern }) => pattern.test(text))
+  return rule && { actions: rule.actions, social: rule.social === true }
+}
+
+/** The first built-in motion for a speech text, or `undefined` when no rule matches. */
 export function builtinGestureOfSpeech(text: string): string | undefined {
-  return speechRules.find(([rule]) => rule.test(text))?.[1]
+  return speechGestureRule(text)?.actions[0]
 }
 
 /** The built-in motion for an emoji, or `undefined` when no rule matches. */
 export function builtinGestureOfEmoji(emoji: string): string | undefined {
   return emojiRules.find(([rule]) => rule.test(emoji))?.[1]
+}
+
+export interface SpeechGesturePickerOptions {
+  /** Share of the non-social speeches with a matching rule that get a motion. Default 0.45. */
+  chance?: number
+  /** Shortest time between two non-social speech motions. Default 14 s. */
+  minimumGapMs?: number
+  random?: () => number
+}
+
+/**
+ * Picks the built-in motion of each speech, so the motions do not repeat.
+ *
+ * - A social rule (greeting, goodbye, thanks) always plays.
+ * - Any other rule plays with `chance`, and never within `minimumGapMs` of the last speech motion.
+ * - The motion is the first of the rule that is not the motion of the last speech.
+ *
+ * Same rules as TalkingHead, which gestures on emoji only. The NeoAlice avatar on the mirror nodded on every
+ * "Sim" and pointed on every "Olha", and the repetition read as a tic.
+ */
+export class SpeechGesturePicker {
+  private lastAction: string | undefined
+  private lastAtMs = Number.NEGATIVE_INFINITY
+  private readonly chance: number
+  private readonly minimumGapMs: number
+  private readonly random: () => number
+
+  constructor(options: SpeechGesturePickerOptions = {}) {
+    this.chance = options.chance ?? 0.45
+    this.minimumGapMs = options.minimumGapMs ?? 14_000
+    this.random = options.random ?? Math.random
+  }
+
+  /** The motion of a speech that starts at `nowMs`, or `undefined` for none. */
+  pick(text: string, nowMs: number): string | undefined {
+    const rule = speechGestureRule(text)
+    if (!rule)
+      return undefined
+    if (!rule.social) {
+      if (nowMs - this.lastAtMs < this.minimumGapMs || this.random() >= this.chance)
+        return undefined
+    }
+    const action = rule.actions.find(candidate => candidate !== this.lastAction) ?? rule.actions[0]
+    this.lastAction = action
+    this.lastAtMs = nowMs
+    return action
+  }
 }

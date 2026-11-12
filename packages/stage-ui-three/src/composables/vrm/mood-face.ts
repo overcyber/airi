@@ -35,38 +35,56 @@ export interface MoodFaceFrameInput {
 
 /**
  * Candidates per mood, VRM 1.0 preset first, then VRM 0.x names. `scale` is the weight
- * at full intensity. Faces read strong fast, so the scales stay low.
+ * at full intensity. Faces read strong fast, so the scales stay low. A mood stays for minutes on the
+ * NeoAlice avatar, so a resting face is a hint of the mood, not a grimace.
  * Keys are the names AIRI sends (`EMOTION_VRMExpressionName_value`), mapped to the
  * nearest Utsuwa mood: happy, sad, frustrated (angry), flustered (surprised),
  * content (relaxed), curious (think).
  */
 const moodFaces: Record<string, { candidates: string[], scale: number } | null> = {
-  happy: { candidates: ['happy', 'joy'], scale: 0.75 },
-  sad: { candidates: ['sad', 'sorrow'], scale: 0.8 },
-  angry: { candidates: ['angry'], scale: 0.7 },
-  surprised: { candidates: ['surprised'], scale: 0.55 },
-  relaxed: { candidates: ['relaxed', 'fun'], scale: 0.6 },
-  think: { candidates: ['think', 'surprised'], scale: 0.3 },
+  happy: { candidates: ['happy', 'joy'], scale: 0.55 },
+  sad: { candidates: ['sad', 'sorrow'], scale: 0.55 },
+  angry: { candidates: ['angry'], scale: 0.5 },
+  surprised: { candidates: ['surprised'], scale: 0.45 },
+  relaxed: { candidates: ['relaxed', 'fun'], scale: 0.45 },
+  think: { candidates: ['think', 'surprised'], scale: 0.25 },
   neutral: null,
 }
+
+/** Weight of a reaction: a little over the resting mood, never a full face. */
+const reactionGain = 1.2
+const reactionMaxWeight = 0.65
 
 /**
  * ARKit shapes of each mood at full intensity, for a model that has them as expressions (for example Eva,
  * converted from Ready Player Me). The NeoAlice avatar showed these faces, so the VRM shows the same.
  *
- * `sad`, `angry`, and `surprised` (NeoAlice `fear`) are the mood baselines of TalkingHead
- * (MIT, https://github.com/met4citizen/TalkingHead, `modules/talkinghead.mjs`, `animMoods`).
+ * `sad`, `angry`, and `surprised` (NeoAlice `fear`) come from the mood baselines of TalkingHead
+ * (MIT, https://github.com/met4citizen/TalkingHead, `modules/talkinghead.mjs`, `animMoods`), at about
+ * 60% of their weight: on a VRM with the full ARKit set, the TalkingHead values read as a grimace.
  * TalkingHead makes its happy face with animated smiles, so `happy` here is a held smile.
  * The eye look shapes stay with the look-at, and the blink shapes stay with the blink layer.
  */
 const arkitMoodShapes: Record<string, Record<string, number>> = {
-  happy: { mouthSmileLeft: 0.6, mouthSmileRight: 0.6, cheekSquintLeft: 0.4, cheekSquintRight: 0.4, eyeSquintLeft: 0.3, eyeSquintRight: 0.3, browInnerUp: 0.15 },
-  sad: { browDownRight: 0.1, browInnerUp: 0.6, browOuterUpRight: 0.2, eyeSquintLeft: 0.7, eyeSquintRight: 0.7, mouthFrownLeft: 0.8, mouthFrownRight: 0.8, mouthLeft: 0.2, mouthPucker: 0.5, mouthRollLower: 0.2, mouthRollUpper: 0.2, mouthShrugLower: 0.2, mouthShrugUpper: 0.2, mouthStretchLeft: 0.4 },
-  angry: { browDownLeft: 0.6, browDownRight: 0.6, jawForward: 0.3, mouthFrownLeft: 0.7, mouthFrownRight: 0.7, mouthRollLower: 0.2, mouthShrugLower: 0.3 },
-  surprised: { browInnerUp: 0.7, eyeSquintLeft: 0.5, eyeSquintRight: 0.5, eyeWideLeft: 0.6, eyeWideRight: 0.6, mouthClose: 0.1, mouthFunnel: 0.3, mouthShrugLower: 0.5, mouthShrugUpper: 0.5 },
+  happy: { mouthSmileLeft: 0.45, mouthSmileRight: 0.45, cheekSquintLeft: 0.25, cheekSquintRight: 0.25, eyeSquintLeft: 0.2, eyeSquintRight: 0.2, browInnerUp: 0.1 },
+  sad: { browDownRight: 0.05, browInnerUp: 0.45, browOuterUpRight: 0.1, eyeSquintLeft: 0.35, eyeSquintRight: 0.35, mouthFrownLeft: 0.5, mouthFrownRight: 0.5, mouthLeft: 0.1, mouthPucker: 0.25, mouthRollLower: 0.1, mouthRollUpper: 0.1, mouthShrugLower: 0.1, mouthShrugUpper: 0.1, mouthStretchLeft: 0.2 },
+  angry: { browDownLeft: 0.5, browDownRight: 0.5, jawForward: 0.15, mouthFrownLeft: 0.45, mouthFrownRight: 0.45, mouthRollLower: 0.1, mouthShrugLower: 0.2 },
+  surprised: { browInnerUp: 0.5, eyeSquintLeft: 0.2, eyeSquintRight: 0.2, eyeWideLeft: 0.45, eyeWideRight: 0.45, mouthClose: 0.05, mouthFunnel: 0.2, mouthShrugLower: 0.25, mouthShrugUpper: 0.25 },
   relaxed: { mouthSmileLeft: 0.3, mouthSmileRight: 0.3, eyeSquintLeft: 0.2, eyeSquintRight: 0.2 },
   // Not from TalkingHead, which has no thinking mood: one brow up, lips pressed to the side.
-  think: { browInnerUp: 0.35, browOuterUpLeft: 0.4, browDownRight: 0.3, mouthPressLeft: 0.4, mouthRollLower: 0.2, mouthLeft: 0.25, eyeSquintRight: 0.25 },
+  think: { browInnerUp: 0.3, browOuterUpLeft: 0.3, browDownRight: 0.25, mouthPressLeft: 0.3, mouthRollLower: 0.15, mouthLeft: 0.2, eyeSquintRight: 0.2 },
+}
+
+/**
+ * An emoji face of TalkingHead has shapes at 1, for example a frown or a stretched mouth, made for its own
+ * avatar in a 3 s animation. Held on a VRM, they read as a grimace. Each shape stops at the cap, then scales.
+ */
+const emojiFaceCap = 0.7
+const emojiFaceScale = 0.85
+
+/** The weight that an emoji shape of TalkingHead gets on the VRM. */
+export function emojiShapeWeight(weight: number) {
+  return Math.round(Math.min(weight, emojiFaceCap) * emojiFaceScale * 1000) / 1000
 }
 
 /** Other names of the preset expressions, in lower case: VRM 0.x and common model names. */
@@ -127,14 +145,14 @@ export function speechShareOf(name: string, hasArkit: boolean): number {
 /** Rate of the change between the speech face and the resting face, per second (about 0.3 s). */
 const speechFaceRate = 10
 
-/** Weight of the happy face while a body emote plays. */
-const emoteFaceWeight = 0.7
+/** Weight of the happy face while a body emote plays. A light smile: a bow or a head shake with a grin looks wrong. */
+const emoteFaceWeight = 0.4
 
 /**
  * Resting mood face, short reactions, blink, and the emote face of a VRM model.
  *
  * Layers, top wins for the expression it touches:
- * 1. Emote face: happy at 0.7 while a body emote plays.
+ * 1. Emote face: happy at 0.4 while a body emote plays.
  * 2. Reaction (flash): attack 0.25 s, hold 2.5 s (up to 8 s while speaking), release 0.8 s.
  * 3. Mood: eases toward its target at rate 1.5/s. A new mood waits until the old one
  *    faded out, so two moods never blend into a muddled face.
@@ -208,7 +226,7 @@ export class MoodFace {
     for (const [name, weight] of [...Object.entries(shapes), ...Object.entries(presetsOfFace(shapes))]) {
       const own = pickCandidate([name.toLowerCase(), ...(presetAliases[name] ?? [])], this.expressionNames)
       if (own)
-        weights.set(own, Math.max(weights.get(own) ?? 0, weight))
+        weights.set(own, Math.max(weights.get(own) ?? 0, emojiShapeWeight(weight)))
     }
     if (weights.size === 0)
       return false
@@ -424,7 +442,7 @@ function targetFor(mood: string, intensity: number, available: readonly string[]
   if (!name)
     return null
   if (kind === 'flash')
-    return { name, weight: Math.round(Math.min(0.9, face.scale * 1.4) * 1000) / 1000, key }
+    return { name, weight: Math.round(Math.min(reactionMaxWeight, face.scale * reactionGain) * 1000) / 1000, key }
   const clamped = Math.max(0, Math.min(1, intensity))
   const weight = Math.round(face.scale * clamped * 1000) / 1000
   return weight > 0 ? { name, weight, key } : null

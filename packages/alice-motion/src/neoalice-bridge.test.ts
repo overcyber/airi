@@ -70,7 +70,7 @@ describe('neoAliceTranslator', () => {
       .toMatchObject({ type: 'intent', intent: { semanticAction: 'gesture_namaste', requestedDurationMs: 6000 } })
     expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'straight' }), 0))
       .toMatchObject({ type: 'intent', intent: { semanticAction: 'pose_straight', requestedChannels: ['posture'] } })
-    for (const pose of ['arms_open', 'bow', 'thinking', 'sitting'])
+    for (const pose of ['arms_open', 'bow', 'thinking', 'sitting', 'lying', 'lie_down'])
       expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose }), 0)).toMatchObject({ type: 'intent', intent: { semanticAction: `pose_${pose}` } })
     expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/animation', JSON.stringify({ url: 'http://192.0.2.10:8081/poses/dance.fbx', duration: 15 }), 0))
       .toEqual({ type: 'animation', site: 'mirror', url: 'http://192.0.2.10:8081/poses/dance.fbx', durationMs: 15_000 })

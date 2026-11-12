@@ -620,11 +620,12 @@ function bindManagedVrmInstanceRenderLoop() {
         mouth: lastMouth,
       })
       // Beats of the xiaoke director: an expression on a speech beat, a micro expression
-      // while idle, and an earlier idle switch right after speech or thinking.
+      // while idle, and an earlier idle switch right after speech or thinking. The beats are small:
+      // a beat every few seconds at a visible weight reads as the same face again and again.
       if (events.speakBeat)
-        moodFace?.react(moodFace.moodName ?? 'relaxed', 0.4)
+        moodFace?.react(moodFace.moodName ?? 'relaxed', 0.2)
       if (events.idleBeat)
-        moodFace?.react(moodFace.moodName ?? 'relaxed', 0.25)
+        moodFace?.react(moodFace.moodName ?? 'relaxed', 0.12)
       if (events.nudgeIdleAfterSeconds !== null)
         vrmAnimator.value?.requestIdleSwitch(events.nudgeIdleAfterSeconds)
     }
@@ -1396,6 +1397,13 @@ defineExpose({
       // The model can change while the clip loads.
       if (vrm.value !== targetVrm || vrmAnimator.value !== animator)
         return false
+      // V7: a pose from a file, for example lying down, is held like a TalkingHead pose: for its `duration`,
+      // or 10 s without one. The entry of the clip plays once, the rest loops, and she gets up at the end.
+      if (emote.pose) {
+        const requestedMs = options.durationMs !== undefined && options.durationMs > poseCueDefaultMs ? options.durationMs : defaultPoseHoldMs
+        animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: requestedMs / 1000 })
+        return true
+      }
       // V6: a gesture of the arms or the head plays only on those bones, or adds to the pose,
       // so the idle and the speech go on for the rest of the body.
       const layering = inferEmoteLayering(emote)

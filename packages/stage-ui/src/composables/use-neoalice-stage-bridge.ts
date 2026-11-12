@@ -7,7 +7,7 @@ import { isPublishableSite, matchWakeWord, neoAliceAudioEvent, neoAliceStateEven
 import { number, object, safeParse, string } from 'valibot'
 import { onScopeDispose, ref, watch } from 'vue'
 
-import { builtinGestureOfEmoji, builtinGestureOfSpeech } from '../libs/alice-motion/builtin-gestures'
+import { builtinGestureOfEmoji, SpeechGesturePicker } from '../libs/alice-motion/builtin-gestures'
 import { resolveNeoAliceAnimationUrls } from '../libs/alice-motion/neoalice-animation-url'
 import { runNeoAliceTool, widgetToolInput } from '../libs/alice-motion/neoalice-tools'
 import { NeoAliceMicrophone, neoAliceVoiceSampleRate, segmentToWavBase64 } from '../libs/alice-motion/neoalice-voice'
@@ -154,6 +154,8 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   let wakeOpenUntilMs = 0
   const phrases = useNeoAlicePhraseTranscriber()
   const microphone = new NeoAliceMicrophone(segment => void sendPhrase(segment))
+  /** The built-in motion of each speech. It spaces the motions out, so the same one does not play on each reply. */
+  const speechGestures = new SpeechGesturePicker()
 
   watch(options.emotes, emotes => runtime.setEmotes(emotes), { immediate: true })
 
@@ -168,7 +170,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     thinking.value = false
     runtime.speechStarted(sessionId, now)
     if (text)
-      playBuiltinGesture(builtinGestureOfSpeech(text), 'speech', now)
+      playBuiltinGesture(speechGestures.pick(text, now), 'speech', now)
     try {
       const blob = await audio()
       if (blob && currentSession === sessionId)
