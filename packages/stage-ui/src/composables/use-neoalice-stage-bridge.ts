@@ -70,6 +70,28 @@ const wakeListenMs = 8000
  */
 const mountedStages: symbol[] = []
 
+/** A speech that one tab claimed stays claimed this long, so a late copy in another tab does not play. */
+const speechClaimMs = 30_000
+
+/**
+ * Claims a speech for this tab. Several tabs of AIRI in one browser, for example `/` and `/mirror`, each run the
+ * bridge, so each one would play the same speech. The first tab that asks gets the Web Lock and holds it for a while.
+ * Without Web Locks (an old browser), every tab plays.
+ */
+async function claimSpeechInBrowser(speech: string): Promise<boolean> {
+  const locks = globalThis.navigator?.locks
+  if (!locks)
+    return true
+  const name = `airi-neoalice-speech:${speech.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 200)}`
+  return await new Promise<boolean>((resolve) => {
+    void locks.request(name, { ifAvailable: true }, async (lock) => {
+      resolve(lock !== null)
+      if (lock)
+        await new Promise(done => setTimeout(done, speechClaimMs))
+    }).catch(() => resolve(true))
+  })
+}
+
 interface StoredMood {
   emotion: string
   intensity: number
@@ -228,7 +250,12 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
             options.showCaption(event.text)
           return
         }
-        void speak(sessionId, event.text, async () => base64ToWav(event.audioBase64))
+        void claimSpeechInBrowser(event.text || sessionId).then((claimed) => {
+          if (claimed)
+            void speak(sessionId, event.text, async () => base64ToWav(event.audioBase64))
+          else
+            console.info('[neoalice-bridge] another tab of this browser plays this speech')
+        })
         return
       }
       case 'speech-stop':

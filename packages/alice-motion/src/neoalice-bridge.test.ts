@@ -183,6 +183,15 @@ describe('neoAliceTranslator speech of the mirror site', () => {
     expect(bridge.translate('neoalice/v1/airi-avatar/cmd/tts/audio', speech, 100)).toMatchObject({ type: 'ignored', reason: 'the same speech came on another site' })
     expect(bridge.translate('neoalice/v1/magicmirror/cmd/tts/stop', '{}', 200)).toMatchObject({ type: 'speech-stop' })
 
+    // ROOT CAUSE:
+    //
+    // NeoAlice sent the same speech to each site with its own session id, so the avatar spoke it several times.
+    //
+    // We fixed this by also matching the text of the speech.
+    const copy = (session: string) => JSON.stringify({ audio: { b64: 'UklGRg==' }, text: 'Hoje faz sol.', session_id: session })
+    expect(bridge.translate('neoalice/v1/magicmirror/cmd/tts/audio', copy('mirror-7'), 1000)).toMatchObject({ type: 'speech-audio' })
+    expect(bridge.translate('neoalice/v1/airi-avatar/cmd/tts/audio', copy('avatar-7'), 1100)).toMatchObject({ type: 'ignored' })
+
     const off = new NeoAliceTranslator({ site: 'airi-avatar', moodSite: 'magicmirror', catalog })
     expect(off.translate('neoalice/v1/magicmirror/cmd/tts/audio', speech, 0)).toMatchObject({ type: 'ignored' })
   })

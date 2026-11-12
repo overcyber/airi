@@ -112,6 +112,11 @@ const props = withDefaults(defineProps<{
    * `full` view of TalkingHead, for example on the mirror, where the avatar also sits and raises her arms.
    */
   framing?: 'default' | 'full-body'
+  /**
+   * Moves the full-body framing: `x` and `y` shift the view in meters (positive is right and up), and `zoom`
+   * brings the camera closer (above 1) or farther (below 1). The mirror page reads it from its URL.
+   */
+  framingAdjust?: { x?: number, y?: number, zoom?: number }
 }>(), {
   presence: () => presenceBubbleIdle,
   enableOrbitControls: true,
@@ -485,17 +490,23 @@ function applySceneBootstrap(value: SceneBootstrap) {
   const bootstrapCameraOffset = toVector3(value.cameraPosition).sub(nextOrigin)
 
   if (props.framing === 'full-body') {
-    // The middle of the body, and a distance that fits 1.3 times its height in the view.
-    const center = { ...value.modelOrigin, y: value.modelOrigin.y - value.modelSize.y / 5 }
+    // The middle of the body, and a distance that fits 1.3 times its height in the view. The camera keeps the
+    // direction that the model load chose, so it looks at the face of the model. A fixed -Z side showed a VRM 0.x
+    // model, which faces the other way, from behind or from the side.
+    const adjust = props.framingAdjust ?? {}
+    const center = new Vector3(value.modelOrigin.x - (adjust.x ?? 0), value.modelOrigin.y - value.modelSize.y / 5 - (adjust.y ?? 0), value.modelOrigin.z)
     const halfFov = ((camera.value?.fov ?? 40) / 2) * Math.PI / 180
-    const distance = (value.modelSize.y * 0.65) / Math.tan(halfFov)
-    modelOrigin.value = center
+    const distance = (value.modelSize.y * 0.65) / Math.tan(halfFov) / Math.min(Math.max(adjust.zoom ?? 1, 0.2), 5)
+    const direction = bootstrapCameraOffset.lengthSq() > 1e-6 ? bootstrapCameraOffset.clone().setY(0).normalize() : new Vector3(0, 0, -1)
+    if (direction.lengthSq() < 1e-6)
+      direction.set(0, 0, -1)
+    modelOrigin.value = toVec3(center)
     modelSize.value = { ...value.modelSize }
     eyeHeight.value = value.eyeHeight
     modelOffset.value = { ...value.modelOffset }
     cameraDistance.value = distance
-    cameraPosition.value = { x: center.x, y: center.y, z: center.z - distance }
-    lookAtTarget.value = { ...value.lookAtTarget }
+    cameraPosition.value = toVec3(center.clone().addScaledVector(direction, distance))
+    lookAtTarget.value = toVec3(center)
     return
   }
 

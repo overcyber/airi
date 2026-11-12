@@ -63,6 +63,8 @@ const props = withDefaults(defineProps<{
   paused?: boolean
   /** Camera framing of a VRM model. See `framing` of `ThreeScene`. */
   vrmFraming?: 'default' | 'full-body'
+  /** Shift and zoom of the full-body framing, see `framingAdjust` of `ThreeScene`. */
+  vrmFramingAdjust?: { x?: number, y?: number, zoom?: number }
 }>(), {
   enableOrbitControls: true,
   paused: false,
@@ -856,6 +858,7 @@ defineExpose({
         :thinking="(chatSending || neoAliceThinking) && !nowSpeaking"
         :motion-library="vrmMotions.motionLibrary"
         :framing="props.vrmFraming"
+        :framing-adjust="props.vrmFramingAdjust"
         @error="reportStageRenderError"
         @vrm-interact="onVRMInteract"
         @model-ready="restoreNeoAliceMood()"

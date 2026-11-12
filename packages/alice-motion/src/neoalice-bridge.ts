@@ -301,17 +301,18 @@ export class NeoAliceTranslator {
       return ignored(topic, 'speech payload is not an object')
     const text = parsed.output.tts?.text ?? parsed.output.text ?? ''
     const sessionId = parsed.output.session_id || undefined
-    const key = sessionId ? `session:${sessionId}` : text.trim() ? `text:${text.trim()}` : undefined
-    if (key) {
-      for (const [seen, entry] of this.recentSpeech) {
-        if (nowMs - entry.atMs > sameSpeechWindowMs)
-          this.recentSpeech.delete(seen)
-      }
-      const earlier = this.recentSpeech.get(key)
-      if (earlier && earlier.site !== site)
-        return ignored(topic, 'the same speech came on another site')
-      this.recentSpeech.set(key, { atMs: nowMs, site })
+    // NeoAlice sends the same speech to the mirror, the avatar site, and the satellites, sometimes with a session id per
+    // site. The session id or the text, seen on another site within the window, marks the copy.
+    const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ')
+    const keys = [sessionId && `session:${sessionId}`, normalized && `text:${normalized}`].filter((key): key is string => !!key)
+    for (const [seen, entry] of this.recentSpeech) {
+      if (nowMs - entry.atMs > sameSpeechWindowMs)
+        this.recentSpeech.delete(seen)
     }
+    if (keys.some(key => this.recentSpeech.get(key) && this.recentSpeech.get(key)!.site !== site))
+      return ignored(topic, 'the same speech came on another site')
+    for (const key of keys)
+      this.recentSpeech.set(key, { atMs: nowMs, site })
     if (isAudio) {
       const audioBase64 = parsed.output.audio?.b64 ?? parsed.output.audio_base64
       if (!audioBase64)

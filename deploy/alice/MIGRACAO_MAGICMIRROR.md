@@ -180,6 +180,11 @@ Parâmetros da URL do `/mirror`:
 | `mouth=0.6` | Abertura da boca, de 0,2 a 1. Use 0,8 para ver de longe. |
 | `view=bust` | Só cabeça e peito. Sem ele, o corpo inteiro aparece. |
 | `stats=1` | Mostra quadros por segundo e custo por quadro |
+| `rotate=30` | Gira o modelo, em graus. Use `rotate=180` se ela aparecer de costas. |
+| `x=0.1` e `y=0.1` | Movem a vista, em metros: `x` positivo para a direita, `y` positivo para cima |
+| `zoom=1.2` | Aproxima a câmera. Abaixo de 1, afasta. |
+
+O espelho guarda as configurações dele, separadas das do navegador do seu PC. Por isso a posição no espelho se ajusta pela URL, por exemplo `/mirror?mouth=0.5&rotate=0&y=0.1&zoom=1.2`.
 
 ## 7. Rodar o perfil de teste (no espelho)
 
@@ -273,7 +278,7 @@ A NeoAlice não mudou, então o avatar antigo volta como era.
 | --- | --- |
 | Tela preta no lugar do avatar | O certificado não é confiável (passo 5), ou a URL está errada. Abra a URL no Chromium do espelho para ver o erro. |
 | Avatar sem voz | O áudio está bloqueado (passo 6, item 4), ou o modo de fala da ponte está em "Silent" (passo 7). |
-| Fala dupla | O `MMM-AvatarMQTT` ainda está carregado, ou há duas páginas do AIRI abertas no mesmo site. |
+| Fala dupla | O `MMM-AvatarMQTT` ainda está carregado, ou há outro aparelho com o AIRI e a ponte ligada. Abas do mesmo navegador não repetem: só uma toca. |
 | A boca não segue o português | Em "Lip sync", o modo está em "Audio only". Ou a NeoAlice mandou o `cmd/tts/audio` sem `text`. |
 | A animação não toca | O teste 3 do passo 4 respondeu `404`, e `AIRI_TALKINGHEAD_UPSTREAM` está vazio. |
 | "WebGL unavailable" | A GPU está desligada. No Raspberry Pi, ligue o driver `vc4-kms-v3d` em `/boot/firmware/config.txt`. |

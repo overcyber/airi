@@ -28,6 +28,21 @@ const mouth = Number.parseFloat(new URLSearchParams(location.search).get('mouth'
 if (Number.isFinite(mouth))
   useModelStore().lipSyncMouthOpening = Math.min(Math.max(mouth, 0.2), 1)
 
+/**
+ * Position on the mirror, from the URL, because the mirror browser keeps its own settings:
+ * `rotate` turns the model (degrees), `x` and `y` shift the view (meters), `zoom` brings it closer (1 is the default).
+ * For example `/mirror?rotate=180&y=0.1&zoom=1.2`. `rotate` stays saved in this browser.
+ */
+const query = new URLSearchParams(location.search)
+function numberParam(name: string) {
+  const value = Number.parseFloat(query.get(name) ?? '')
+  return Number.isFinite(value) ? value : undefined
+}
+const rotate = numberParam('rotate')
+if (rotate !== undefined)
+  useModelStore().modelRotationY = ((rotate % 360) + 540) % 360 - 180
+const framingAdjust = { x: numberParam('x'), y: numberParam('y'), zoom: numberParam('zoom') }
+
 // The mirror shows the page over its black screen, so the page itself has no background.
 const saved = { html: '', body: '' }
 onMounted(() => {
@@ -76,6 +91,7 @@ if (new URLSearchParams(location.search).has('stats')) {
       :enable-orbit-controls="false"
       :paused="false"
       :vrm-framing="framing"
+      :vrm-framing-adjust="framingAdjust"
     />
     <pre
       v-if="stats"
