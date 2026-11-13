@@ -81,6 +81,36 @@ A Neptuna (`packages/alice-motion/fixtures/vrm/neptuna/neptuna.vrm`) é o modelo
 
 ## 5. Teste no espelho
 
+### 5.1 Confira a versão do servidor antes de testar
+
+Se o servidor não está no branch, nada desta seção funciona. O `retune` também falha com `ENOENT: no such file or directory, open 'retune'`. Esse erro é do `cli.ts` antigo, que não conhece o comando `retune`.
+
+Na pasta do repositório no servidor, rode:
+
+```bash
+git fetch origin claude/bold-einstein-8ye9r5
+```
+
+```bash
+git checkout claude/bold-einstein-8ye9r5 && git pull --rebase origin claude/bold-einstein-8ye9r5
+```
+
+```bash
+git log -1 --oneline
+```
+
+Esperado: o commit mais novo do branch, não o do `main`. Uma mensagem `Already up to date` em outro branch não atualiza nada.
+
+Depois, na raiz do repositório, rode o `retune`. Um caminho relativo começa na pasta onde você digitou o comando:
+
+```bash
+pnpm -F @proj-airi/alice-avatar-tools convert retune deploy/alice/modelos/eva-ruiva.vrm
+```
+
+O teste `stage-motion.test.ts` cobre o caminho inteiro, do tópico `cmd/avatar/pose` com `lying` até o clipe `lie_down` com 20 s.
+
+### 5.2 Teste do comando
+
 O comando so funciona depois de atualizar o AIRI do servidor: `git pull` no branch, `docker compose -f deploy/alice/compose.yaml up -d --build`, e recarregar a pagina do espelho. A versao anterior do container nao conhece `lying`, e a ponte registra `ignored: the catalog has no action for this command`. Para conferir, abra o console da pagina `/mirror`: a linha `[neoalice-bridge] played pose_lying as clip lie_down` aparece quando o comando chega.
 
 ```bash

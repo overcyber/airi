@@ -35,7 +35,7 @@ To bring a VRM that an older version of this converter made up to date, without 
 pnpm -F @proj-airi/alice-avatar-tools convert retune <avatar.vrm> [output.vrm]
 ```
 
-It softens the preset expressions, frees the hair springs, widens the eye range of the look-at, and adds the floor collider. Without `output.vrm`, it writes over the input.
+It softens the preset expressions, frees the hair springs, widens the eye range of the look-at, and adds the floor collider. Without `output.vrm`, it writes over the input. A relative path starts at the folder where you typed the command.
 
 The command prints a report, for example `armDropBeforeDegrees: 54.7` and `armDropAfterDegrees: 0`. Then import the `.vrm` file in AIRI: **Settings > Models > Select model > Import > VRM**.
 

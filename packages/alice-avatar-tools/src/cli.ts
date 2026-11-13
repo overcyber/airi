@@ -1,6 +1,7 @@
 import process from 'node:process'
 
 import { readFile, writeFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 
 import { errorMessageFrom } from '@moeru/std'
 
@@ -15,23 +16,30 @@ import { convertRpmToVrm } from './rpm-to-vrm'
  *        pnpm -F @proj-airi/alice-avatar-tools convert retune <input.vrm> [output.vrm]
  *
  * Works offline. The input and the output stay on this machine.
+ * Relative paths start at the folder where you typed the command, not at this package.
  */
 async function main() {
-  const args = process.argv.slice(2)
+  // `pnpm -F` runs the script in the package folder. pnpm keeps the folder of the command in INIT_CWD.
+  const base = process.env.INIT_CWD ?? process.cwd()
+  const args = process.argv.slice(2).filter(arg => arg !== '--')
+  const path = (arg: string | undefined) => arg === undefined ? undefined : resolve(base, arg)
   if (args[0] === 'retune') {
-    const [, input, output = input] = args
+    const input = path(args[1])
     if (!input) {
       console.error('Usage: pnpm -F @proj-airi/alice-avatar-tools convert retune <input.vrm> [output.vrm]')
       process.exitCode = 2
       return
     }
+    const output = path(args[2]) ?? input
     const glb = readGlb(await readFile(input))
     const report = retuneVrm(glb)
     await writeFile(output, writeGlb(glb))
     console.info(JSON.stringify({ output, ...report }, null, 2))
     return
   }
-  const [input, output, name = 'Eva', author = 'Alice'] = args
+  const input = path(args[0])
+  const output = path(args[1])
+  const [, , name = 'Eva', author = 'Alice'] = args
   if (!input || !output) {
     console.error('Usage: pnpm -F @proj-airi/alice-avatar-tools convert <input.glb> <output.vrm> [name] [author]')
     process.exitCode = 2
