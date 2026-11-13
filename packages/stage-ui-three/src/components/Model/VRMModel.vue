@@ -253,6 +253,18 @@ type UpdatableMaterial = Material & {
 
 // Expressions
 const idleEyeSaccades = useIdleEyeSaccades()
+const defaultTookAt = computed(() => new Vector3(0, eyeHeight.value, -100))
+const focusPos = useVRMEyeFocusFor({
+  cameraPosition: () => props.cameraPosition,
+  context: () => ({
+    camera: camera.value,
+    raycaster,
+    defaultLookAt: defaultTookAt.value,
+  }),
+  screenBoundingBox: props.screenBoundingBox,
+  source: () => props.cursorPosition,
+  trackingMode: () => props.trackingMode,
+})
 // shallowRef: the composable object must stay non-reactive, otherwise Vue
 // deep-unwraps nested refs/computed (e.g. isEmoteActive) and breaks reads
 // like vrmEmote.value.isEmoteActive.value in the render loop.
@@ -654,6 +666,11 @@ function bindManagedVrmInstanceRenderLoop() {
       activeVrm?.humanoid.update()
     })
     const lookAtMs = measureFrameStep(tracingEnabled, () => {
+      // Idle saccades and the tracking target (camera, mouse, or the default far point), every frame.
+      // A one-shot update on mount froze the eyes at their first target forever: no idle glances, and no
+      // follow-up when the target changed without a reactive dependency firing again.
+      if (activeVrm)
+        idleEyeSaccades.update(activeVrm, focusPos, delta)
       // Eye contact by mood: the target moves away for a moment, for example down when sad,
       // and comes back after this update, so the tracking target of the camera or the mouse stays as it was.
       const lookTarget = activeVrm?.lookAt?.target
@@ -807,8 +824,6 @@ function componentCleanUp(
     })
   }
 }
-
-const defaultTookAt = computed(() => new Vector3(0, eyeHeight.value, -100))
 
 function computeBoundingBox(vrmScene: Object3D) {
   const box = new Box3()
@@ -1157,18 +1172,6 @@ async function loadModel() {
   }
 }
 
-const focusPos = useVRMEyeFocusFor({
-  cameraPosition: () => props.cameraPosition,
-  context: () => ({
-    camera: camera.value,
-    raycaster,
-    defaultLookAt: defaultTookAt.value,
-  }),
-  screenBoundingBox: props.screenBoundingBox,
-  source: () => props.cursorPosition,
-  trackingMode: () => props.trackingMode,
-})
-
 onMounted(async () => {
   // watch if the model needs to be reloaded
   // Registered BEFORE the initial load to avoid missing src changes
@@ -1264,9 +1267,6 @@ onMounted(async () => {
       sh: nprIrrSH.value ?? null,
     })
     updateIblProbe(mode)
-  }, { immediate: true })
-  watch(focusPos, (newPos) => {
-    idleEyeSaccades.instantUpdate(vrm.value, newPos)
   }, { immediate: true })
 })
 

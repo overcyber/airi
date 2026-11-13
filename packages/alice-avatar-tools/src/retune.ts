@@ -2,12 +2,12 @@ import type { Glb } from './glb'
 
 import { addFloorCollider } from './floor-collider'
 import { hairJointSettings } from './hair-springs'
-import { presetBlendShapes } from './rpm-to-vrm'
+import { lookAtSettings, presetBlendShapes } from './rpm-to-vrm'
 
 /**
  * Brings a VRM that an older version of this converter made up to date, without a new conversion:
  * the preset expressions get the weights of `presetBlendShapes`, the hair springs get `hairJointSettings`,
- * and the floor collider is added when it is missing. The mesh, the textures, and the skeleton do not change.
+ * the eyes get the look-at ranges of `lookAtSettings`, and the floor collider is added when it is missing. The mesh, the textures, and the skeleton do not change.
  */
 
 export interface RetuneReport {
@@ -16,6 +16,8 @@ export interface RetuneReport {
   /** Spring joints whose settings changed. */
   hairJoints: number
   floor: boolean
+  /** The eyes got the look-at ranges of `lookAtSettings`. */
+  lookAt: boolean
 }
 
 interface MorphBind {
@@ -25,6 +27,7 @@ interface MorphBind {
 }
 
 interface VrmExtension {
+  lookAt?: { type?: string, offsetFromHeadBone?: [number, number, number] } & Record<string, unknown>
   expressions?: { preset?: Record<string, { morphTargetBinds?: MorphBind[] }> }
 }
 
@@ -38,7 +41,7 @@ const extendedColliderExtension = 'VRMC_springBone_extended_collider'
 /** Retunes the file in place. */
 export function retuneVrm(glb: Glb): RetuneReport {
   const { json } = glb
-  const report: RetuneReport = { presets: [], hairJoints: 0, floor: false }
+  const report: RetuneReport = { presets: [], hairJoints: 0, floor: false, lookAt: false }
 
   const vrm = json.extensions?.VRMC_vrm as VrmExtension | undefined
   const presets = vrm?.expressions?.preset ?? {}
@@ -57,6 +60,12 @@ export function retuneVrm(glb: Glb): RetuneReport {
     }
     if (changed)
       report.presets.push(name)
+  }
+
+  if (vrm?.lookAt?.type === 'bone') {
+    const next = lookAtSettings(vrm.lookAt.offsetFromHeadBone ?? [0, 0, 0])
+    report.lookAt = JSON.stringify(vrm.lookAt) !== JSON.stringify(next)
+    vrm.lookAt = next
   }
 
   const springBone = json.extensions?.VRMC_springBone as SpringBoneExtension | undefined

@@ -82,10 +82,38 @@ const arkitMoodShapes: Record<string, Record<string, number>> = {
 const emojiFaceCap = 0.7
 const emojiFaceScale = 0.85
 
-/** The weight that an emoji shape of TalkingHead gets on the VRM. */
-export function emojiShapeWeight(weight: number) {
-  return Math.round(Math.min(weight, emojiFaceCap) * emojiFaceScale * 1000) / 1000
+/**
+ * Lower caps for the shapes that turn a smile into a grimace on a realistic face: a wide smile with the
+ * upper lip up, the nose wrinkled, and the eyes squeezed shut is the grin of the Joker. Matched by prefix.
+ */
+const emojiShapeCaps: Array<[prefix: string, cap: number]> = [
+  ['mouthSmile', 0.5],
+  ['mouthUpperUp', 0.2],
+  ['mouthLowerDown', 0.3],
+  ['mouthDimple', 0.15],
+  ['mouthStretch', 0.35],
+  ['mouthPress', 0.3],
+  ['mouthFrown', 0.55],
+  ['noseSneer', 0.2],
+  ['cheekSquint', 0.3],
+  ['eyeSquint', 0.35],
+  ['eyeWide', 0.5],
+  ['jawOpen', 0.3],
+  ['mouthOpen', 0.3],
+  ['browInnerUp', 0.5],
+  ['browDown', 0.6],
+]
+
+/** The weight that an emoji shape of TalkingHead gets on the VRM. `name` picks the cap of the shape. */
+export function emojiShapeWeight(weight: number, name = '') {
+  const cap = emojiShapeCaps.find(([prefix]) => name.startsWith(prefix))?.[1] ?? emojiFaceCap
+  return Math.round(Math.min(weight, cap) * emojiFaceScale * 1000) / 1000
 }
+
+/** The smile of the emote face and of a warm bond on a model with the ARKit shapes, at weight 1. */
+const arkitSmileShapes: Record<string, number> = { mouthSmileLeft: 1, mouthSmileRight: 1, cheekSquintLeft: 0.5, cheekSquintRight: 0.5 }
+/** Smile of the emote face on an ARKit model. It joins the mood by the larger weight, never by a sum. */
+const arkitEmoteSmile = 0.3
 
 /** Other names of the preset expressions, in lower case: VRM 0.x and common model names. */
 const presetAliases: Record<string, string[]> = {
@@ -122,7 +150,17 @@ export function releaseMoodOverrides(expressionManager: MoodExpressionManager | 
   }
 }
 
-const blinkNames = ['blink', 'Blink', 'eyeBlinkLeft', 'eyeBlinkRight']
+const blinkPresetNames = ['blink', 'Blink']
+const blinkShapeNames = ['eyeBlinkLeft', 'eyeBlinkRight']
+
+/**
+ * The expressions that close the eyes: the blink preset, or the two ARKit shapes on a model without it.
+ * Never both: on Eva the preset is the two shapes, and both together closed the eyelids twice as far.
+ */
+export function blinkExpressionsOf(names: readonly string[]): string[] {
+  const preset = blinkPresetNames.find(name => names.includes(name))
+  return preset ? [preset] : blinkShapeNames.filter(name => names.includes(name))
+}
 
 /** Expressions that hold a mood, a reaction, or the emote face. Their presets can move the mouth. */
 const moodPresetNames = new Set(['happy', 'angry', 'sad', 'relaxed', 'surprised', 'joy', 'sorrow', 'fun'])
@@ -177,6 +215,7 @@ export class MoodFace {
   /** How far the mouth shapes of the face have moved out for the lip sync: 0 at rest, 1 while she speaks. */
   private speechFace = 0
   private readonly hasArkit: boolean
+  private readonly blinkExpressions: string[]
 
   constructor(
     private readonly expressionNames: readonly string[],
@@ -185,6 +224,7 @@ export class MoodFace {
     this.blink = { timerSeconds: 0, nextSeconds: this.nextBlinkIn(), active: false, progress: 0 }
     this.emoteFace = findHappyExpression(expressionNames)
     this.hasArkit = expressionNames.includes('mouthSmileLeft')
+    this.blinkExpressions = blinkExpressionsOf(expressionNames)
   }
 
   /** The current resting mood name, or `null` for neutral. */
@@ -226,9 +266,12 @@ export class MoodFace {
     // The presets of the face are for a model without the ARKit shapes. On Eva they would add a second smile.
     const presets = this.hasArkit ? {} : presetsOfFace(shapes)
     for (const [name, weight] of [...Object.entries(shapes), ...Object.entries(presets)]) {
+      // The look-at owns the eye direction. An eye look shape under it would turn one layer against the other.
+      if (name.startsWith('eyeLook'))
+        continue
       const own = pickCandidate([name.toLowerCase(), ...(presetAliases[name] ?? [])], this.expressionNames)
       if (own)
-        weights.set(own, Math.max(weights.get(own) ?? 0, emojiShapeWeight(weight)))
+        weights.set(own, Math.max(weights.get(own) ?? 0, emojiShapeWeight(weight, name)))
     }
     if (weights.size === 0)
       return false
@@ -243,7 +286,8 @@ export class MoodFace {
     const emoteName = input.emotePlaying ? this.emoteFace : null
 
     if (emoteName) {
-      face.set(emoteName, emoteFaceWeight)
+      // On an ARKit model the smile of the emote is ARKit shapes below, so it cannot add to the mood smile.
+      face.set(emoteName, this.hasArkit ? 0 : emoteFaceWeight)
       this.emoteFaceActive = true
     }
     else if (this.emoteFaceActive && this.emoteFace) {
@@ -336,10 +380,23 @@ export class MoodFace {
     }
     // The bond: a light smile at rest when the bond is warm, heavy eyelids when her energy is low.
     const moodKey = this.mood?.key ?? this.moodTarget?.key
+    // Every smile on an ARKit model goes through the same shapes and joins by the larger weight. A preset
+    // on top of the shapes is a sum, and three light smiles in a sum are one grin.
+    const smiles: number[] = []
+    if (this.hasArkit && emoteName)
+      smiles.push(arkitEmoteSmile)
     if (this.bond.warmth > 0.5 && !['sad', 'angry', 'surprised'].includes(moodKey ?? '')) {
       const smile = pickCandidate(['relaxed', 'fun'], this.expressionNames)
-      if (smile)
+      if (this.hasArkit)
+        smiles.push((this.bond.warmth - 0.5) * 0.3)
+      else if (smile)
         arkit.set(smile, Math.max(arkit.get(smile) ?? 0, Math.round((this.bond.warmth - 0.5) * 0.5 * 1000) / 1000))
+    }
+    for (const smile of smiles) {
+      for (const [name, share] of Object.entries(arkitSmileShapes)) {
+        if (this.expressionNames.includes(name))
+          arkit.set(name, Math.max(arkit.get(name) ?? 0, Math.round(smile * share * 1000) / 1000))
+      }
     }
     if (this.bond.energy < 0.4 && !input.emotePlaying) {
       const lids = pickCandidate(['blink'], this.expressionNames)
@@ -382,20 +439,16 @@ export class MoodFace {
           blink.nextSeconds = this.nextBlinkIn()
           weight = 0
         }
-        for (const name of blinkNames) {
-          if (this.expressionNames.includes(name))
-            face.set(name, weight)
-        }
+        for (const name of this.blinkExpressions)
+          face.set(name, weight)
       }
     }
     else if (blink.active) {
       // An emote that starts mid-blink must not leave the eyelid half closed.
       blink.active = false
       blink.timerSeconds = 0
-      for (const name of blinkNames) {
-        if (this.expressionNames.includes(name))
-          face.set(name, 0)
-      }
+      for (const name of this.blinkExpressions)
+        face.set(name, 0)
     }
 
     return face

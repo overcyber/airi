@@ -20,6 +20,7 @@ function createVrm(): Glb {
       extensionsUsed: ['VRMC_vrm', 'VRMC_springBone'],
       extensions: {
         VRMC_vrm: {
+          lookAt: { type: 'bone', offsetFromHeadBone: [0, 0.07, 0.07], rangeMapHorizontalInner: { inputMaxValue: 90, outputScale: 10 } },
           expressions: {
             preset: {
               happy: { morphTargetBinds: [{ node: 2, index: 0, weight: 0.8 }, { node: 2, index: 1, weight: 0.5 }] },
@@ -43,17 +44,20 @@ describe('retuneVrm', () => {
   it('softens the presets, frees the hair, and adds the floor once', () => {
     const glb = createVrm()
 
-    expect(retuneVrm(glb)).toEqual({ presets: ['happy'], hairJoints: 1, floor: true })
+    expect(retuneVrm(glb)).toEqual({ presets: ['happy'], hairJoints: 1, floor: true, lookAt: true })
 
-    const vrm = glb.json.extensions!.VRMC_vrm as { expressions: { preset: Record<string, { morphTargetBinds: Array<{ weight: number }> }> } }
+    const vrm = glb.json.extensions!.VRMC_vrm as { lookAt: { offsetFromHeadBone: number[], rangeMapHorizontalInner: unknown }, expressions: { preset: Record<string, { morphTargetBinds: Array<{ weight: number }> }> } }
     expect(vrm.expressions.preset.happy.morphTargetBinds.map(bind => bind.weight)).toEqual([0.5, 0.3])
     expect(vrm.expressions.preset.aa.morphTargetBinds[0].weight).toBe(1)
+    // The eyes follow a target almost one to one, and the eye position stays.
+    expect(vrm.lookAt.rangeMapHorizontalInner).toEqual({ inputMaxValue: 40, outputScale: 30 })
+    expect(vrm.lookAt.offsetFromHeadBone).toEqual([0, 0.07, 0.07])
     const springBone = glb.json.extensions!.VRMC_springBone as { springs: Array<{ joints: Array<Record<string, unknown>> }>, colliders: unknown[] }
     expect(springBone.springs[0].joints[0]).toMatchObject(hairJointSettings(0))
     expect(springBone.colliders).toHaveLength(1)
 
     // A second run changes nothing more.
-    expect(retuneVrm(glb)).toEqual({ presets: [], hairJoints: 1, floor: false })
+    expect(retuneVrm(glb)).toEqual({ presets: [], hairJoints: 1, floor: false, lookAt: false })
     expect(springBone.colliders).toHaveLength(1)
   })
 })

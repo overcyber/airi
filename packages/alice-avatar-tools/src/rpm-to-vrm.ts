@@ -21,6 +21,25 @@ import {
 } from './math'
 
 /**
+ * The look-at of the avatar: the eye bones turn toward the target.
+ *
+ * The first version turned the eyes 10 degrees for a target 90 degrees away, like a VRoid model. On this
+ * realistic face the eyes then never moved in the head: they did not hold the viewer when the head turned,
+ * and they read as static. A human eye follows a target about one to one up to 30 or 35 degrees.
+ */
+export function lookAtSettings(offsetFromHeadBone: [number, number, number]) {
+  const horizontal = { inputMaxValue: 40, outputScale: 30 }
+  return {
+    type: 'bone',
+    offsetFromHeadBone,
+    rangeMapHorizontalInner: horizontal,
+    rangeMapHorizontalOuter: horizontal,
+    rangeMapVerticalDown: { inputMaxValue: 30, outputScale: 18 },
+    rangeMapVerticalUp: { inputMaxValue: 30, outputScale: 14 },
+  }
+}
+
+/**
  * Converts a Ready Player Me avatar (GLB with an ARKit and Oculus viseme face) to VRM 1.0.
  *
  * Sprint V4 of Plan 04: the Eva avatar of the mirror becomes a VRM, so the AIRI motion layer
@@ -279,7 +298,7 @@ export function convertRpmToVrm(glb: Glb, options: ConvertOptions): ConvertRepor
   }
   const head = translationOf(skeleton.world(nodeIndex.get('Head')!))
   const eye = nodeIndex.has('LeftEye') ? translationOf(skeleton.world(nodeIndex.get('LeftEye')!)) : head
-  const range = { inputMaxValue: 90, outputScale: 10 }
+  const lookAt = lookAtSettings([0, eye[1] - head[1], eye[2] - head[2]])
 
   json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_vrm'])]
   json.extensions = {
@@ -304,14 +323,7 @@ export function convertRpmToVrm(glb: Glb, options: ConvertOptions): ConvertRepor
       },
       humanoid: { humanBones },
       expressions: { preset, custom },
-      lookAt: {
-        type: 'bone',
-        offsetFromHeadBone: [0, eye[1] - head[1], eye[2] - head[2]],
-        rangeMapHorizontalInner: range,
-        rangeMapHorizontalOuter: range,
-        rangeMapVerticalDown: range,
-        rangeMapVerticalUp: range,
-      },
+      lookAt,
     },
   }
 

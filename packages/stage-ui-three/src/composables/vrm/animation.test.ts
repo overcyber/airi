@@ -3,8 +3,9 @@ import type { VRMCore } from '@pixiv/three-vrm-core'
 import { VRMCore as Core, VRMHumanoid } from '@pixiv/three-vrm-core'
 import { AnimationClip, AnimationMixer, Group, Object3D, QuaternionKeyframeTrack, VectorKeyframeTrack } from 'three'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 
-import { reAnchorRootPositionTrack, useBlink } from './animation'
+import { reAnchorRootPositionTrack, useBlink, useIdleEyeSaccades } from './animation'
 
 /** Creates a real normalized rig without a model file or a renderer. */
 function createRig() {
@@ -233,5 +234,56 @@ describe('useBlink', () => {
     for (let i = 0; i < 64; i++)
       blink.update(vrm, 0.016)
     expect(lastBlinkValue(vrm)).toBeGreaterThan(0)
+  })
+})
+
+describe('useIdleEyeSaccades', () => {
+  /** A VRM stand-in with an expression manager (so `update` does not bail out) and a lookAt stub with the eyes at 1.6 m. */
+  function fakeVrm() {
+    return {
+      expressionManager: {},
+      lookAt: {
+        target: undefined as unknown as Object3D | undefined,
+        update: vi.fn(),
+        getLookAtWorldPosition: (target: { set: (x: number, y: number, z: number) => unknown }) => target.set(0, 1.6, 0),
+      },
+    } as unknown as VRMCore
+  }
+
+  it('moves the eye target on its own over time, instead of freezing at the first call', () => {
+    // ROOT CAUSE:
+    //
+    // The render loop called `instantUpdate` once, from a Vue watcher that never fired again when the
+    // look-at target stopped changing (the default target, far away, never changes). The eyes froze at
+    // whatever direction that first call picked and never moved again: no idle glances, no following a
+    // moving tracking target raised later.
+    const saccades = useIdleEyeSaccades()
+    const vrm = fakeVrm()
+    const target = ref({ x: 0, y: 1.6, z: -100 })
+
+    // 6 s of frames: several saccades. The eyes glance up to 4 degrees to the side of a target 100 m away,
+    // which is up to 7 m there. The old offset of 25 cm was 0.14 degrees: no visible motion.
+    let widest = 0
+    for (let i = 0; i < 360; i++) {
+      saccades.update(vrm, target, 1 / 60)
+      widest = Math.max(widest, Math.abs(vrm.lookAt!.target!.position.x))
+    }
+    expect(widest).toBeGreaterThan(0.5)
+    expect(widest).toBeLessThanOrEqual(100 * Math.tan(4 * Math.PI / 180) + 1e-6)
+
+    // The look-at target moves, for example the cursor: the eyes follow in the next frames, not at the next saccade.
+    target.value = { x: 50, y: 1.6, z: -100 }
+    for (let i = 0; i < 12; i++)
+      saccades.update(vrm, target, 1 / 60)
+    expect(vrm.lookAt!.target!.position.x).toBeGreaterThan(40)
+  })
+
+  it('does not call vrm.lookAt.update: the render loop calls it once, after adding the mood gaze offset', () => {
+    const saccades = useIdleEyeSaccades()
+    const vrm = fakeVrm()
+
+    saccades.update(vrm, ref({ x: 0, y: 1.6, z: -4 }), 0.1)
+
+    expect(vrm.lookAt!.update).not.toHaveBeenCalled()
   })
 })

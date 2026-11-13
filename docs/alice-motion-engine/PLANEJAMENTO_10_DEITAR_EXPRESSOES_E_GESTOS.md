@@ -61,6 +61,24 @@ pnpm -F @proj-airi/alice-avatar-tools exec tsx -e "import{readFileSync,writeFile
 - **Cabelo sem fisica.** A tranca tinha rigidez 1 na raiz e arrasto 0,35: ficava dura como um pau. Agora rigidez 0,55 na raiz ate 0,12 na ponta, gravidade 0,55 e arrasto 0,2. Se o cabelo nao mexe no espelho, o VRM que esta em `deploy/alice/modelos` e anterior as molas (Plano 08, M2). Troque pelo VRM atualizado.
 - **Comando novo:** `pnpm -F @proj-airi/alice-avatar-tools convert retune eva-ruiva.vrm` aplica os tres ajustes num VRM ja convertido, sem converter de novo.
 
+## 4.3. Olhos parados e sorriso somado (13/11, segunda correção)
+
+Medido no `eva-ruiva.vrm` com o look-at real do three-vrm, não suposto:
+
+| Problema | Causa medida | Correção |
+| --- | --- | --- |
+| Olhos estáticos | O look-at do modelo girava os olhos 10° para um alvo a 90° (padrão de modelo VRoid). Com o alvo a 46°, o olho girava 5°. Os olhos não seguravam o espectador quando a cabeça virava. | `lookAtSettings` no conversor: 30° de olho para 40° de alvo na horizontal, 18° para baixo e 14° para cima. O `convert retune` aplica num VRM já convertido. |
+| Olhos estáticos | As sacadas ociosas (`useIdleEyeSaccades.update`) nunca eram chamadas: o `VRMModel.vue` chamava só `instantUpdate`, uma vez. E o desvio era de 25 cm num alvo a 100 m: 0,14°. | O laço de quadro chama `update` em todo quadro. O desvio agora é angular: até 4° para o lado e 2,5° para cima ou para baixo, a cada 0,8 a 4,4 s, em cerca de 50 ms. |
+| Olhos estranhos ao piscar | A piscada escrevia o preset `blink` e as formas `eyeBlinkLeft` e `eyeBlinkRight`, que são a mesma coisa na Eva: pálpebra fechada em dobro. | `blinkExpressionsOf`: o preset, ou as duas formas, nunca os dois. |
+| Olhar contra o look-at | Os rostos de emoji 😏 e 😒 escreviam formas `eyeLook*` por baixo do look-at. | O rosto de emoji não escreve mais `eyeLook*`. |
+| Sorriso ainda largo | O humor feliz (formas ARKit), o rosto do emote (preset `happy`), o vínculo (preset `relaxed`) e um emoji de riso escreviam cada um um sorriso por uma expressão diferente, e o modelo somava todos. | Num modelo ARKit, todo sorriso passa pelas mesmas formas e vale o maior, nunca a soma. As formas que fazem a careta têm teto: `noseSneer` e `mouthUpperUp` 0,17, `eyeSquint` 0,3, `mouthSmile` 0,43. |
+
+Hipótese descartada: "o alvo perto da câmera deixa os olhos vesgos". O three-vrm aplica o mesmo ângulo nos dois olhos (medido: quaternions iguais nos dois), então a distância do alvo não cruza os olhos. O `eye-tracking.ts` ficou como estava.
+
+Evidências em `evidencias/D10/`: `eva-olhos-frente.png`, `eva-olhos-lado.png`, `eva-olhos-cima.png` (alvos a 46° e 44°) e `eva-riso-pior-caso.png` (humor feliz, vínculo no máximo e emoji 😄 juntos, pela classe `MoodFace` real).
+
+A Neptuna (`packages/alice-motion/fixtures/vrm/neptuna/neptuna.vrm`) é o modelo de teste de outro autor, com licença própria: o arquivo não foi alterado. As correções de código acima valem para ela também, porque estão no AIRI e não no arquivo.
+
 ## 5. Teste no espelho
 
 O comando so funciona depois de atualizar o AIRI do servidor: `git pull` no branch, `docker compose -f deploy/alice/compose.yaml up -d --build`, e recarregar a pagina do espelho. A versao anterior do container nao conhece `lying`, e a ponte registra `ignored: the catalog has no action for this command`. Para conferir, abra o console da pagina `/mirror`: a linha `[neoalice-bridge] played pose_lying as clip lie_down` aparece quando o comando chega.

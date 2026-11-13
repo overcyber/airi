@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { emojiShapeWeight, findHappyExpression, MoodFace, releaseMoodOverrides } from './mood-face'
+import { blinkExpressionsOf, emojiShapeWeight, findHappyExpression, MoodFace, releaseMoodOverrides } from './mood-face'
 import { talkingHeadEmojiFaces } from './talkinghead-emoji-faces'
 
 const vrm1Names = ['happy', 'sad', 'angry', 'surprised', 'relaxed', 'neutral', 'blink', 'aa']
@@ -230,6 +230,56 @@ describe('moodFace on a model with the ARKit shapes', () => {
     const reacting = run(face, 0.5)
     expect(reacting.get('mouthFrownLeft')).toBeCloseTo(0.5, 2)
     expect(reacting.get('sad') ?? 0).toBe(0)
+  })
+})
+
+describe('moodFace smiles on a model with the ARKit shapes', () => {
+  const arkitNames = [...vrm1Names, 'mouthSmileLeft', 'mouthSmileRight', 'cheekSquintLeft', 'eyeSquintLeft', 'noseSneerLeft', 'mouthUpperUpLeft', 'eyeLookInRight']
+
+  it('never adds smiles: the mood, the emote, the bond, and an emoji join by the largest one', () => {
+    // ROOT CAUSE:
+    //
+    // The happy mood (ARKit smile), the emote face (the `happy` preset), the warm bond (the `relaxed` preset),
+    // and a smile emoji each wrote a smile through another expression. The model added them all: a grin
+    // like the Joker, with the eyes squeezed and the nose wrinkled.
+    const face = new MoodFace(arkitNames, noEarlyBlink)
+    face.setMood('happy', 1)
+    face.setBond({ warmth: 1, energy: 0.8 })
+    run(face, 5)
+    face.showFace(talkingHeadEmojiFaces['\u{1F604}'])
+    const all = run(face, 1, { emotePlaying: false })
+
+    expect(all.get('mouthSmileLeft')).toBeLessThanOrEqual(0.45)
+    expect(all.get('happy') ?? 0).toBe(0)
+    expect(all.get('relaxed') ?? 0).toBe(0)
+    // The shapes that make the grin: capped low.
+    expect(all.get('eyeSquintLeft')).toBeLessThanOrEqual(0.3)
+    expect(all.get('noseSneerLeft')).toBeLessThanOrEqual(0.17)
+    expect(all.get('mouthUpperUpLeft')).toBeLessThanOrEqual(0.17)
+
+    // A body emote smiles with the same shapes, not with the preset on top.
+    const emote = run(face, 4, { emotePlaying: true })
+    expect(emote.get('happy') ?? 0).toBe(0)
+    expect(emote.get('mouthSmileLeft')).toBeCloseTo(0.3, 2)
+  })
+
+  it('leaves the eye direction to the look-at: an emoji face writes no eye look shape', () => {
+    const face = new MoodFace(arkitNames, noEarlyBlink)
+    face.showFace(talkingHeadEmojiFaces['\u{1F60F}'])
+
+    expect(run(face, 1).has('eyeLookInRight')).toBe(false)
+  })
+})
+
+describe('blinkExpressionsOf', () => {
+  it('closes the eyes with the preset or with the ARKit shapes, never with both', () => {
+    // ROOT CAUSE:
+    //
+    // Eva has the `blink` preset and the `eyeBlinkLeft` and `eyeBlinkRight` shapes that the preset is made of.
+    // The blink wrote all three, so the eyelids closed twice as far and the eyes looked wrong at each blink.
+    expect(blinkExpressionsOf(['blink', 'eyeBlinkLeft', 'eyeBlinkRight'])).toEqual(['blink'])
+    expect(blinkExpressionsOf(['eyeBlinkLeft', 'eyeBlinkRight'])).toEqual(['eyeBlinkLeft', 'eyeBlinkRight'])
+    expect(blinkExpressionsOf(['Blink', 'joy'])).toEqual(['Blink'])
   })
 })
 

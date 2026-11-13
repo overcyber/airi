@@ -11,7 +11,7 @@ The converter has no dependencies on the network. The input and the output stay 
 | T pose | The arms of a Ready Player Me avatar rest in an A pose, about 55 degrees down. VRM 1.0 and VRMA animations expect a T pose. The converter turns the arm bones to the horizontal, then re-skins the mesh, the blend shape deltas, and the inverse bind matrices, so the rest mesh matches the new skeleton. |
 | Humanoid | Maps the Mixamo style bones (`Hips`, `Spine1`, `LeftForeArm`, `LeftHandIndex1`, and others) to the VRM humanoid bones, fingers included. |
 | Expressions | VRM presets from the ARKit and viseme blend shapes: `aa`, `ih`, `ou`, `ee`, `oh`, `blink`, `happy`, `angry`, `sad`, `relaxed`, `surprised`, and the look directions. Every blend shape is also a custom expression, so the 52 ARKit names stay reachable. |
-| Look-at | Eye bones, with the eye height from the skeleton. |
+| Look-at | Eye bones, with the eye height from the skeleton. The eyes turn 30 degrees for a target 40 degrees to the side, so they hold the viewer when the head turns. |
 | Meta | Name, authors, and the VRM 1.0 license with no redistribution, no modification, and personal non-profit use. |
 | Floor | A plane collider at the feet (`VRMC_springBone_extended_collider`) for the hair springs, so the braid rests on the floor when she lies down. three-vrm 3 reads it. Other readers see a small sphere far below the floor. |
 
@@ -35,7 +35,7 @@ To bring a VRM that an older version of this converter made up to date, without 
 pnpm -F @proj-airi/alice-avatar-tools convert retune <avatar.vrm> [output.vrm]
 ```
 
-It softens the preset expressions, frees the hair springs, and adds the floor collider. Without `output.vrm`, it writes over the input.
+It softens the preset expressions, frees the hair springs, widens the eye range of the look-at, and adds the floor collider. Without `output.vrm`, it writes over the input.
 
 The command prints a report, for example `armDropBeforeDegrees: 54.7` and `armDropAfterDegrees: 0`. Then import the `.vrm` file in AIRI: **Settings > Models > Select model > Import > VRM**.
 
