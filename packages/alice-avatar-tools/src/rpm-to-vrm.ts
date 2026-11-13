@@ -68,11 +68,13 @@ export const presetBlendShapes: Record<string, Record<string, number>> = {
   blink: { eyeBlinkLeft: 1, eyeBlinkRight: 1 },
   blinkLeft: { eyeBlinkLeft: 1 },
   blinkRight: { eyeBlinkRight: 1 },
-  happy: { mouthSmileLeft: 0.8, mouthSmileRight: 0.8, cheekSquintLeft: 0.5, cheekSquintRight: 0.5, eyeSquintLeft: 0.3, eyeSquintRight: 0.3 },
-  angry: { browDownLeft: 1, browDownRight: 1, noseSneerLeft: 0.4, noseSneerRight: 0.4, mouthPressLeft: 0.4, mouthPressRight: 0.4, eyeSquintLeft: 0.3, eyeSquintRight: 0.3 },
-  sad: { browInnerUp: 0.8, mouthFrownLeft: 0.7, mouthFrownRight: 0.7, mouthShrugLower: 0.3 },
-  relaxed: { mouthSmileLeft: 0.4, mouthSmileRight: 0.4, eyeSquintLeft: 0.4, eyeSquintRight: 0.4 },
-  surprised: { browInnerUp: 1, browOuterUpLeft: 1, browOuterUpRight: 1, eyeWideLeft: 1, eyeWideRight: 1, jawOpen: 0.35 },
+  // The emotion presets at full weight are a clear face, not a grimace: a viewer that plays a preset at 1
+  // (the VRM settings page, another VRM app) must not get a grin like the Joker or eyes out of their sockets.
+  happy: { mouthSmileLeft: 0.5, mouthSmileRight: 0.5, cheekSquintLeft: 0.3, cheekSquintRight: 0.3, eyeSquintLeft: 0.2, eyeSquintRight: 0.2 },
+  angry: { browDownLeft: 0.7, browDownRight: 0.7, noseSneerLeft: 0.25, noseSneerRight: 0.25, mouthPressLeft: 0.3, mouthPressRight: 0.3, eyeSquintLeft: 0.2, eyeSquintRight: 0.2 },
+  sad: { browInnerUp: 0.6, mouthFrownLeft: 0.5, mouthFrownRight: 0.5, mouthShrugLower: 0.2 },
+  relaxed: { mouthSmileLeft: 0.3, mouthSmileRight: 0.3, eyeSquintLeft: 0.3, eyeSquintRight: 0.3 },
+  surprised: { browInnerUp: 0.7, browOuterUpLeft: 0.6, browOuterUpRight: 0.6, eyeWideLeft: 0.6, eyeWideRight: 0.6, jawOpen: 0.25 },
   neutral: {},
   lookUp: { eyeLookUpLeft: 1, eyeLookUpRight: 1 },
   lookDown: { eyeLookDownLeft: 1, eyeLookDownRight: 1 },

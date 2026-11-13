@@ -223,7 +223,9 @@ export class MoodFace {
    */
   showFace(shapes: Readonly<Record<string, number>>) {
     const weights = new Map<string, number>()
-    for (const [name, weight] of [...Object.entries(shapes), ...Object.entries(presetsOfFace(shapes))]) {
+    // The presets of the face are for a model without the ARKit shapes. On Eva they would add a second smile.
+    const presets = this.hasArkit ? {} : presetsOfFace(shapes)
+    for (const [name, weight] of [...Object.entries(shapes), ...Object.entries(presets)]) {
       const own = pickCandidate([name.toLowerCase(), ...(presetAliases[name] ?? [])], this.expressionNames)
       if (own)
         weights.set(own, Math.max(weights.get(own) ?? 0, emojiShapeWeight(weight)))
@@ -275,8 +277,10 @@ export class MoodFace {
       }
     }
     if (mood) {
+      // On a model with the ARKit shapes, the mood is those shapes only. Its preset is the same shapes again
+      // (the converter builds it from them), and both together made a grin twice as wide as either.
       if (emoteName !== mood.name)
-        face.set(mood.name, mood.weight)
+        face.set(mood.name, this.hasArkit && shapes ? 0 : mood.weight)
       if (mood.weight === 0)
         mood = null
     }
@@ -301,8 +305,9 @@ export class MoodFace {
         flash = null
       }
       else if (!owned) {
-        // Never dip the resting face on the same expression.
-        face.set(flash.name, Math.max(mood?.name === flash.name ? mood.weight : 0, flash.weight * shape))
+        // Never dip the resting face on the same expression. On an ARKit model the reaction is its shapes only.
+        const flashPreset = this.hasArkit && flash.key && arkitMoodShapes[flash.key] ? 0 : flash.weight * shape
+        face.set(flash.name, Math.max(mood?.name === flash.name ? face.get(mood.name) ?? 0 : 0, flashPreset))
       }
     }
     this.flash = flash

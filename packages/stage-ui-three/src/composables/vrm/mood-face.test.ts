@@ -186,7 +186,8 @@ describe('moodFace emoji faces', () => {
     const wink = run(arkit, 0.5)
     // A TalkingHead shape at 1 stops at the cap of 0.7, then scales by 0.85.
     expect(wink.get('tongueOut')).toBeCloseTo(0.595, 2)
-    expect(wink.get('happy')).toBeGreaterThan(0.5)
+    // The ARKit model gets no preset on top: the preset is the same shapes again.
+    expect(wink.get('happy') ?? 0).toBe(0)
 
     // A VRoid-like model with presets only: the laugh closes the eyes, the heart eyes do not.
     const presets = ['joy', 'sorrow', 'angry', 'surprised', 'Blink', 'A', 'neutral']
@@ -208,6 +209,27 @@ describe('moodFace emoji faces', () => {
     expect(emojiShapeWeight(0.7)).toBeCloseTo(0.595, 3)
     expect(emojiShapeWeight(0.4)).toBeCloseTo(0.34, 3)
     expect(emojiShapeWeight(0)).toBe(0)
+  })
+})
+
+describe('moodFace on a model with the ARKit shapes', () => {
+  it('drives the mood and the reaction with the ARKit shapes only, never with the preset too', () => {
+    // ROOT CAUSE:
+    //
+    // On Eva, the happy mood wrote the `happy` preset (mouthSmile 0.8 inside the model) and the ARKit mouthSmile
+    // at the same time. The two smiles added up to a grin like the Joker.
+    //
+    // We fixed this by writing only the ARKit shapes when the model has them.
+    const face = new MoodFace([...vrm1Names, 'mouthSmileLeft', 'mouthSmileRight', 'cheekSquintLeft', 'browInnerUp', 'mouthFrownLeft'], noEarlyBlink)
+    face.setMood('happy', 1)
+    const rest = run(face, 5)
+    expect(rest.get('mouthSmileLeft')).toBeCloseTo(0.45, 2)
+    expect(rest.get('happy') ?? 0).toBe(0)
+
+    face.react('sad')
+    const reacting = run(face, 0.5)
+    expect(reacting.get('mouthFrownLeft')).toBeCloseTo(0.5, 2)
+    expect(reacting.get('sad') ?? 0).toBe(0)
   })
 })
 

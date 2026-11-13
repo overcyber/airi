@@ -116,6 +116,20 @@ function distance(a: Vec3, b: Vec3) {
 }
 
 /**
+ * Spring settings of the hair joint `index`, root first: stiffer at the root, freer at the tip, like a real
+ * braid. Stiffness 1 with drag 0.35 held the braid stiff as a stick, so the hair never seemed to move.
+ */
+export function hairJointSettings(index: number) {
+  return {
+    hitRadius: 0.02,
+    stiffness: Math.max(0.12, 0.55 - index * 0.11),
+    gravityPower: 0.55,
+    gravityDir: [0, -1, 0] as [number, number, number],
+    dragForce: 0.2,
+  }
+}
+
+/**
  * Adds the hair chain and its spring bones in place. The GLB must have the `VRMC_vrm` extension.
  * Returns a report with 0 vertices, and changes nothing, when the avatar has no hanging hair.
  */
@@ -242,15 +256,7 @@ export function addHairSprings(glb: Glb, options: HairSpringOptions = {}): HairS
       colliderGroups: [{ name: 'body', colliders: colliders.map((_, i) => i) }],
       springs: [{
         name: 'hair',
-        joints: names.map((_, i) => ({
-          node: firstNode + i,
-          hitRadius,
-          // Stiffer at the root, freer at the tip, like a real ponytail.
-          stiffness: Math.max(0.35, 1 - i * 0.18),
-          gravityPower: 0.4,
-          gravityDir: [0, -1, 0],
-          dragForce: 0.35,
-        })),
+        joints: names.map((_, i) => ({ node: firstNode + i, ...hairJointSettings(i) })),
         colliderGroups: [0],
         center: nodeIndex.get('Hips'),
       }],

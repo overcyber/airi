@@ -55,7 +55,15 @@ Correcao no modelo: o conversor (`packages/alice-avatar-tools`, `addFloorCollide
 pnpm -F @proj-airi/alice-avatar-tools exec tsx -e "import{readFileSync,writeFileSync}from'node:fs';import{addFloorCollider,readGlb,writeGlb}from'./src/index';const g=readGlb(readFileSync('eva-ruiva.vrm'));console.log(addFloorCollider(g));writeFileSync('eva-ruiva.vrm',writeGlb(g))"
 ```
 
+## 4.2. Sorriso dobrado e cabelo parado (13/11)
+
+- **Sorriso de Coringa.** Na Eva, o humor `happy` escrevia o preset `happy` do modelo (que ja e `mouthSmile` 0,8) e, por cima, as formas ARKit `mouthSmile`. Os dois somados passavam de 1. Agora, num modelo com as formas ARKit, o AIRI escreve so as formas ARKit (humor, reacao e emoji). O preset do modelo tambem ficou mais leve (`happy` 0,5, `surprised` 0,6 a 0,7, `angry` 0,7), para qualquer outro visualizador.
+- **Cabelo sem fisica.** A tranca tinha rigidez 1 na raiz e arrasto 0,35: ficava dura como um pau. Agora rigidez 0,55 na raiz ate 0,12 na ponta, gravidade 0,55 e arrasto 0,2. Se o cabelo nao mexe no espelho, o VRM que esta em `deploy/alice/modelos` e anterior as molas (Plano 08, M2). Troque pelo VRM atualizado.
+- **Comando novo:** `pnpm -F @proj-airi/alice-avatar-tools convert retune eva-ruiva.vrm` aplica os tres ajustes num VRM ja convertido, sem converter de novo.
+
 ## 5. Teste no espelho
+
+O comando so funciona depois de atualizar o AIRI do servidor: `git pull` no branch, `docker compose -f deploy/alice/compose.yaml up -d --build`, e recarregar a pagina do espelho. A versao anterior do container nao conhece `lying`, e a ponte registra `ignored: the catalog has no action for this command`. Para conferir, abra o console da pagina `/mirror`: a linha `[neoalice-bridge] played pose_lying as clip lie_down` aparece quando o comando chega.
 
 ```bash
 S=neoalice/v1/magicmirror

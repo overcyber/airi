@@ -7,15 +7,31 @@ import { errorMessageFrom } from '@moeru/std'
 import { addFloorCollider } from './floor-collider'
 import { readGlb, writeGlb } from './glb'
 import { addHairSprings } from './hair-springs'
+import { retuneVrm } from './retune'
 import { convertRpmToVrm } from './rpm-to-vrm'
 
 /**
  * Usage: pnpm -F @proj-airi/alice-avatar-tools convert <input.glb> <output.vrm> [name] [author]
+ *        pnpm -F @proj-airi/alice-avatar-tools convert retune <input.vrm> [output.vrm]
  *
  * Works offline. The input and the output stay on this machine.
  */
 async function main() {
-  const [input, output, name = 'Eva', author = 'Alice'] = process.argv.slice(2)
+  const args = process.argv.slice(2)
+  if (args[0] === 'retune') {
+    const [, input, output = input] = args
+    if (!input) {
+      console.error('Usage: pnpm -F @proj-airi/alice-avatar-tools convert retune <input.vrm> [output.vrm]')
+      process.exitCode = 2
+      return
+    }
+    const glb = readGlb(await readFile(input))
+    const report = retuneVrm(glb)
+    await writeFile(output, writeGlb(glb))
+    console.info(JSON.stringify({ output, ...report }, null, 2))
+    return
+  }
+  const [input, output, name = 'Eva', author = 'Alice'] = args
   if (!input || !output) {
     console.error('Usage: pnpm -F @proj-airi/alice-avatar-tools convert <input.glb> <output.vrm> [name] [author]')
     process.exitCode = 2
