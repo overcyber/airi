@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import type { CaptionChannelEvent } from '@proj-airi/stage-shared'
 import type { VrmFrameCostSummary } from '@proj-airi/stage-ui-three/trace'
 
 import { useModelStore } from '@proj-airi/stage-ui-three'
 import { acquireStageThreeRuntimeTrace, getStageThreeRuntimeTraceContext, stageThreeTraceVrmUpdateFrameEvent, VrmFrameCostWindow } from '@proj-airi/stage-ui-three/trace'
 import { WidgetStage } from '@proj-airi/stage-ui/components/scenes'
-import { onMounted, onUnmounted, ref } from 'vue'
+import { useBroadcastChannel } from '@vueuse/core'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 
 /**
  * The page of the MagicMirror (Plan 06, F3): the avatar only, on a transparent background.
@@ -57,6 +59,22 @@ onUnmounted(() => {
 })
 
 /**
+ * The text of the speech that arrives, like the caption overlay of the desktop app. The old avatar
+ * module of the mirror showed what Alice was saying, so the stage posts every speech on the caption
+ * channel and the mirror page itself renders it: the web app has no caption surface of its own.
+ * The stage clears the caption with an empty text when the speech ends.
+ */
+const speechCaption = ref('')
+const { data: captionEvent } = useBroadcastChannel<CaptionChannelEvent, CaptionChannelEvent>({ name: 'airi-caption-overlay' })
+watch(captionEvent, (event) => {
+  if (!event || event.type !== 'caption-assistant')
+    return
+  speechCaption.value = event.operation === 'append' && event.text
+    ? `${speechCaption.value} ${event.text}`.trim()
+    : event.text
+})
+
+/**
  * `/mirror?stats=1` measures the VRM update on the mirror computer (Plan 06, F4): the fps and the
  * average time of each motion layer, every 5 seconds, on the page and in the console.
  */
@@ -93,6 +111,14 @@ if (new URLSearchParams(location.search).has('stats')) {
       :vrm-framing="framing"
       :vrm-framing-adjust="framingAdjust"
     />
+    <p
+      v-if="speechCaption"
+      data-testid="mirror-caption"
+      class="pointer-events-none absolute inset-x-0 bottom-0 m-0 px-2 pb-1 text-center text-white font-medium"
+      :style="{ fontSize: 'clamp(12px, 3.4vh, 30px)', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }"
+    >
+      {{ speechCaption }}
+    </p>
     <pre
       v-if="stats"
       data-testid="mirror-stats"
