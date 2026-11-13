@@ -13,6 +13,7 @@ The converter has no dependencies on the network. The input and the output stay 
 | Expressions | VRM presets from the ARKit and viseme blend shapes: `aa`, `ih`, `ou`, `ee`, `oh`, `blink`, `happy`, `angry`, `sad`, `relaxed`, `surprised`, and the look directions. Every blend shape is also a custom expression, so the 52 ARKit names stay reachable. |
 | Look-at | Eye bones, with the eye height from the skeleton. |
 | Meta | Name, authors, and the VRM 1.0 license with no redistribution, no modification, and personal non-profit use. |
+| Floor | A plane collider at the feet (`VRMC_springBone_extended_collider`) for the hair springs, so the braid rests on the floor when she lies down. three-vrm 3 reads it. Other readers see a small sphere far below the floor. |
 
 Textures, materials, and blend shapes do not change.
 

@@ -41,8 +41,19 @@ Capturas com o VRM de teste `neptuna` (VRM 0.x) no retarget real (`fbx-retarget.
 - `sentada-de-lado-1.7s.png`: o meio da transição.
 - `deitada-frente.png`: a pose final vista de frente, como no espelho.
 - `deitada-cima.png`: a pose final vista de cima. O quadril ficou a 0,14 m e a cabeça a 0,22 m.
+- `eva-sentada-de-lado-1.7s.png`, `eva-deitada-frente.png`, `eva-deitada-cabeca.png`, `eva-deitada-costas-tranca.png`: a Eva (`eva-ruiva.vrm`, VRM 1.0) com as molas do cabelo simuladas e o colisor de chão.
 
 Teste automático: `packages/stage-ui-three/src/composables/vrm/lie-down-motion.test.ts` lê a FBX, passa pelo retarget e confere o repouso no começo, o quadril no chão, o corpo de lado com a frente para o espectador, e o laço sem salto.
+
+## 4.1. Eva: cabelo e colisor de chao
+
+As primeiras capturas (`deitada-*.png`) eram quadros parados, sem a simulacao das molas: a tranca aparecia reta, fora da fisica. Com a Eva e a simulacao a 60 fps (`eva-deitada-*.png`), a tranca cai com a gravidade atras da cabeca ate o chao. O VRM nao tinha colisor de chao, entao a ponta da tranca atravessava o piso (ponta a -0,03 m).
+
+Correcao no modelo: o conversor (`packages/alice-avatar-tools`, `addFloorCollider`) acrescenta um colisor plano no no raiz, na altura dos pes, como `VRMC_springBone_extended_collider`. Com ele, a ponta fica a 0,02 m do chao (o `hitRadius` da junta). O `preparar.sh` ja usa o conversor, entao a proxima `eva-ruiva.vrm` sai com o colisor. Para um VRM ja convertido, rode o passo sozinho:
+
+```bash
+pnpm -F @proj-airi/alice-avatar-tools exec tsx -e "import{readFileSync,writeFileSync}from'node:fs';import{addFloorCollider,readGlb,writeGlb}from'./src/index';const g=readGlb(readFileSync('eva-ruiva.vrm'));console.log(addFloorCollider(g));writeFileSync('eva-ruiva.vrm',writeGlb(g))"
+```
 
 ## 5. Teste no espelho
 
