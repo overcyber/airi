@@ -121,7 +121,9 @@ export class MotionScheduler {
     const interruptible = intent.interruptible ?? entry.interruptible
 
     const conflicts = this.conflictsOf(cue)
-    const blocker = conflicts.find(other => !other.interruptible || other.cue.priority >= cue.priority)
+    // A new held pose replaces the pose that plays, like the poses of TalkingHead: the last command wins.
+    const replacesPose = (other: ActiveCue) => !!entry.held && !!this.catalog.get(other.semanticAction)?.held && other.interruptible
+    const blocker = conflicts.find(other => !replacesPose(other) && (!other.interruptible || other.cue.priority >= cue.priority))
     if (blocker) {
       const channel = cue.channels.find(name => blocker.cue.channels.includes(name))
       return { ok: false, reason: `channel ${channel} is held by ${blocker.cue.id} (priority ${blocker.cue.priority})` }
@@ -166,7 +168,9 @@ export class MotionScheduler {
       Math.round(nowMs),
       intent.offsetFromSpeechMs !== undefined && speechStart !== undefined ? speechStart + intent.offsetFromSpeechMs : 0,
     )
-    const durationMs = intent.requestedDurationMs || entry.durationMs
+    // A held pose owns its channels only while it gets into the pose. Its requested time is for the renderer:
+    // a 20 s pose that held the body channels for 20 s refused every other pose, also `straight`.
+    const durationMs = entry.held ? entry.durationMs : intent.requestedDurationMs || entry.durationMs
     const halfDuration = Math.floor(durationMs / 2)
     const candidate = {
       id: `cue-${intent.id}`.slice(0, 128),
@@ -180,6 +184,7 @@ export class MotionScheduler {
       channels: intent.requestedChannels ?? entry.channels,
       priority: intent.priority ?? entry.priority,
       expiresAtMs: startAtMs + durationMs,
+      ...(entry.held && intent.requestedDurationMs && { holdMs: intent.requestedDurationMs }),
     }
     // The cue passes the same 4096 byte and shape check as a cue from anywhere else.
     return parseMotionCue(candidate)

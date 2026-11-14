@@ -47,6 +47,12 @@ export const MotionCatalogEntrySchema = pipe(
     maxWeight: pipe(number(), finite(), minValue(0), maxValue(1)),
     /** For people and for the LLM prompt. */
     description: pipe(string(), maxLength(200)),
+    /**
+     * A pose that the renderer holds. Its cue owns the channels only for `durationMs`, the entry of the pose.
+     * The requested duration of the intent becomes the hold time of the renderer (`holdMs` of the cue).
+     * A new held pose always replaces the old one.
+     */
+    held: optional(boolean()),
   }),
   check(entry => (entry.clipId === undefined) !== (entry.generatorId === undefined), 'an entry needs exactly one of clipId and generatorId'),
   check(entry => new Set(entry.channels).size === entry.channels.length, 'channels must not repeat'),
@@ -162,12 +168,12 @@ export const defaultMotionCatalogEntries: MotionCatalogEntry[] = [
 
   ...talkingHeadGestureEntries(),
   ...talkingHeadPoses.map(([pose, description]) =>
-    clip(`pose_${pose}`, `th:pose:${pose}`, stance, poseCueMs, 45, description),
+    ({ ...clip(`pose_${pose}`, `th:pose:${pose}`, stance, poseCueMs, 45, description), held: true }),
   ),
   // The lying pose is an FBX of the VRM motion library (`lie_down`), not a TalkingHead template. NeoAlice sends
   // `cmd/avatar/pose` with `lying` or `lie_down`, like `sitting`. The renderer holds it and gets up at the end.
-  clip('pose_lying', 'lie_down', stance, poseCueMs, 45, 'Lie down on the side'),
-  clip('pose_lie_down', 'lie_down', stance, poseCueMs, 45, 'Lie down on the side'),
+  { ...clip('pose_lying', 'lie_down', stance, poseCueMs, 45, 'Lie down on the side'), held: true },
+  { ...clip('pose_lie_down', 'lie_down', stance, poseCueMs, 45, 'Lie down on the side'), held: true },
   entry({ semanticAction: 'emoji', generatorId: 'facial/emoji', channels: ['facial'], durationMs: 2000, priority: 30, description: 'Show an emoji face' }),
 ]
 

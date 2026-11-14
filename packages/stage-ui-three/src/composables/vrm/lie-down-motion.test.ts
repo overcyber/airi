@@ -25,7 +25,7 @@ function createVrm() {
   }
   node('hips').position.y = 1
   scene.updateMatrixWorld(true)
-  return { scene, meta: { metaVersion: '1' }, humanoid: { getNormalizedBoneNode: (name: string) => node(name) } } as unknown as VRM
+  return { scene, meta: { metaVersion: '1' }, humanoid: { getNormalizedBoneNode: (name: string) => node(name), getRawBoneNode: () => null } } as unknown as VRM
 }
 
 function loadBundledFbx(file: string) {

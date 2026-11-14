@@ -26,6 +26,7 @@ function fakeVrm(): VRM {
         }
         return node
       },
+      getRawBoneNode: () => null,
     },
   } as unknown as VRM
 }

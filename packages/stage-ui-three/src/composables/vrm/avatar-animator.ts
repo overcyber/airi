@@ -467,6 +467,14 @@ export class AvatarAnimator {
     this.pose = action
   }
 
+  /**
+   * `true` while a pose from an animation file holds the body, for example lying on the floor, also while she
+   * gets into it or out of it. A gesture made for a standing body breaks such a pose.
+   */
+  get holdsClipPose() {
+    return this.poseEntry !== null || this.poseExit !== null
+  }
+
   /** The action that holds the body against the idle and the talking clips: the pose, or the pose that leaves now. */
   private get bodyHeld() {
     return this.pose ?? this.poseExit

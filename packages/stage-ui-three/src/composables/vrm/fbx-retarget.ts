@@ -49,15 +49,43 @@ function bareName(name: string) {
   return name.replace(/^mixamorig\d*:?/, '')
 }
 
-/** Rest bones of a Ready Player Me source: world rotations chained from the table, parents first. */
-function rpmSourceBones(): Map<string, SourceBone> {
+/** Bones that the avatar converter of V4 turns into the T pose. Their rest on the VRM is not the source rest. */
+const convertedBones = new Set(['LeftArm', 'LeftForeArm', 'LeftHand', 'RightArm', 'RightForeArm', 'RightHand'])
+
+/**
+ * The local rest rotations of a VRM made from a Ready Player Me avatar, by Ready Player Me bone name.
+ * `undefined` for another rig: its bones have other local axes, so the table stays the better source.
+ *
+ * The table is one Ready Player Me avatar. Eva rests with straighter fingers (up to 30 degrees per joint),
+ * other thumbs and other shoulders. TalkingHead sets its templates on the bones of the avatar itself, so with the
+ * table her fingers bent backwards in the namaste.
+ */
+function rpmRestOfVrm(vrm: VRM): Map<string, Quaternion> | undefined {
+  if (vrm.humanoid.getRawBoneNode('leftIndexProximal')?.name !== 'LeftHandIndex1')
+    return undefined
+  const pose = vrm.humanoid.rawRestPose
+  const rest = new Map<string, Quaternion>()
+  for (const bone of rpmRestSkeleton) {
+    const vrmBone = vrmBoneOfRpmName(bone.name) as VRMHumanBoneName | undefined
+    const rotation = vrmBone ? pose[vrmBone]?.rotation : undefined
+    if (rotation && !convertedBones.has(bone.name))
+      rest.set(bone.name, new Quaternion(...rotation).normalize())
+  }
+  return rest
+}
+
+/**
+ * Rest bones of a Ready Player Me source: world rotations chained from the table, parents first.
+ * `restOfVrm` replaces the table rest of the bones that the target VRM has from the same avatar.
+ */
+function rpmSourceBones(restOfVrm?: Map<string, Quaternion>): Map<string, SourceBone> {
   const bones = new Map<string, SourceBone>()
   for (const bone of rpmRestSkeleton) {
     const vrmBone = vrmBoneOfRpmName(bone.name) as VRMHumanBoneName | undefined
     if (!vrmBone)
       continue
     // The table has 5 decimals. Normalize, because the inverse below assumes a unit quaternion.
-    const local = new Quaternion(...bone.rotation).normalize()
+    const local = restOfVrm?.get(bone.name)?.clone() ?? new Quaternion(...bone.rotation).normalize()
     const parentWorld = bone.parent ? bones.get(bone.parent)?.restWorld ?? new Quaternion() : new Quaternion()
     bones.set(bone.name, { trackName: bone.name, vrmBone, parent: bone.parent, restWorld: parentWorld.clone().multiply(local), parentRestWorld: parentWorld.clone() })
   }
@@ -112,7 +140,7 @@ export function retargetFbxClip(vrm: VRM, clip: AnimationClip, asset?: Object3D)
   const mixamo = clip.tracks.some(track => track.name.startsWith('mixamorig'))
   if (mixamo && !asset)
     throw new Error('A Mixamo FBX clip needs its FBX object for the rest pose')
-  const bones = mixamo ? mixamoSourceBones(asset!) : rpmSourceBones()
+  const bones = mixamo ? mixamoSourceBones(asset!) : rpmSourceBones(rpmRestOfVrm(vrm))
   const corrections = tPoseCorrections(bones)
   const flip = vrm.meta?.metaVersion === '0'
 

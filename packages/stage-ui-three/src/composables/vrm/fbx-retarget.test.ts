@@ -22,7 +22,7 @@ function createVrm(metaVersion: '0' | '1' = '1') {
   }
   node('hips').position.y = 1
   scene.updateMatrixWorld(true)
-  const vrm = { scene, meta: { metaVersion }, humanoid: { getNormalizedBoneNode: (name: string) => node(name) } } as unknown as VRM
+  const vrm = { scene, meta: { metaVersion }, humanoid: { getNormalizedBoneNode: (name: string) => node(name), getRawBoneNode: () => null } } as unknown as VRM
   return vrm
 }
 
@@ -99,5 +99,25 @@ describe('retargetFbxClip', () => {
   it('returns null when no track maps to a VRM bone, and needs the FBX object for Mixamo', () => {
     expect(retargetFbxClip(createVrm(), new AnimationClip('x', 1, [new QuaternionKeyframeTrack('Tail.quaternion', [0], [0, 0, 0, 1])]))).toBeNull()
     expect(() => retargetFbxClip(createVrm(), new AnimationClip('x', 1, [new QuaternionKeyframeTrack('mixamorigHips.quaternion', [0], [0, 0, 0, 1])]))).toThrow('FBX object')
+  })
+
+  // ROOT CAUSE:
+  //
+  // The rest table is one Ready Player Me avatar, with curled fingers. Eva rests with straight fingers. TalkingHead
+  // sets a template on the bones of the avatar itself, so a flat finger of the namaste bent backwards on Eva.
+  it('uses the rest of a Ready Player Me VRM for its own bones, so a finger at its rest stays at rest', () => {
+    const flatFinger = new AnimationClip('namaste', 1, [new QuaternionKeyframeTrack('LeftHandIndex2.quaternion', [0], [0, 0, 0, 1])])
+    const eva = createVrm()
+    Object.assign(eva.humanoid, {
+      getRawBoneNode: (name: string) => name === 'leftIndexProximal' ? { name: 'LeftHandIndex1' } : null,
+      rawRestPose: { leftIndexIntermediate: { rotation: [0, 0, 0, 1] } },
+    })
+
+    const onEva = valueOf(retargetFbxClip(eva, flatFinger)!, 'Normalized_leftIndexIntermediate.quaternion')
+    expect(onEva.angleTo(new Quaternion())).toBeLessThan(1e-4)
+
+    // Another rig keeps the table, where the rest finger is curled, so the flat finger is a turn back.
+    const onOtherRig = valueOf(retargetFbxClip(createVrm(), flatFinger)!, 'Normalized_leftIndexIntermediate.quaternion')
+    expect(onOtherRig.angleTo(new Quaternion())).toBeGreaterThan(0.1)
   })
 })

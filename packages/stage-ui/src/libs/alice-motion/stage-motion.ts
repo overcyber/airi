@@ -149,7 +149,8 @@ export class StageMotionRuntime {
       const clipId = event.cue.clipId!
       this.stats.started++
       const rendererClip = vrmClipAliases[clipId] ?? clipId
-      const durationMs = event.cue.expiresAtMs !== undefined ? event.cue.expiresAtMs - event.cue.startAtMs : undefined
+      // A held pose plays for its requested hold time. Its cue only covers the entry of the pose.
+      const durationMs = event.cue.holdMs ?? (event.cue.expiresAtMs !== undefined ? event.cue.expiresAtMs - event.cue.startAtMs : undefined)
       if (await this.hooks.playClip(rendererClip, { durationMs })) {
         this.hooks.log?.(`played ${event.semanticAction} as clip ${rendererClip}`)
       }

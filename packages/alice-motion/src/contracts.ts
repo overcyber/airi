@@ -97,6 +97,8 @@ export const MotionCueSchema = pipe(
     channels: pipe(Channels, minLength(1)),
     priority: pipe(number(), integer(), minValue(0), maxValue(100)),
     expiresAtMs: optional(Milliseconds),
+    /** How long the renderer holds a pose (a catalog entry with `held`). The cue itself ends after the pose entry. */
+    holdMs: optional(pipe(Milliseconds, maxValue(60_000))),
   }),
   check(cue => (cue.clipId === undefined) !== (cue.generatorId === undefined), 'a cue needs exactly one of clipId and generatorId'),
   check(cue => cue.expiresAtMs === undefined || cue.expiresAtMs > cue.startAtMs, 'expiresAtMs must be after startAtMs'),

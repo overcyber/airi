@@ -255,3 +255,27 @@ describe('neoAliceTranslator night mode and person position', () => {
       .toHaveProperty('target')
   })
 })
+
+describe('neoAliceTranslator intent IDs', () => {
+  // ROOT CAUSE:
+  //
+  // A new MQTT connection makes a new translator, whose numbers started at 1 again. The stage scheduler lives
+  // longer and refuses an ID that it saw in the last 10 min, so the first commands after a reconnection were lost.
+  it('gives intents of two connections different IDs', () => {
+    const first = translator().translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'sitting' }), 0)
+    const second = translator().translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'sitting' }), 0)
+    expect(first.type === 'intent' && second.type === 'intent' && first.intent.id !== second.intent.id).toBe(true)
+  })
+})
+
+describe('neoAliceTranslator gestures sent as poses', () => {
+  it('plays `{"pose":"namaste"}` as the namaste gesture, held 10 s or for the asked time', () => {
+    const bridge = translator()
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'namaste' }), 0))
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'gesture_namaste', requestedDurationMs: 10_000 } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'namaste', duration: 4 }), 5000))
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'gesture_namaste', requestedDurationMs: 4000 } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'flying' }), 0))
+      .toMatchObject({ type: 'ignored' })
+  })
+})

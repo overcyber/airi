@@ -234,6 +234,12 @@ export class NeoAliceTranslator {
   /** Speech that played, by session or text, so a broadcast to two read sites plays once. */
   private readonly recentSpeech = new Map<string, { atMs: number, site: string }>()
   private sequence = 0
+  /**
+   * Marks the intents of this translator. A new MQTT connection makes a new translator, and the stage scheduler
+   * refuses an intent ID that it saw in the last 10 min. Without the mark, the numbers start again at 1 and the
+   * first commands after a reconnection were dropped as "already received".
+   */
+  private readonly connectionMark = Math.floor(Math.random() * 36 ** 6).toString(36)
 
   constructor(options: NeoAliceTranslatorOptions) {
     this.options = options
@@ -378,6 +384,13 @@ export class NeoAliceTranslator {
         const name = normalizeName(command.pose ?? command.name)
         semanticAction = name && this.known(`pose_${name}`)
         extra = { requestedChannels: ['posture'] }
+        // NeoAlice also sends a gesture as a pose, for example `namaste`. It plays as that gesture, held for the
+        // time of the command, or 10 s like a pose without one.
+        const gesture = !semanticAction && name ? this.known(`gesture_${name}`) : undefined
+        if (gesture) {
+          semanticAction = gesture
+          extra = { requestedDurationMs: Math.min(60_000, durationMs && durationMs > 0 ? durationMs : 10_000) }
+        }
         break
       }
       default:
@@ -392,7 +405,7 @@ export class NeoAliceTranslator {
     this.sequence++
     const candidate: MotionIntent = {
       schemaVersion: 1,
-      id: `neoalice-${site}-${this.sequence}`.slice(0, 128),
+      id: `neoalice-${this.connectionMark}-${this.sequence}-${site}`.slice(0, 128),
       timestampMs: 0,
       source,
       semanticAction,

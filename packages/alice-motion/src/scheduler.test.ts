@@ -114,6 +114,25 @@ describe('motionScheduler', () => {
     expect(scheduler.activeCues.map(cue => cue.clipId ?? cue.generatorId)).toEqual(['procedural/glance', 'greeting'])
   })
 
+  // ROOT CAUSE:
+  //
+  // A pose with `duration` used the duration as the cue time, so `{"pose":"lying","duration":20}` held the body
+  // channels for 20 s at priority 45. Every other pose of the same priority was refused, also `straight`.
+  it('holds the body channels of a pose only for its entry, gives the hold time to the renderer, and lets a new pose replace it', () => {
+    const scheduler = new MotionScheduler()
+    const lying = scheduler.submit(intent('pose_lying', { requestedDurationMs: 20_000 }), 0)
+    expect(lying).toMatchObject({ ok: true, cue: { clipId: 'lie_down', expiresAtMs: 1500, holdMs: 20_000 } })
+
+    const straight = scheduler.submit(intent('pose_straight'), 500)
+    expect(straight).toMatchObject({ ok: true })
+    if (lying.ok && straight.ok)
+      expect(straight.preempted).toEqual([lying.cue.id])
+
+    // Without a duration, the renderer uses its own default hold time.
+    const sitting = scheduler.submit(intent('pose_sitting'), 5000)
+    expect(sitting.ok && sitting.cue.holdMs).toBe(undefined)
+  })
+
   it('lets additive layers sit on a normal cue, but not on one that cannot be interrupted', () => {
     const scheduler = new MotionScheduler()
     scheduler.submit(intent('peace_sign'), 0)

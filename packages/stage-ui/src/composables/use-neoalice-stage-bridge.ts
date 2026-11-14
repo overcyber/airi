@@ -298,7 +298,8 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
       {
         if (nightMode.value) {
           // In the night mode she lies with the eyes closed. A pose wakes her up and plays, other motions wait.
-          if (!event.intent.semanticAction.startsWith('pose_')) {
+          // She already lies. Ending the night mode first made her get up and lie down again.
+          if (!event.intent.semanticAction.startsWith('pose_') || ['pose_lying', 'pose_lie_down'].includes(event.intent.semanticAction)) {
             console.info(`[neoalice-bridge] night mode: ignored ${event.intent.semanticAction}`)
             break
           }

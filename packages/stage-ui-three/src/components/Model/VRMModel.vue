@@ -1421,6 +1421,13 @@ defineExpose({
       return false
     // NeoAlice sends the gestures and poses of the TalkingHead avatar. The VRM plays the same templates.
     const template = parseTalkingHeadClipId(id)
+    const emoteOfId = template ? undefined : findVrmEmote(props.motionLibrary.emotes, id)
+    // A standing gesture on a body that lies on the floor fades the floor pose out, and she popped up. A new pose
+    // still plays: it replaces the floor pose.
+    if (animator.holdsClipPose && template?.kind !== 'pose' && !emoteOfId?.pose) {
+      console.info(`[vrm] motion "${id}" skipped: she holds a floor pose`)
+      return true
+    }
     if (template) {
       if (template.kind === 'pose') {
         // In TalkingHead, the mood idle replaces a pose after some seconds, so a pose does not stay. Here a pose
@@ -1445,7 +1452,7 @@ defineExpose({
       animator.playEmote(clip, undefined, { nodes, durationSeconds, fadeSeconds: 1 })
       return true
     }
-    const emote = findVrmEmote(props.motionLibrary.emotes, id)
+    const emote = emoteOfId
     if (!emote)
       return false
     try {
