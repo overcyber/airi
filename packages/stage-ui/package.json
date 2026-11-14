@@ -33,6 +33,7 @@
     "./features/motions/live2d": "./src/features/motions/live2d/index.ts",
     "./libs/inference/adapters/*": "./src/libs/inference/adapters/*.ts",
     "./libs/inference": "./src/libs/inference/index.ts",
+    "./libs/alice-motion/*": "./src/libs/alice-motion/*.ts",
     "./libs/product-signals": "./src/libs/product-signals/index.ts",
     "./libs/cards": "./src/libs/cards/index.ts",
     "./libs/product-signals/*": "./src/libs/product-signals/*.ts",

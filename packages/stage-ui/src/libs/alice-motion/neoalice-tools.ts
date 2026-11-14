@@ -7,9 +7,10 @@ import { errorMessageFrom } from '@moeru/std'
  * The tools that NeoAlice can run on the avatar with `cmd/avatar/tool` (Plan 07, W4).
  *
  * The broker has no access control, so any device of the network can publish. `computer_use` (keyboard and
- * mouse) is never on this list: it needs a confirmation on the screen.
+ * mouse) is never on this list: it needs a confirmation on the screen. `avatar_motion` only moves the avatar,
+ * within the limits of its bones.
  */
-export const neoAliceToolAllowlist: readonly string[] = ['get_weather', 'stage_widgets', 'image_journal']
+export const neoAliceToolAllowlist: readonly string[] = ['get_weather', 'stage_widgets', 'image_journal', 'avatar_motion', 'avatar_rig']
 
 type WidgetEvent = Extract<NeoAliceBridgeEvent, { type: 'widget' }>
 

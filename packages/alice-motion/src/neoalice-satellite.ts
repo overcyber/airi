@@ -106,6 +106,15 @@ export function neoAliceToolResultEvent(input: { site: string, requestId: string
 }
 
 /**
+ * A motion that the LLM of the avatar created with `save`, as `evt/avatar/motion_save`, QoS 1. The companion service
+ * keeps it in its motion library and publishes the library again, so every mirror can play it by name.
+ */
+export function neoAliceMotionSaveEvent(input: { site: string, motion: unknown, nowMs: number }): NeoAliceSatelliteMessage {
+  const payload = { v: 1, type: 'evt.avatar.motion_save', ts: new Date(input.nowMs).toISOString(), site_id: input.site, motion: input.motion }
+  return { topic: `${topicRoot}/${input.site}/evt/avatar/motion_save`, payload: JSON.stringify(payload), qos: 1 }
+}
+
+/**
  * The state of the avatar as `evt/state`, QoS 0. NeoAlice counts a site as active while it sees
  * these messages (120 s by default), so a heartbeat every 30 s keeps the avatar in the broadcasts.
  */

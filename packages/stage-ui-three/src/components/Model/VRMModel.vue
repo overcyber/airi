@@ -7,6 +7,7 @@
 */
 
 import type { VRM } from '@pixiv/three-vrm'
+import type { CustomMotion } from '@proj-airi/alice-motion'
 import type {
   AnimationClip,
   AnimationMixer,
@@ -81,6 +82,7 @@ import {
 import { AvatarAnimator } from '../../composables/vrm/avatar-animator'
 import { BodyInertia } from '../../composables/vrm/body-inertia'
 import { loadVrm } from '../../composables/vrm/core'
+import { createCustomMotionClip, customMotionFace } from '../../composables/vrm/custom-motion-clip'
 import { findVrmEmote } from '../../composables/vrm/emote-cue'
 import { useVRMEmote } from '../../composables/vrm/expression'
 import { loadFbxClip } from '../../composables/vrm/fbx-retarget'
@@ -1549,6 +1551,38 @@ defineExpose({
       console.error(`[vrm] animation "${url}" failed to load:`, error)
       return false
     }
+  },
+  /**
+   * Plays a pose or a movement that NeoAlice or an LLM created (`CustomMotion` of alice-motion, already checked).
+   * A pose holds for its duration, then the idle comes back. A gesture plays on its own bones only. The face of
+   * the motion shows for about 3 s. Resolves `false` when nothing of the motion fits the model.
+   */
+  playCustomMotion(motion: CustomMotion): boolean {
+    const targetVrm = vrm.value
+    const animator = vrmAnimator.value
+    if (!targetVrm || !animator)
+      return false
+    if (animator.holdsClipPose && motion.kind === 'gesture') {
+      console.info(`[vrm] motion "${motion.name ?? 'custom'}" skipped: she holds a floor pose`)
+      return true
+    }
+    const face = customMotionFace(motion)
+    const faceShown = Object.keys(face).length > 0 && (vrmMoodFace.value?.showFace(face) ?? false)
+    const clip = createCustomMotionClip(targetVrm, motion)
+    if (!clip)
+      return faceShown
+    if (motion.kind === 'pose') {
+      animator.holdPose(clip, 0.8, motion.duration)
+    }
+    else {
+      const nodes = new Set(clip.tracks.map(track => track.name.slice(0, track.name.lastIndexOf('.'))))
+      animator.playEmote(clip, undefined, { nodes, durationSeconds: motion.duration, fadeSeconds: 0.6 })
+    }
+    return true
+  },
+  /** Ends the held pose now, like `cmd/avatar` with `stop`. A gesture and an animation end on their own. */
+  stopPose() {
+    vrmAnimator.value?.holdPose(null)
   },
   // NOTICE: This runtime frame hook is intentionally separate from internal VRM model hooks.
   // External callers use it for live pose/tracking input; internal hooks remain reserved for

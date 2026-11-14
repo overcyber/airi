@@ -211,3 +211,31 @@ describe('mqttGateway', () => {
     expect(topics.state).toBe('neoalice/v1/companion/evt/companion/state')
   })
 })
+
+describe('mqttGateway motion library', () => {
+  it('saves a motion with save, a definition of the old mirror, and a motion of the avatar LLM, and deletes by name', async () => {
+    const { client } = createClient()
+    const gateway = new MqttGateway({ client, publishSite: 'companion', inputSites: [], deriveInteractions: false, deriveWindowMs: 120_000, now: () => new Date(clock) })
+    const onMotionCommand = vi.fn<NonNullable<GatewayHandlers['onMotionCommand']>>(async () => {})
+    gateway.start({ onEvent: vi.fn(async () => {}), onSnapshotRequest: vi.fn(async () => {}), onMotionCommand })
+    const deliver = (topic: string, body: unknown) => {
+      const payload = Buffer.from(JSON.stringify(body))
+      client.emit('message', topic, payload, { cmd: 'publish', topic, payload, qos: 0, dup: false, retain: false })
+    }
+
+    deliver('neoalice/v1/mirror/cmd/avatar/motion', { name: 'aceno', save: true, bones: {} })
+    deliver('neoalice/v1/mirror/cmd/avatar/motion', { name: 'once', bones: {} })
+    deliver('neoalice/v1/mirror/cmd/avatar', { action: 'defineGesture', name: 'Saudacao', template: { 'LeftArm.rotation': { x: 0, y: 0, z: 1 } } })
+    deliver('neoalice/v1/mirror/cmd/avatar', { action: 'gesture', name: 'wave' })
+    deliver('neoalice/v1/airi-avatar/evt/avatar/motion_save', { motion: { name: 'pulo' } })
+    deliver('neoalice/v1/mirror/cmd/avatar/motion_delete', { name: 'aceno' })
+
+    await vi.waitFor(() => expect(onMotionCommand).toHaveBeenCalledTimes(4))
+    expect(onMotionCommand.mock.calls.map(call => call[0])).toEqual([
+      { kind: 'save', motion: { name: 'aceno', save: true, bones: {} }, site: 'mirror' },
+      { kind: 'save', motion: { name: 'saudacao', template: { 'LeftArm.rotation': { x: 0, y: 0, z: 1 } }, kind: 'gesture' }, site: 'mirror' },
+      { kind: 'save', motion: { name: 'pulo' }, site: 'airi-avatar' },
+      { kind: 'delete', name: 'aceno', site: 'mirror' },
+    ])
+  })
+})

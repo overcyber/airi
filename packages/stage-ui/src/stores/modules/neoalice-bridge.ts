@@ -25,7 +25,7 @@ let mqttConnectLoading: Promise<typeof import('mqtt')['connect']> | undefined
  * Source: `node_modules/mqtt/package.json` (`exports['.'].browser.import`) and the end of `dist/mqtt.esm.js`.
  * Removal condition: MQTT.js adds named exports to its browser ESM build.
  */
-function loadMqttConnect(): Promise<typeof import('mqtt')['connect']> {
+export function loadMqttConnect(): Promise<typeof import('mqtt')['connect']> {
   // One load for the whole app. A settings change during the first load reuses it.
   mqttConnectLoading ??= import('mqtt').then((module) => {
     const loaded = module as typeof import('mqtt') & { default?: typeof import('mqtt') }
@@ -222,14 +222,15 @@ export const useNeoAliceBridgeStore = defineStore('neoalice-bridge', () => {
 
   /**
    * Publishes a satellite message of the avatar. Resolves `false` when the bridge is not connected.
-   * Only `evt/audio`, `evt/state`, `evt/stt/final`, and `evt/wake` of the configured site are permitted.
+   * Only `evt/audio`, `evt/state`, `evt/stt/final`, `evt/wake`, `evt/avatar/tool_result`, and `evt/avatar/motion_save` of
+   * the configured site are permitted.
    */
   async function publish(message: NeoAliceSatelliteMessage) {
     const current = client
     const ownSite = site.value.trim()
     if (!current || status.value !== 'connected' || !isPublishableSite(ownSite))
       return false
-    const permitted = ['evt/audio', 'evt/state', 'evt/stt/final', 'evt/wake', 'evt/avatar/tool_result'].map(action => `neoalice/v1/${ownSite}/${action}`)
+    const permitted = ['evt/audio', 'evt/state', 'evt/stt/final', 'evt/wake', 'evt/avatar/tool_result', 'evt/avatar/motion_save'].map(action => `neoalice/v1/${ownSite}/${action}`)
     if (!permitted.includes(message.topic))
       throw new Error(`The bridge does not publish on ${message.topic}`)
     await current.publishAsync(message.topic, message.payload, { qos: message.qos })

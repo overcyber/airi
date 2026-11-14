@@ -1,15 +1,18 @@
 import process from 'node:process'
 
 import { Buffer } from 'node:buffer'
+import { join } from 'node:path'
 
 import { initLogger, LoggerFormat, LoggerLevel, useLogger } from '@guiiai/logg'
 import { errorMessageFrom, merge } from '@moeru/std'
+import { avatarRigData } from '@proj-airi/alice-motion'
 import { createContainer, createLoggLogger, lifecycle, provide, resolve, start, stop } from 'injeca'
 import { connect } from 'mqtt'
 
 import { CompanionService } from '../companion-service'
 import { defaultPolicy } from '../companion-state'
 import { parseEnv } from '../config'
+import { MotionLibrary } from '../motion-library'
 import { companionOrigin, companionTopics, MqttGateway } from '../mqtt-gateway'
 import { StateStore } from '../state-store'
 
@@ -106,9 +109,32 @@ async function main(): Promise<void> {
   await start(container)
   const deps = await resolve(container, { service, gateway, env })
   await deps.service.start()
+  // The saved poses and movements of the avatar, kept in a JSON file that a person can open.
+  const motions = new MotionLibrary(deps.env.ALICE_COMPANION_MOTIONS_FILE || join(deps.env.ALICE_COMPANION_DATA_DIR, 'movimentos.json'))
+  const loadedMotions = await motions.load()
+  log.log(`Motion library: ${loadedMotions.loaded} motions${loadedMotions.skipped ? `, ${loadedMotions.skipped} broken ones skipped` : ''}`)
   deps.gateway.start({
     onEvent: event => deps.service.handle(event),
-    onSnapshotRequest: () => deps.service.publishSnapshot(),
+    onSnapshotRequest: async () => {
+      await deps.service.publishSnapshot()
+      await deps.gateway.publishMotions(motions.list())
+      await deps.gateway.publishRig(avatarRigData())
+    },
+    onMotionCommand: async (command) => {
+      if (command.kind === 'delete') {
+        if (await motions.delete(command.name))
+          log.log(`Motion "${command.name}" deleted (site ${command.site})`)
+      }
+      else {
+        const saved = await motions.save(command.motion)
+        if (!saved.ok) {
+          log.warn(`Motion from site ${command.site} not saved: ${saved.reason}`)
+          return
+        }
+        log.log(`Motion "${saved.motion.name}" saved (site ${command.site})`)
+      }
+      await deps.gateway.publishMotions(motions.list())
+    },
   })
   log.log(`Companion state service runs for persona "${deps.env.ALICE_COMPANION_PERSONA_ID}" on ${deps.env.ALICE_COMPANION_MQTT_URL}`)
 

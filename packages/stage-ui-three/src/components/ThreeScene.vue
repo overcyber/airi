@@ -8,6 +8,7 @@
 */
 
 import type { VRM } from '@pixiv/three-vrm'
+import type { CustomMotion } from '@proj-airi/alice-motion'
 import type { PresenceBubblePalette, PresenceBubbleState } from '@proj-airi/stage-shared'
 import type { TresContext } from '@tresjs/core'
 import type { DirectionalLight, SphericalHarmonics3, Texture, WebGLRenderer, WebGLRenderTarget } from 'three'
@@ -1098,6 +1099,8 @@ defineExpose({
   motions: () => modelRef.value?.motions() ?? [],
   playMotion: async (id: string, options?: { durationMs?: number }) => await modelRef.value?.playMotion(id, options) ?? false,
   playMotionUrl: async (url: string, options?: { durationMs?: number }) => await modelRef.value?.playMotionUrl(url, options) ?? false,
+  playCustomMotion: (motion: CustomMotion) => modelRef.value?.playCustomMotion(motion) ?? false,
+  stopPose: () => modelRef.value?.stopPose(),
   // NOTICE: External runtime hooks are intentionally separate from internal VRM model hooks.
   // This public frame hook is reserved for live pose/tracking input and is forwarded to VRMModel
   // without exposing the internal model/material lifecycle hook pipeline.

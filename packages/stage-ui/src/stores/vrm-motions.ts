@@ -1,3 +1,4 @@
+import type { CustomMotion } from '@proj-airi/alice-motion'
 import type { VrmEmoteAnimation, VrmMotionLibrary } from '@proj-airi/stage-ui-three/assets/vrm'
 
 import type { VrmMotionRecord } from '../database/repos/vrm-motions.repo'
@@ -185,6 +186,22 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
     }
   }
 
+  /**
+   * Motions that NeoAlice or an LLM created and named, by name: the saved library of the companion service
+   * (`evt/avatar/motions`) plus the ones defined since. The motions page lists them.
+   */
+  const customMotions = shallowRef<CustomMotion[]>([])
+
+  function setCustomMotions(motions: readonly CustomMotion[]) {
+    customMotions.value = [...motions]
+  }
+
+  function rememberCustomMotion(motion: CustomMotion) {
+    if (!motion.name)
+      return
+    customMotions.value = [...customMotions.value.filter(item => item.name !== motion.name), motion]
+  }
+
   /** Asks the VRM stage to play an emote, for example the preview button of the settings. */
   function requestPlay(id: string) {
     void playRequest.trigger(id)
@@ -202,5 +219,8 @@ export const useVrmMotionsStore = defineStore('vrm-motions', () => {
     removeMotion,
     requestPlay,
     onPlayRequest: playRequest.on,
+    customMotions,
+    setCustomMotions,
+    rememberCustomMotion,
   }
 })

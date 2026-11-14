@@ -36,12 +36,21 @@ export function companionTopics(publishSite: string) {
     affect: `${topicRoot}/${publishSite}/evt/companion/affect`,
     /** Retained. `{ "online": boolean }`. The broker publishes `false` as the last will. */
     status: `${topicRoot}/${publishSite}/evt/companion/status`,
+    /** Retained. `{ "motions": [...] }`, the saved poses and movements that NeoAlice or an LLM created. */
+    motions: `${topicRoot}/${publishSite}/evt/avatar/motions`,
+    /** Retained. The bones and face shapes of the avatar, for the prompt of the LLM of NeoAlice. */
+    rig: `${topicRoot}/${publishSite}/evt/avatar/rig`,
   }
 }
+
+/** A change of the saved motions: from `cmd/avatar/motion` or `evt/avatar/motion_save` with `save`, `defineGesture` or `definePose` of `cmd/avatar`, and `cmd/avatar/motion_delete`. */
+export type MotionLibraryCommand = { kind: 'save', motion: unknown, site: string } | { kind: 'delete', name: string, site: string }
 
 export interface GatewayHandlers {
   onEvent: (event: CompanionEvent) => Promise<unknown>
   onSnapshotRequest: () => Promise<void>
+  /** Saves or deletes a motion. Without it, the motion topics are not read. */
+  onMotionCommand?: (command: MotionLibraryCommand) => Promise<void>
 }
 
 export interface MqttGatewayOptions {
@@ -101,6 +110,8 @@ export class MqttGateway implements CompanionPublisher {
     ]
     if (this.options.deriveInteractions)
       subscriptions.push(`${topicRoot}/+/evt/stt/final`, `${topicRoot}/+/cmd/tts/say`, `${topicRoot}/+/cmd/tts/audio`)
+    if (handlers.onMotionCommand)
+      subscriptions.push(`${topicRoot}/+/cmd/avatar/motion`, `${topicRoot}/+/cmd/avatar/motion_delete`, `${topicRoot}/+/cmd/avatar`, `${topicRoot}/+/evt/avatar/motion_save`)
 
     const announce = () => {
       void this.publish(this.topics.status, { online: true }, true)
@@ -132,8 +143,43 @@ export class MqttGateway implements CompanionPublisher {
     await this.publish(this.topics.state, snapshot, true)
   }
 
+  /** Publishes the saved motions, retained, so a mirror that connects later gets them. */
+  async publishMotions(motions: unknown[]): Promise<void> {
+    await this.publish(this.topics.motions, { v: 1, motions }, true)
+  }
+
+  /** Publishes the bones and face shapes of the avatar, retained. */
+  async publishRig(rig: unknown): Promise<void> {
+    await this.publish(this.topics.rig, rig, true)
+  }
+
   async publishAffect(affect: AffectUpdated): Promise<void> {
     await this.publish(this.topics.affect, affect, false)
+  }
+
+  /** Turns a motion message into a save or a delete. A motion without `save`, or a plain command, is not saved. */
+  private async routeMotion(site: string, action: string, json: unknown, handlers: GatewayHandlers): Promise<void> {
+    if (!handlers.onMotionCommand || typeof json !== 'object' || json === null)
+      return
+    const message = json as Record<string, unknown>
+    if (action === 'cmd/avatar/motion_delete') {
+      if (typeof message.name === 'string')
+        await handlers.onMotionCommand({ kind: 'delete', name: message.name, site })
+      return
+    }
+    if (action === 'evt/avatar/motion_save') {
+      await handlers.onMotionCommand({ kind: 'save', motion: message.motion, site })
+      return
+    }
+    if (action === 'cmd/avatar') {
+      if (message.action !== 'defineGesture' && message.action !== 'definePose')
+        return
+      const name = typeof message.name === 'string' ? message.name.trim().toLowerCase().replace(/[\s-]+/g, '_') : undefined
+      await handlers.onMotionCommand({ kind: 'save', motion: { name, template: message.template, kind: message.action === 'definePose' ? 'pose' : 'gesture' }, site })
+      return
+    }
+    if (message.save === true)
+      await handlers.onMotionCommand({ kind: 'save', motion: message, site })
   }
 
   private async publish(topic: string, body: unknown, retain: boolean): Promise<void> {
@@ -175,6 +221,11 @@ export class MqttGateway implements CompanionPublisher {
       case 'evt/mood':
       case 'cmd/evt/mood':
         return this.routeMood(site, json, at, handlers)
+      case 'cmd/avatar/motion':
+      case 'evt/avatar/motion_save':
+      case 'cmd/avatar':
+      case 'cmd/avatar/motion_delete':
+        return this.routeMotion(site, action, json, handlers)
       case 'evt/companion/interaction': {
         const message = this.validate(InteractionMessageSchema, json, topic)
         if (!message)

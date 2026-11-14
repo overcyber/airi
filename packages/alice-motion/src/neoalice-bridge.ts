@@ -2,11 +2,13 @@ import type { InferOutput } from 'valibot'
 
 import type { MotionCatalog } from './catalog'
 import type { MotionIntent, MotionSource } from './contracts'
+import type { CustomMotion } from './custom-motion'
 import type { ResolvedMood } from './mood-vocabulary'
 
 import { array, boolean, fallback, finite, looseObject, maxLength, maxValue, minValue, nullable, number, optional, picklist, pipe, record, safeParse, string, unknown } from 'valibot'
 
 import { maxMessageBytes, motionSources, parseMotionIntent } from './contracts'
+import { parseCustomMotion } from './custom-motion'
 import { resolveMood } from './mood-vocabulary'
 
 /**
@@ -57,6 +59,16 @@ export type NeoAliceBridgeEvent
     | { type: 'night-mode', site: string, active: boolean }
     /** The face recognition greets someone by name, for example "Ola Ana" (F5). */
     | { type: 'greeting', site: string, text: string }
+    /**
+     * A pose or a movement that NeoAlice or an LLM created (`cmd/avatar/motion`, or `defineGesture` and
+     * `definePose` of `cmd/avatar`), or a saved one played by name. `play` is `false` for a definition only.
+     * `save` asks the companion service to keep it. `warnings` say what the check clamped or dropped.
+     */
+    | { type: 'custom-motion', site: string, motion: CustomMotion, play: boolean, save: boolean, warnings: string[] }
+    /** The saved motions of the companion service (`evt/avatar/motions`, retained). */
+    | { type: 'motion-library', site: string, motions: CustomMotion[] }
+    /** `cmd/avatar` with `stop`: ends the pose, the gesture, the animation, or all of them. */
+    | { type: 'stop-motion', site: string, what: 'pose' | 'gesture' | 'animation' | 'all' }
     | { type: 'ignored', topic: string, reason: string }
 
 /**
@@ -99,7 +111,7 @@ export interface NeoAliceTranslatorOptions {
 }
 
 /** The actions of the mood site: mood and avatar commands, no speech. */
-const moodActions = ['evt/mood', 'cmd/evt/mood', 'evt/alice/night_mode', 'cmd/avatar/gesture', 'cmd/avatar/pose', 'cmd/avatar/animation', 'cmd/avatar/emoji', 'cmd/avatar/widget', 'cmd/avatar/tool']
+const moodActions = ['evt/mood', 'cmd/evt/mood', 'evt/alice/night_mode', 'cmd/avatar', 'cmd/avatar/motion', 'cmd/avatar/gesture', 'cmd/avatar/pose', 'cmd/avatar/animation', 'cmd/avatar/emoji', 'cmd/avatar/widget', 'cmd/avatar/tool']
 /** The speech actions, read from the mood site with `moodSiteSpeech`. */
 const speechActions = ['cmd/tts/say', 'cmd/tts/audio', 'cmd/tts/stop']
 /** The same speech on two sites (a broadcast) within this window plays once. */
@@ -128,7 +140,10 @@ export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 's
     `${topicRoot}/${site}/cmd/avatar/emoji`,
     `${topicRoot}/${site}/cmd/avatar/widget`,
     `${topicRoot}/${site}/cmd/avatar/tool`,
+    `${topicRoot}/${site}/cmd/avatar`,
+    `${topicRoot}/${site}/cmd/avatar/motion`,
     `${topicRoot}/${companionSite}/evt/companion/state`,
+    `${topicRoot}/${companionSite}/evt/avatar/motions`,
     `${topicRoot}/${companionSite}/evt/companion/affect`,
     ...(options.vision
       ? [
@@ -239,12 +254,19 @@ export class NeoAliceTranslator {
    * refuses an intent ID that it saw in the last 10 min. Without the mark, the numbers start again at 1 and the
    * first commands after a reconnection were dropped as "already received".
    */
+  /** Saved motions by name, from the companion service and from `defineGesture` and `definePose`. */
+  private readonly customMotions = new Map<string, CustomMotion>()
   private readonly connectionMark = Math.floor(Math.random() * 36 ** 6).toString(36)
 
   constructor(options: NeoAliceTranslatorOptions) {
     this.options = options
     this.catalog = options.catalog
     this.companionSite = options.companionSite ?? 'companion'
+  }
+
+  /** The saved motion of a name, for `{"pose": name}` and `{"gesture": name}`. */
+  customMotion(name: string) {
+    return this.customMotions.get(name)
   }
 
   /** Replaces the catalog, for example after the user imports an FBX animation with the name of a NeoAlice file. */
@@ -316,6 +338,10 @@ export class NeoAliceTranslator {
       }
       case 'cmd/avatar/animation':
         return translateAnimation(topic, site, data)
+      case 'cmd/avatar/motion':
+        return this.translateMotion(topic, site, data, true)
+      case 'cmd/avatar':
+        return this.translateCommand(topic, site, data, payload)
       case 'cmd/avatar/widget':
         return translateWidget(topic, site, data)
       case 'cmd/avatar/tool':
@@ -399,8 +425,16 @@ export class NeoAliceTranslator {
         extra = { requestedChannels: ['facial'] }
         break
     }
-    if (!semanticAction)
+    if (!semanticAction) {
+      // A motion that NeoAlice created and saved plays by its name, as a pose or as a gesture.
+      const saved = action !== 'cmd/avatar/emoji' ? this.customMotions.get(normalizeName(command.pose ?? command.gesture ?? command.name) ?? '') : undefined
+      if (saved) {
+        const kind = action === 'cmd/avatar/pose' ? 'pose' : saved.kind
+        const duration = command.duration !== undefined && command.duration > 0 ? Math.min(60, command.duration) : saved.duration
+        return { type: 'custom-motion', site, motion: { ...saved, kind, duration, mirror: command.mirror ?? saved.mirror }, play: true, save: false, warnings: [] }
+      }
       return ignored(topic, 'the catalog has no action for this command')
+    }
 
     this.sequence++
     const candidate: MotionIntent = {
@@ -432,6 +466,19 @@ export class NeoAliceTranslator {
         return bond ? { type: 'bond', site, bond } : ignored(topic, 'no mood and no metrics in the companion state')
       return { type: 'mood', site, mood: resolveMood(mood.primary), intensity: toUnit(mood.intensity ?? undefined), origin: 'companion', ...(bond && { bond }) }
     }
+    if (action === 'evt/avatar/motions') {
+      const list = safeParse(looseObject({ motions: array(unknown()) }), data)
+      if (!list.success)
+        return ignored(topic, 'no motions list')
+      const motions = list.output.motions.flatMap((item) => {
+        const parsed = parseCustomMotion(item)
+        return parsed.ok && parsed.motion.name ? [parsed.motion] : []
+      })
+      this.customMotions.clear()
+      for (const motion of motions)
+        this.customMotions.set(motion.name!, motion)
+      return { type: 'motion-library', site, motions }
+    }
     if (action === 'evt/companion/affect') {
       const parsed = safeParse(CompanionAffectPayload, data)
       const name = parsed.success ? parsed.output.emotion ?? parsed.output.airiEmotion : undefined
@@ -440,6 +487,48 @@ export class NeoAliceTranslator {
       return { type: 'mood', site, mood: resolveMood(name), intensity: toUnit(parsed.success ? parsed.output.intensity : undefined), origin: 'companion' }
     }
     return ignored(topic, `companion topic "${action}" is not read by the bridge`)
+  }
+
+  /** `cmd/avatar/motion`: a motion to check and play. A named one with `save` is kept by the companion service. */
+  private translateMotion(topic: string, site: string, data: unknown, play: boolean): NeoAliceBridgeEvent {
+    const parsed = parseCustomMotion(data)
+    if (!parsed.ok)
+      return ignored(topic, parsed.reason)
+    if (parsed.motion.name)
+      this.customMotions.set(parsed.motion.name, parsed.motion)
+    return { type: 'custom-motion', site, motion: parsed.motion, play, save: parsed.save, warnings: parsed.warnings }
+  }
+
+  /**
+   * `cmd/avatar`: the command format of the old mirror (`runAvatarCommand` of `neoalice_moves.mjs`), one
+   * `{"action": ...}` per message. Gestures, poses, animations and moods take the same path as their own topics.
+   */
+  private translateCommand(topic: string, site: string, data: unknown, payload: string): NeoAliceBridgeEvent {
+    const parsed = safeParse(looseObject({ action: Name, name: Name, dur: Seconds, mirror: fallback(optional(boolean()), undefined), url: fallback(optional(pipe(string(), maxLength(2048))), undefined), what: Name, values: fallback(optional(record(string(), unknown())), undefined), template: fallback(optional(record(string(), unknown())), undefined) }), data)
+    if (!parsed.success || !parsed.output.action)
+      return ignored(topic, 'cmd/avatar needs an action')
+    const command = parsed.output
+    switch (command.action) {
+      case 'gesture':
+        return this.translateAvatar(topic, site, 'cmd/avatar/gesture', { gesture: command.name, duration: command.dur, mirror: command.mirror }, payload)
+      case 'pose':
+        return this.translateAvatar(topic, site, 'cmd/avatar/pose', { pose: command.name, duration: command.dur }, payload)
+      case 'animation':
+        return translateAnimation(topic, site, { name: command.name, url: command.url, duration: command.dur })
+      case 'mood':
+        return command.name ? { type: 'mood', site, mood: resolveMood(command.name), origin: 'neoalice' } : ignored(topic, 'no mood')
+      case 'face':
+        return this.translateMotion(topic, site, { face: command.values ?? {}, duration: command.dur ?? 3 }, true)
+      case 'stop': {
+        const what = command.what === 'pose' || command.what === 'gesture' || command.what === 'animation' ? command.what : 'all'
+        return { type: 'stop-motion', site, what }
+      }
+      case 'defineGesture':
+      case 'definePose':
+        return this.translateMotion(topic, site, { name: normalizeName(command.name), template: command.template, kind: command.action === 'definePose' ? 'pose' : 'gesture', save: true }, false)
+      default:
+        return ignored(topic, `cmd/avatar action "${command.action}" is not read by the bridge`)
+    }
   }
 
   private known(semanticAction: string) {

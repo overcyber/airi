@@ -1,12 +1,13 @@
-import type { NeoAliceBridgeEvent, SpeechSegment } from '@proj-airi/alice-motion'
+import type { CustomMotion, NeoAliceBridgeEvent, SpeechSegment } from '@proj-airi/alice-motion'
 
 import type { StageEmote } from '../libs/alice-motion/stage-motion'
 
 import { errorMessageFrom } from '@moeru/std'
-import { isPublishableSite, matchWakeWord, neoAliceAudioEvent, neoAliceStateEvent, neoAliceSttFinalEvent, neoAliceToolResultEvent, neoAliceWakeEvent, parseWakeWords } from '@proj-airi/alice-motion'
+import { isPublishableSite, matchWakeWord, neoAliceAudioEvent, neoAliceMotionSaveEvent, neoAliceStateEvent, neoAliceSttFinalEvent, neoAliceToolResultEvent, neoAliceWakeEvent, parseWakeWords } from '@proj-airi/alice-motion'
 import { number, object, safeParse, string } from 'valibot'
 import { onScopeDispose, ref, watch } from 'vue'
 
+import { createAvatarMotionTools } from '../libs/alice-motion/avatar-motion-tools'
 import { builtinGestureOfEmoji, SpeechGesturePicker } from '../libs/alice-motion/builtin-gestures'
 import { resolveNeoAliceAnimationUrls } from '../libs/alice-motion/neoalice-animation-url'
 import { runNeoAliceTool, widgetToolInput } from '../libs/alice-motion/neoalice-tools'
@@ -40,6 +41,10 @@ export interface NeoAliceStageBridgeOptions {
   reactEmotion?: (emotion: string) => void
   /** Shows the bond of the companion state on the face (warmth and energy, 0 to 1). */
   applyBond?: (bond: { warmth: number, energy: number }) => void
+  /** Plays a pose or a movement that NeoAlice or an LLM created. Returns `false` when the stage cannot. */
+  playCustomMotion?: (motion: CustomMotion) => boolean
+  /** Ends the held pose now (`cmd/avatar` with `stop`). */
+  stopPose?: () => void
   /** Shows the own face of an emoji, as TalkingHead does. Returns `false` when the stage cannot. */
   reactEmoji?: (emoji: string) => boolean
 }
@@ -131,6 +136,18 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   const brainTools = useNeoAliceBrainTools()
   const vrmMotions = useVrmMotionsStore()
   const llmTools = useLlmToolsStore()
+  // The body tools of the LLM run here, in the window of the stage that plays them.
+  const avatarMotionTools = createAvatarMotionTools({
+    play: motion => options.playCustomMotion?.(motion) ?? false,
+    save: async (motion) => {
+      vrmMotions.rememberCustomMotion(motion)
+      const site = bridge.site.trim()
+      if (!isPublishableSite(site))
+        return false
+      return await bridge.publish(neoAliceMotionSaveEvent({ site, motion, nowMs: Date.now() })).catch(() => false)
+    },
+  })
+  llmTools.addTools(...avatarMotionTools)
   const runtime = new StageMotionRuntime({
     playClip: options.playClip,
     log: message => console.info(`[neoalice-bridge] ${message}`),
@@ -289,6 +306,30 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         options.applyEmotion(event.mood.airiEmotion, event.intensity ?? 1)
         bridge.lastMood = JSON.stringify({ emotion: event.mood.airiEmotion, intensity: event.intensity ?? 1, atMs: Date.now() } satisfies StoredMood)
         return
+      case 'custom-motion': {
+        if (event.warnings.length > 0)
+          console.info(`[neoalice-bridge] motion ${event.motion.name ?? 'custom'}: ${event.warnings.join('; ')}`)
+        if (event.motion.name)
+          vrmMotions.rememberCustomMotion(event.motion)
+        if (!event.play)
+          break
+        if (nightMode.value && event.motion.kind === 'gesture') {
+          console.info(`[neoalice-bridge] night mode: ignored the motion ${event.motion.name ?? 'custom'}`)
+          break
+        }
+        if (nightMode.value)
+          nightMode.value = false
+        if (!options.playCustomMotion?.(event.motion))
+          console.info(`[neoalice-bridge] the stage could not play the motion ${event.motion.name ?? 'custom'}`)
+        break
+      }
+      case 'motion-library':
+        vrmMotions.setCustomMotions(event.motions)
+        break
+      case 'stop-motion':
+        if (event.what === 'pose' || event.what === 'all')
+          options.stopPose?.()
+        break
       case 'night-mode':
         if (nightMode.value !== event.active)
           console.info(`[neoalice-bridge] night mode ${event.active ? 'on' : 'off'}`)
@@ -614,6 +655,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     stopVoiceWatch()
     disconnectTextSink()
     brainTools.dispose()
+    llmTools.removeToolsByIds(...avatarMotionTools.map(tool => tool.id))
     waitingSince = undefined
     void microphone.stop().then(() => {
       bridge.voiceStatus = 'off'

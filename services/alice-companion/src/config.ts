@@ -45,6 +45,8 @@ const EnvSchema = object({
   ALICE_COMPANION_MQTT_PASSWORD: optional(string()),
   /** Directory of `state.json`, `state.json.bak`, `audit.jsonl`, and the lock file. */
   ALICE_COMPANION_DATA_DIR: optional(pipe(string(), nonEmpty()), './data'),
+  /** File of the saved poses and movements. Empty means `movimentos.json` in the data directory. */
+  ALICE_COMPANION_MOTIONS_FILE: optional(string(), ''),
   ALICE_COMPANION_PERSONA_ID: optional(pipe(string(), regex(SiteName)), 'alice'),
   ALICE_COMPANION_OWNER_PROFILE_ID: optional(pipe(string(), regex(SiteName)), 'default'),
   ALICE_COMPANION_PUBLISH_SITE: optional(pipe(string(), regex(SiteName, 'ALICE_COMPANION_PUBLISH_SITE must be one topic level')), 'companion'),

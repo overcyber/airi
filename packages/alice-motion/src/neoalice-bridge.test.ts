@@ -279,3 +279,39 @@ describe('neoAliceTranslator gestures sent as poses', () => {
       .toMatchObject({ type: 'ignored' })
   })
 })
+
+describe('neoAliceTranslator motions that NeoAlice creates', () => {
+  it('reads cmd/avatar/motion and the cmd/avatar commands of the old mirror, also defineGesture', () => {
+    const topics = neoAliceBridgeTopics({ site: 'mirror' })
+    expect(topics).toEqual(expect.arrayContaining(['neoalice/v1/mirror/cmd/avatar', 'neoalice/v1/mirror/cmd/avatar/motion', 'neoalice/v1/companion/evt/avatar/motions']))
+    const bridge = translator()
+
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/motion', JSON.stringify({ name: 'bracos', kind: 'pose', save: true, bones: { leftUpperArm: { levantar: 170 } } }), 0))
+      .toMatchObject({ type: 'custom-motion', play: true, save: true, motion: { name: 'bracos', kind: 'pose' } })
+    // A saved name plays as a pose or a gesture.
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'bracos', duration: 5 }), 100))
+      .toMatchObject({ type: 'custom-motion', play: true, motion: { name: 'bracos', duration: 5 } })
+
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar', JSON.stringify({ action: 'defineGesture', name: 'saudacao', template: { 'LeftArm.rotation': { x: -0.74, y: 0.4, z: 0.27 } } }), 200))
+      .toMatchObject({ type: 'custom-motion', play: false, save: true, motion: { name: 'saudacao', format: 'talkinghead', kind: 'gesture' } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar', JSON.stringify({ action: 'gesture', name: 'saudacao', mirror: true }), 300))
+      .toMatchObject({ type: 'custom-motion', motion: { name: 'saudacao', mirror: true } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar', JSON.stringify({ action: 'gesture', name: 'thumbup', dur: 2 }), 400))
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'gesture_thumbup', requestedDurationMs: 2000 } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar', JSON.stringify({ action: 'mood', name: 'happy' }), 500))
+      .toMatchObject({ type: 'mood', mood: { airiEmotion: 'happy' } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar', JSON.stringify({ action: 'stop', what: 'pose' }), 600))
+      .toEqual({ type: 'stop-motion', site: 'mirror', what: 'pose' })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar', JSON.stringify({ action: 'face', values: { mouthSmileLeft: 0.6 } }), 700))
+      .toMatchObject({ type: 'custom-motion', motion: { keyframes: [{ face: { mouthSmileLeft: 0.6 } }] } })
+  })
+
+  it('takes the saved library of the companion service', () => {
+    const bridge = translator()
+    const library = { motions: [{ name: 'aceno', kind: 'gesture', bones: { rightUpperArm: { levantar: 150 } } }, { name: 'Bad Name' }] }
+    expect(bridge.translate('neoalice/v1/companion/evt/avatar/motions', JSON.stringify(library), 0))
+      .toMatchObject({ type: 'motion-library', motions: [{ name: 'aceno' }] })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/gesture', JSON.stringify({ gesture: 'aceno' }), 100))
+      .toMatchObject({ type: 'custom-motion', motion: { name: 'aceno' } })
+  })
+})

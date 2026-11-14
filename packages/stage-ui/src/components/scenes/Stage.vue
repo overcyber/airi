@@ -568,6 +568,11 @@ const { thinking: neoAliceThinking, nightMode: neoAliceNightMode, visionPerson: 
       vrmViewerRef.value?.setBond(bond)
   },
   reactEmoji: emoji => stageModelRenderer.value === 'vrm' && (vrmViewerRef.value?.reactEmoji(emoji) ?? false),
+  playCustomMotion: motion => stageModelRenderer.value === 'vrm' && (vrmViewerRef.value?.playCustomMotion(motion) ?? false),
+  stopPose: () => {
+    if (stageModelRenderer.value === 'vrm')
+      vrmViewerRef.value?.stopPose()
+  },
   reactEmotion: (emotion) => {
     if (stageModelRenderer.value === 'vrm') {
       vrmViewerRef.value?.reactExpression(emotion, 1)
