@@ -35,39 +35,85 @@ export interface MoodFaceFrameInput {
 
 /**
  * Candidates per mood, VRM 1.0 preset first, then VRM 0.x names. `scale` is the weight
- * at full intensity. Faces read strong fast, so the scales stay low.
+ * at full intensity. Faces read strong fast, so the scales stay low. A mood stays for minutes on the
+ * NeoAlice avatar, so a resting face is a hint of the mood, not a grimace.
  * Keys are the names AIRI sends (`EMOTION_VRMExpressionName_value`), mapped to the
  * nearest Utsuwa mood: happy, sad, frustrated (angry), flustered (surprised),
  * content (relaxed), curious (think).
  */
 const moodFaces: Record<string, { candidates: string[], scale: number } | null> = {
-  happy: { candidates: ['happy', 'joy'], scale: 0.75 },
-  sad: { candidates: ['sad', 'sorrow'], scale: 0.8 },
-  angry: { candidates: ['angry'], scale: 0.7 },
-  surprised: { candidates: ['surprised'], scale: 0.55 },
-  relaxed: { candidates: ['relaxed', 'fun'], scale: 0.6 },
-  think: { candidates: ['think', 'surprised'], scale: 0.3 },
+  happy: { candidates: ['happy', 'joy'], scale: 0.55 },
+  sad: { candidates: ['sad', 'sorrow'], scale: 0.55 },
+  angry: { candidates: ['angry'], scale: 0.5 },
+  surprised: { candidates: ['surprised'], scale: 0.45 },
+  relaxed: { candidates: ['relaxed', 'fun'], scale: 0.45 },
+  think: { candidates: ['think', 'surprised'], scale: 0.25 },
   neutral: null,
 }
+
+/** Weight of a reaction: a little over the resting mood, never a full face. */
+const reactionGain = 1.2
+const reactionMaxWeight = 0.65
 
 /**
  * ARKit shapes of each mood at full intensity, for a model that has them as expressions (for example Eva,
  * converted from Ready Player Me). The NeoAlice avatar showed these faces, so the VRM shows the same.
  *
- * `sad`, `angry`, and `surprised` (NeoAlice `fear`) are the mood baselines of TalkingHead
- * (MIT, https://github.com/met4citizen/TalkingHead, `modules/talkinghead.mjs`, `animMoods`).
+ * `sad`, `angry`, and `surprised` (NeoAlice `fear`) come from the mood baselines of TalkingHead
+ * (MIT, https://github.com/met4citizen/TalkingHead, `modules/talkinghead.mjs`, `animMoods`), at about
+ * 60% of their weight: on a VRM with the full ARKit set, the TalkingHead values read as a grimace.
  * TalkingHead makes its happy face with animated smiles, so `happy` here is a held smile.
  * The eye look shapes stay with the look-at, and the blink shapes stay with the blink layer.
  */
 const arkitMoodShapes: Record<string, Record<string, number>> = {
-  happy: { mouthSmileLeft: 0.6, mouthSmileRight: 0.6, cheekSquintLeft: 0.4, cheekSquintRight: 0.4, eyeSquintLeft: 0.3, eyeSquintRight: 0.3, browInnerUp: 0.15 },
-  sad: { browDownRight: 0.1, browInnerUp: 0.6, browOuterUpRight: 0.2, eyeSquintLeft: 0.7, eyeSquintRight: 0.7, mouthFrownLeft: 0.8, mouthFrownRight: 0.8, mouthLeft: 0.2, mouthPucker: 0.5, mouthRollLower: 0.2, mouthRollUpper: 0.2, mouthShrugLower: 0.2, mouthShrugUpper: 0.2, mouthStretchLeft: 0.4 },
-  angry: { browDownLeft: 0.6, browDownRight: 0.6, jawForward: 0.3, mouthFrownLeft: 0.7, mouthFrownRight: 0.7, mouthRollLower: 0.2, mouthShrugLower: 0.3 },
-  surprised: { browInnerUp: 0.7, eyeSquintLeft: 0.5, eyeSquintRight: 0.5, eyeWideLeft: 0.6, eyeWideRight: 0.6, mouthClose: 0.1, mouthFunnel: 0.3, mouthShrugLower: 0.5, mouthShrugUpper: 0.5 },
+  happy: { mouthSmileLeft: 0.45, mouthSmileRight: 0.45, cheekSquintLeft: 0.25, cheekSquintRight: 0.25, eyeSquintLeft: 0.2, eyeSquintRight: 0.2, browInnerUp: 0.1 },
+  sad: { browDownRight: 0.05, browInnerUp: 0.45, browOuterUpRight: 0.1, eyeSquintLeft: 0.35, eyeSquintRight: 0.35, mouthFrownLeft: 0.5, mouthFrownRight: 0.5, mouthLeft: 0.1, mouthPucker: 0.25, mouthRollLower: 0.1, mouthRollUpper: 0.1, mouthShrugLower: 0.1, mouthShrugUpper: 0.1, mouthStretchLeft: 0.2 },
+  angry: { browDownLeft: 0.5, browDownRight: 0.5, jawForward: 0.15, mouthFrownLeft: 0.45, mouthFrownRight: 0.45, mouthRollLower: 0.1, mouthShrugLower: 0.2 },
+  surprised: { browInnerUp: 0.5, eyeSquintLeft: 0.2, eyeSquintRight: 0.2, eyeWideLeft: 0.45, eyeWideRight: 0.45, mouthClose: 0.05, mouthFunnel: 0.2, mouthShrugLower: 0.25, mouthShrugUpper: 0.25 },
   relaxed: { mouthSmileLeft: 0.3, mouthSmileRight: 0.3, eyeSquintLeft: 0.2, eyeSquintRight: 0.2 },
   // Not from TalkingHead, which has no thinking mood: one brow up, lips pressed to the side.
-  think: { browInnerUp: 0.35, browOuterUpLeft: 0.4, browDownRight: 0.3, mouthPressLeft: 0.4, mouthRollLower: 0.2, mouthLeft: 0.25, eyeSquintRight: 0.25 },
+  think: { browInnerUp: 0.3, browOuterUpLeft: 0.3, browDownRight: 0.25, mouthPressLeft: 0.3, mouthRollLower: 0.15, mouthLeft: 0.2, eyeSquintRight: 0.2 },
 }
+
+/**
+ * An emoji face of TalkingHead has shapes at 1, for example a frown or a stretched mouth, made for its own
+ * avatar in a 3 s animation. Held on a VRM, they read as a grimace. Each shape stops at the cap, then scales.
+ */
+const emojiFaceCap = 0.7
+const emojiFaceScale = 0.85
+
+/**
+ * Lower caps for the shapes that turn a smile into a grimace on a realistic face: a wide smile with the
+ * upper lip up, the nose wrinkled, and the eyes squeezed shut is the grin of the Joker. Matched by prefix.
+ */
+const emojiShapeCaps: Array<[prefix: string, cap: number]> = [
+  ['mouthSmile', 0.5],
+  ['mouthUpperUp', 0.2],
+  ['mouthLowerDown', 0.3],
+  ['mouthDimple', 0.15],
+  ['mouthStretch', 0.35],
+  ['mouthPress', 0.3],
+  ['mouthFrown', 0.55],
+  ['noseSneer', 0.2],
+  ['cheekSquint', 0.3],
+  ['eyeSquint', 0.35],
+  ['eyeWide', 0.5],
+  ['jawOpen', 0.3],
+  ['mouthOpen', 0.3],
+  ['browInnerUp', 0.5],
+  ['browDown', 0.6],
+]
+
+/** The weight that an emoji shape of TalkingHead gets on the VRM. `name` picks the cap of the shape. */
+export function emojiShapeWeight(weight: number, name = '') {
+  const cap = emojiShapeCaps.find(([prefix]) => name.startsWith(prefix))?.[1] ?? emojiFaceCap
+  return Math.round(Math.min(weight, cap) * emojiFaceScale * 1000) / 1000
+}
+
+/** The smile of the emote face and of a warm bond on a model with the ARKit shapes, at weight 1. */
+const arkitSmileShapes: Record<string, number> = { mouthSmileLeft: 1, mouthSmileRight: 1, cheekSquintLeft: 0.5, cheekSquintRight: 0.5 }
+/** Smile of the emote face on an ARKit model. It joins the mood by the larger weight, never by a sum. */
+const arkitEmoteSmile = 0.3
 
 /** Other names of the preset expressions, in lower case: VRM 0.x and common model names. */
 const presetAliases: Record<string, string[]> = {
@@ -104,7 +150,17 @@ export function releaseMoodOverrides(expressionManager: MoodExpressionManager | 
   }
 }
 
-const blinkNames = ['blink', 'Blink', 'eyeBlinkLeft', 'eyeBlinkRight']
+const blinkPresetNames = ['blink', 'Blink']
+const blinkShapeNames = ['eyeBlinkLeft', 'eyeBlinkRight']
+
+/**
+ * The expressions that close the eyes: the blink preset, or the two ARKit shapes on a model without it.
+ * Never both: on Eva the preset is the two shapes, and both together closed the eyelids twice as far.
+ */
+export function blinkExpressionsOf(names: readonly string[]): string[] {
+  const preset = blinkPresetNames.find(name => names.includes(name))
+  return preset ? [preset] : blinkShapeNames.filter(name => names.includes(name))
+}
 
 /** Expressions that hold a mood, a reaction, or the emote face. Their presets can move the mouth. */
 const moodPresetNames = new Set(['happy', 'angry', 'sad', 'relaxed', 'surprised', 'joy', 'sorrow', 'fun'])
@@ -127,14 +183,14 @@ export function speechShareOf(name: string, hasArkit: boolean): number {
 /** Rate of the change between the speech face and the resting face, per second (about 0.3 s). */
 const speechFaceRate = 10
 
-/** Weight of the happy face while a body emote plays. */
-const emoteFaceWeight = 0.7
+/** Weight of the happy face while a body emote plays. A light smile: a bow or a head shake with a grin looks wrong. */
+const emoteFaceWeight = 0.4
 
 /**
  * Resting mood face, short reactions, blink, and the emote face of a VRM model.
  *
  * Layers, top wins for the expression it touches:
- * 1. Emote face: happy at 0.7 while a body emote plays.
+ * 1. Emote face: happy at 0.4 while a body emote plays.
  * 2. Reaction (flash): attack 0.25 s, hold 2.5 s (up to 8 s while speaking), release 0.8 s.
  * 3. Mood: eases toward its target at rate 1.5/s. A new mood waits until the old one
  *    faded out, so two moods never blend into a muddled face.
@@ -159,6 +215,7 @@ export class MoodFace {
   /** How far the mouth shapes of the face have moved out for the lip sync: 0 at rest, 1 while she speaks. */
   private speechFace = 0
   private readonly hasArkit: boolean
+  private readonly blinkExpressions: string[]
 
   constructor(
     private readonly expressionNames: readonly string[],
@@ -167,6 +224,7 @@ export class MoodFace {
     this.blink = { timerSeconds: 0, nextSeconds: this.nextBlinkIn(), active: false, progress: 0 }
     this.emoteFace = findHappyExpression(expressionNames)
     this.hasArkit = expressionNames.includes('mouthSmileLeft')
+    this.blinkExpressions = blinkExpressionsOf(expressionNames)
   }
 
   /** The current resting mood name, or `null` for neutral. */
@@ -205,10 +263,15 @@ export class MoodFace {
    */
   showFace(shapes: Readonly<Record<string, number>>) {
     const weights = new Map<string, number>()
-    for (const [name, weight] of [...Object.entries(shapes), ...Object.entries(presetsOfFace(shapes))]) {
+    // The presets of the face are for a model without the ARKit shapes. On Eva they would add a second smile.
+    const presets = this.hasArkit ? {} : presetsOfFace(shapes)
+    for (const [name, weight] of [...Object.entries(shapes), ...Object.entries(presets)]) {
+      // The look-at owns the eye direction. An eye look shape under it would turn one layer against the other.
+      if (name.startsWith('eyeLook'))
+        continue
       const own = pickCandidate([name.toLowerCase(), ...(presetAliases[name] ?? [])], this.expressionNames)
       if (own)
-        weights.set(own, Math.max(weights.get(own) ?? 0, weight))
+        weights.set(own, Math.max(weights.get(own) ?? 0, emojiShapeWeight(weight, name)))
     }
     if (weights.size === 0)
       return false
@@ -223,7 +286,8 @@ export class MoodFace {
     const emoteName = input.emotePlaying ? this.emoteFace : null
 
     if (emoteName) {
-      face.set(emoteName, emoteFaceWeight)
+      // On an ARKit model the smile of the emote is ARKit shapes below, so it cannot add to the mood smile.
+      face.set(emoteName, this.hasArkit ? 0 : emoteFaceWeight)
       this.emoteFaceActive = true
     }
     else if (this.emoteFaceActive && this.emoteFace) {
@@ -257,8 +321,10 @@ export class MoodFace {
       }
     }
     if (mood) {
+      // On a model with the ARKit shapes, the mood is those shapes only. Its preset is the same shapes again
+      // (the converter builds it from them), and both together made a grin twice as wide as either.
       if (emoteName !== mood.name)
-        face.set(mood.name, mood.weight)
+        face.set(mood.name, this.hasArkit && shapes ? 0 : mood.weight)
       if (mood.weight === 0)
         mood = null
     }
@@ -283,8 +349,9 @@ export class MoodFace {
         flash = null
       }
       else if (!owned) {
-        // Never dip the resting face on the same expression.
-        face.set(flash.name, Math.max(mood?.name === flash.name ? mood.weight : 0, flash.weight * shape))
+        // Never dip the resting face on the same expression. On an ARKit model the reaction is its shapes only.
+        const flashPreset = this.hasArkit && flash.key && arkitMoodShapes[flash.key] ? 0 : flash.weight * shape
+        face.set(flash.name, Math.max(mood?.name === flash.name ? face.get(mood.name) ?? 0 : 0, flashPreset))
       }
     }
     this.flash = flash
@@ -313,10 +380,23 @@ export class MoodFace {
     }
     // The bond: a light smile at rest when the bond is warm, heavy eyelids when her energy is low.
     const moodKey = this.mood?.key ?? this.moodTarget?.key
+    // Every smile on an ARKit model goes through the same shapes and joins by the larger weight. A preset
+    // on top of the shapes is a sum, and three light smiles in a sum are one grin.
+    const smiles: number[] = []
+    if (this.hasArkit && emoteName)
+      smiles.push(arkitEmoteSmile)
     if (this.bond.warmth > 0.5 && !['sad', 'angry', 'surprised'].includes(moodKey ?? '')) {
       const smile = pickCandidate(['relaxed', 'fun'], this.expressionNames)
-      if (smile)
+      if (this.hasArkit)
+        smiles.push((this.bond.warmth - 0.5) * 0.3)
+      else if (smile)
         arkit.set(smile, Math.max(arkit.get(smile) ?? 0, Math.round((this.bond.warmth - 0.5) * 0.5 * 1000) / 1000))
+    }
+    for (const smile of smiles) {
+      for (const [name, share] of Object.entries(arkitSmileShapes)) {
+        if (this.expressionNames.includes(name))
+          arkit.set(name, Math.max(arkit.get(name) ?? 0, Math.round(smile * share * 1000) / 1000))
+      }
     }
     if (this.bond.energy < 0.4 && !input.emotePlaying) {
       const lids = pickCandidate(['blink'], this.expressionNames)
@@ -359,20 +439,16 @@ export class MoodFace {
           blink.nextSeconds = this.nextBlinkIn()
           weight = 0
         }
-        for (const name of blinkNames) {
-          if (this.expressionNames.includes(name))
-            face.set(name, weight)
-        }
+        for (const name of this.blinkExpressions)
+          face.set(name, weight)
       }
     }
     else if (blink.active) {
       // An emote that starts mid-blink must not leave the eyelid half closed.
       blink.active = false
       blink.timerSeconds = 0
-      for (const name of blinkNames) {
-        if (this.expressionNames.includes(name))
-          face.set(name, 0)
-      }
+      for (const name of this.blinkExpressions)
+        face.set(name, 0)
     }
 
     return face
@@ -424,7 +500,7 @@ function targetFor(mood: string, intensity: number, available: readonly string[]
   if (!name)
     return null
   if (kind === 'flash')
-    return { name, weight: Math.round(Math.min(0.9, face.scale * 1.4) * 1000) / 1000, key }
+    return { name, weight: Math.round(Math.min(reactionMaxWeight, face.scale * reactionGain) * 1000) / 1000, key }
   const clamped = Math.max(0, Math.min(1, intensity))
   const weight = Math.round(face.scale * clamped * 1000) / 1000
   return weight > 0 ? { name, weight, key } : null

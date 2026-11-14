@@ -253,6 +253,18 @@ type UpdatableMaterial = Material & {
 
 // Expressions
 const idleEyeSaccades = useIdleEyeSaccades()
+const defaultTookAt = computed(() => new Vector3(0, eyeHeight.value, -100))
+const focusPos = useVRMEyeFocusFor({
+  cameraPosition: () => props.cameraPosition,
+  context: () => ({
+    camera: camera.value,
+    raycaster,
+    defaultLookAt: defaultTookAt.value,
+  }),
+  screenBoundingBox: props.screenBoundingBox,
+  source: () => props.cursorPosition,
+  trackingMode: () => props.trackingMode,
+})
 // shallowRef: the composable object must stay non-reactive, otherwise Vue
 // deep-unwraps nested refs/computed (e.g. isEmoteActive) and breaks reads
 // like vrmEmote.value.isEmoteActive.value in the render loop.
@@ -620,11 +632,12 @@ function bindManagedVrmInstanceRenderLoop() {
         mouth: lastMouth,
       })
       // Beats of the xiaoke director: an expression on a speech beat, a micro expression
-      // while idle, and an earlier idle switch right after speech or thinking.
+      // while idle, and an earlier idle switch right after speech or thinking. The beats are small:
+      // a beat every few seconds at a visible weight reads as the same face again and again.
       if (events.speakBeat)
-        moodFace?.react(moodFace.moodName ?? 'relaxed', 0.4)
+        moodFace?.react(moodFace.moodName ?? 'relaxed', 0.2)
       if (events.idleBeat)
-        moodFace?.react(moodFace.moodName ?? 'relaxed', 0.25)
+        moodFace?.react(moodFace.moodName ?? 'relaxed', 0.12)
       if (events.nudgeIdleAfterSeconds !== null)
         vrmAnimator.value?.requestIdleSwitch(events.nudgeIdleAfterSeconds)
     }
@@ -653,6 +666,11 @@ function bindManagedVrmInstanceRenderLoop() {
       activeVrm?.humanoid.update()
     })
     const lookAtMs = measureFrameStep(tracingEnabled, () => {
+      // Idle saccades and the tracking target (camera, mouse, or the default far point), every frame.
+      // A one-shot update on mount froze the eyes at their first target forever: no idle glances, and no
+      // follow-up when the target changed without a reactive dependency firing again.
+      if (activeVrm)
+        idleEyeSaccades.update(activeVrm, focusPos, delta)
       // Eye contact by mood: the target moves away for a moment, for example down when sad,
       // and comes back after this update, so the tracking target of the camera or the mouse stays as it was.
       const lookTarget = activeVrm?.lookAt?.target
@@ -806,8 +824,6 @@ function componentCleanUp(
     })
   }
 }
-
-const defaultTookAt = computed(() => new Vector3(0, eyeHeight.value, -100))
 
 function computeBoundingBox(vrmScene: Object3D) {
   const box = new Box3()
@@ -1156,18 +1172,6 @@ async function loadModel() {
   }
 }
 
-const focusPos = useVRMEyeFocusFor({
-  cameraPosition: () => props.cameraPosition,
-  context: () => ({
-    camera: camera.value,
-    raycaster,
-    defaultLookAt: defaultTookAt.value,
-  }),
-  screenBoundingBox: props.screenBoundingBox,
-  source: () => props.cursorPosition,
-  trackingMode: () => props.trackingMode,
-})
-
 onMounted(async () => {
   // watch if the model needs to be reloaded
   // Registered BEFORE the initial load to avoid missing src changes
@@ -1263,9 +1267,6 @@ onMounted(async () => {
       sh: nprIrrSH.value ?? null,
     })
     updateIblProbe(mode)
-  }, { immediate: true })
-  watch(focusPos, (newPos) => {
-    idleEyeSaccades.instantUpdate(vrm.value, newPos)
   }, { immediate: true })
 })
 
@@ -1396,6 +1397,13 @@ defineExpose({
       // The model can change while the clip loads.
       if (vrm.value !== targetVrm || vrmAnimator.value !== animator)
         return false
+      // V7: a pose from a file, for example lying down, is held like a TalkingHead pose: for its `duration`,
+      // or 10 s without one. The entry of the clip plays once, the rest loops, and she gets up at the end.
+      if (emote.pose) {
+        const requestedMs = options.durationMs !== undefined && options.durationMs > poseCueDefaultMs ? options.durationMs : defaultPoseHoldMs
+        animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: requestedMs / 1000 })
+        return true
+      }
       // V6: a gesture of the arms or the head plays only on those bones, or adds to the pose,
       // so the idle and the speech go on for the rest of the body.
       const layering = inferEmoteLayering(emote)

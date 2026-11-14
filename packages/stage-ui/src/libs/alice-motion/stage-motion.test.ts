@@ -1,8 +1,9 @@
 import type { MotionIntent } from '@proj-airi/alice-motion'
 
+import { NeoAliceTranslator } from '@proj-airi/alice-motion'
 import { describe, expect, it, vi } from 'vitest'
 
-import { StageMotionRuntime } from './stage-motion'
+import { catalogWithEmotes, StageMotionRuntime } from './stage-motion'
 
 let sequence = 0
 
@@ -78,5 +79,25 @@ describe('stageMotionRuntime', () => {
 
     expect(runtime.scheduler.activeCues.some(cue => cue.sessionId === 'turn-1')).toBe(false)
     expect(runtime.submit(intent('shoot', { sessionId: 'turn-1' }), 200).ok).toBe(false)
+  })
+
+  // ROOT CAUSE:
+  //
+  // A mirror reported that `cmd/avatar/pose` with `lying` did nothing. The branch code plays it. The mirror ran an
+  // older build without `lie_down`. This test keeps the whole path, from the MQTT topic to the renderer clip, in CI.
+  it('plays the lying pose of the mirror topic as the lie_down clip, for the requested duration', async () => {
+    const { runtime, playClip } = createRuntime(['lie_down'])
+    const emotes = [{ id: 'lie_down', name: 'Lie Down', description: 'Lie down on the side' }]
+    runtime.setEmotes(emotes)
+    const translator = new NeoAliceTranslator({ site: 'magicmirror', catalog: catalogWithEmotes(emotes) })
+
+    const event = translator.translate('neoalice/v1/magicmirror/cmd/avatar/pose', JSON.stringify({ pose: 'lying', duration: 20 }), 0)
+    expect(event).toMatchObject({ type: 'intent', intent: { semanticAction: 'pose_lying', requestedDurationMs: 20_000 } })
+    if (event.type !== 'intent')
+      return
+    expect(runtime.submit({ ...event.intent, timestampMs: 1000 }, 1000).ok).toBe(true)
+    await runtime.tick(1000)
+
+    expect(playClip).toHaveBeenCalledWith('lie_down', { durationMs: 20_000 })
   })
 })

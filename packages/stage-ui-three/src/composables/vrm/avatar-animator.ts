@@ -5,9 +5,26 @@
 
 import type { AnimationAction, AnimationClip, Object3D } from 'three'
 
-import { AdditiveAnimationBlendMode, AnimationMixer, LoopOnce, LoopRepeat } from 'three'
+import { AdditiveAnimationBlendMode, AnimationMixer, AnimationUtils, LoopOnce, LoopRepeat } from 'three'
 
 import { additiveClip, maskClip } from './motion-layers'
+
+/**
+ * A pose that comes from an animation file (V7): the first `introSeconds` of the clip bring her into the pose,
+ * for example from standing to lying down, and the rest of the clip loops while she holds it. When the pose
+ * ends, the entry plays backwards, so she gets up the way she lay down.
+ */
+export interface PoseClipOptions {
+  /** Where the held loop starts in the clip, in seconds. 0 holds the whole clip in a loop. */
+  introSeconds: number
+  /** Fade in and out, in seconds. Default 0.6. */
+  fadeSeconds?: number
+  /** Time of the pose on the frame clock, after the entry. `null` holds it until the next pose. */
+  holdSeconds?: number | null
+}
+
+/** Frames per second of the baked FBX and VRMA clips, for `AnimationUtils.subclip`. */
+const clipFps = 30
 
 /**
  * How an emote mixes with the body (V6).
@@ -44,10 +61,19 @@ const fadeSeconds = {
 }
 
 /**
- * Weight of a talking clip of the pool. It adds to the idle, so she gestures with half the arm motion of the
- * clip and the mouth stays the focus of the speech.
+ * Weight of a talking clip of the pool, picked in this range for each speech. It adds to the idle, so she
+ * gestures with a part of the arm motion of the clip and the mouth stays the focus of the speech.
  */
-const talkingOverlayWeight = 0.5
+const talkingOverlayWeightRange: readonly [number, number] = [0.3, 0.45]
+
+/**
+ * The talking clip starts this long after the speech, on the frame clock. A short answer ("Sim.", "Pronto.")
+ * ends before it, so she does not throw her arms up for one word.
+ */
+const talkingOverlayDelaySeconds = 0.9
+
+/** While a long speech goes on, the talking clip changes to another one of the pool after this long. */
+const talkingSwitchSecondsRange: readonly [number, number] = [8, 13]
 
 /** Emotes play faster than recorded, so a gesture reads as a quick reaction. */
 const emoteTimeScale = 1.5
@@ -82,6 +108,10 @@ export class AvatarAnimator {
   pose: AnimationAction | null = null
   /** Time left of the held pose on the frame clock. `null` holds it until the next pose. */
   private poseRemainingSeconds: number | null = null
+  /** The entry clip of the held pose from a file, played backwards when the pose ends. `null` for a template pose. */
+  private poseEntry: { action: AnimationAction, fadeSeconds: number } | null = null
+  /** The pose that leaves now, played backwards. The idle comes back when it ends. */
+  private poseExit: AnimationAction | null = null
   /** The emote of a timed play and its remaining time on the frame clock. */
   private timedEmote: { action: AnimationAction, remainingSeconds: number, finish: () => void } | null = null
 
@@ -91,6 +121,10 @@ export class AvatarAnimator {
   /** The talking clip adds to the idle (a clip of the pool) instead of replacing it (the single talking clip). */
   private talkingIsOverlay = false
   private talkingToken = 0
+  /** Time left before the talking clip of the pool starts, on the frame clock. `null` when it is not waiting. */
+  private talkingStartRemainingSeconds: number | null = null
+  /** Time left before the talking clip changes to another one of the pool. `null` when no clip of the pool plays. */
+  private talkingSwitchRemainingSeconds: number | null = null
   private thinkingClip: { url: string, clip: AnimationClip } | null = null
   private thinkingToken = 0
   private idleToken = 0
@@ -167,15 +201,19 @@ export class AvatarAnimator {
   }
 
   setTalking(speaking: boolean) {
-    // A held pose stays while she speaks, for example she talks while sitting.
-    if (this.pose)
+    // A held pose stays while she speaks, for example she talks while sitting. Same while she gets up.
+    if (this.bodyHeld)
       return
     if (speaking && this.talkingPool.length > 0) {
-      this.startPooledTalking()
+      // The clip of the pool waits a moment, so a short answer plays with the idle only.
+      this.talkingStartRemainingSeconds = talkingOverlayDelaySeconds
       return
     }
-    if (!speaking)
+    if (!speaking) {
       this.talkingToken++
+      this.talkingStartRemainingSeconds = null
+      this.talkingSwitchRemainingSeconds = null
+    }
     if (speaking && this.talkingClip) {
       this.talkingIsOverlay = false
       this.idle?.fadeOut(fadeSeconds.talkOrThink)
@@ -184,6 +222,8 @@ export class AvatarAnimator {
         this.talking.setLoop(LoopRepeat, Infinity)
       }
       this.talking.reset().fadeIn(fadeSeconds.talkOrThink).play()
+      // From a random point of the clip, so each speech does not open with the same gesture.
+      this.talking.time = this.random() * this.talkingClip.duration
     }
     else if (!speaking) {
       this.talking?.fadeOut(fadeSeconds.talkOrThink)
@@ -194,6 +234,10 @@ export class AvatarAnimator {
     }
   }
 
+  /**
+   * Starts a talking clip of the pool over the idle: another clip than the last one, from a random point, at a
+   * weight of the range. The same clip from its start, at the same weight, made every speech open with the same arms.
+   */
   private startPooledTalking() {
     const others = this.talkingPool.filter(url => url !== this.lastTalkingUrl)
     const choices = others.length > 0 ? others : this.talkingPool
@@ -202,26 +246,50 @@ export class AvatarAnimator {
     this.hooks.loadClip(url)
       .then((clip) => {
         // The speech ended, a newer speech started, or something else holds the body.
-        if (this.disposed || token !== this.talkingToken || !this.hooks.isTalking() || this.pose || this.emotePlaying)
+        if (this.disposed || token !== this.talkingToken || !this.hooks.isTalking() || this.bodyHeld || this.emotePlaying)
           return
         this.lastTalkingUrl = url
-        // The clip adds to the idle at half weight. The idle stays the base, so it must run, for example after thinking.
+        // The clip adds to the idle at a part of its weight. The idle stays the base, so it must run, for example after thinking.
         const action = this.mixer.clipAction(additiveClip(clip))
         action.blendMode = AdditiveAnimationBlendMode
         action.setLoop(LoopRepeat, Infinity)
-        action.weight = talkingOverlayWeight
+        const [minWeight, maxWeight] = talkingOverlayWeightRange
+        action.weight = minWeight + (maxWeight - minWeight) * this.random()
         this.ensureIdle()
         if (this.talking && this.talking !== action)
           this.talking.fadeOut(fadeSeconds.talkOrThink)
         action.reset().fadeIn(fadeSeconds.talkOrThink).play()
+        action.time = this.random() * clip.duration
         this.talking = action
         this.talkingIsOverlay = true
+        const [minSwitch, maxSwitch] = talkingSwitchSecondsRange
+        this.talkingSwitchRemainingSeconds = this.talkingPool.length > 1 ? minSwitch + (maxSwitch - minSwitch) * this.random() : null
       })
       .catch(error => console.warn('[vrm-animator] talking clip failed to load, staying idle:', error))
   }
 
+  /** Advances the wait and the switch of the talking clip of the pool by one frame. */
+  private updatePooledTalking(deltaSeconds: number) {
+    if (this.talkingStartRemainingSeconds !== null) {
+      this.talkingStartRemainingSeconds -= deltaSeconds
+      if (this.talkingStartRemainingSeconds <= 0) {
+        this.talkingStartRemainingSeconds = null
+        if (this.hooks.isTalking() && !this.bodyHeld)
+          this.startPooledTalking()
+      }
+    }
+    if (this.talkingSwitchRemainingSeconds !== null) {
+      this.talkingSwitchRemainingSeconds -= deltaSeconds
+      if (this.talkingSwitchRemainingSeconds <= 0) {
+        this.talkingSwitchRemainingSeconds = null
+        if (this.hooks.isTalking() && !this.bodyHeld && !this.emotePlaying)
+          this.startPooledTalking()
+      }
+    }
+  }
+
   startThinking(url: string) {
-    if (this.thinking || this.pose)
+    if (this.thinking || this.bodyHeld)
       return
     const token = ++this.thinkingToken
     const cached = this.thinkingClip?.url === url ? this.thinkingClip.clip : null
@@ -248,7 +316,7 @@ export class AvatarAnimator {
       return
     this.thinking.fadeOut(fadeSeconds.talkOrThink)
     this.thinking = null
-    if (resumeIdle && !this.pose)
+    if (resumeIdle && !this.bodyHeld)
       this.idle?.reset().fadeIn(fadeSeconds.talkOrThink).play()
   }
 
@@ -297,7 +365,7 @@ export class AvatarAnimator {
         next.reset().fadeIn(fadeOut).play()
       }
       // The talking clip of the pool adds to the idle, so it comes back over it while she still speaks.
-      if (this.talkingIsOverlay && this.talking && this.hooks.isTalking() && !this.pose)
+      if (this.talkingIsOverlay && this.talking && this.hooks.isTalking() && !this.bodyHeld)
         this.talking.reset().fadeIn(fadeOut).play()
       onFinished?.()
     }
@@ -315,19 +383,78 @@ export class AvatarAnimator {
     if (!clip) {
       if (!previous)
         return
+      if (this.poseEntry) {
+        this.leavePoseBackwards(previous)
+        return
+      }
       this.pose = null
       previous.fadeOut(fade)
-      if (!this.emotePlaying) {
-        const next = this.baseAction()
-        if (next) {
-          next.enabled = true
-          next.reset().fadeIn(fade).play()
-        }
-      }
+      this.resumeAfterPose(fade)
       return
     }
     const action = this.mixer.clipAction(clip)
     action.setLoop(LoopRepeat, Infinity)
+    this.takePose(action, previous, fade)
+    if (!this.emotePlaying)
+      action.reset().fadeIn(fade).play()
+  }
+
+  /**
+   * Holds a pose from an animation file, for example `lie-down.fbx`: the entry plays once, then the rest of
+   * the clip loops. Gestures play over it, and she speaks in it. `holdPose(null)` or the hold time plays the
+   * entry backwards, so she gets up, and the idle comes back.
+   */
+  holdPoseClip(clip: AnimationClip, options: PoseClipOptions) {
+    const fade = options.fadeSeconds ?? 0.6
+    const introSeconds = Math.min(Math.max(0, options.introSeconds), clip.duration)
+    const previous = this.pose
+    this.poseRemainingSeconds = null
+    const hasEntry = introSeconds > 1 / clipFps && introSeconds < clip.duration - 1 / clipFps
+    // `subclip` leaves the end frame out, so the end frame goes one further: the entry ends on the first frame
+    // of the loop, and the loop keeps the last frame of the clip.
+    const introFrame = Math.round(introSeconds * clipFps)
+    const loop = hasEntry
+      ? AnimationUtils.subclip(clip, `${clip.name}:hold`, introFrame, Math.round(clip.duration * clipFps) + 1, clipFps)
+      : clip
+    const loopAction = this.mixer.clipAction(loop)
+    loopAction.setLoop(LoopRepeat, Infinity)
+    loopAction.timeScale = 1
+    if (!hasEntry) {
+      this.poseRemainingSeconds = options.holdSeconds ?? null
+      this.takePose(loopAction, previous, fade)
+      if (!this.emotePlaying)
+        loopAction.reset().fadeIn(fade).play()
+      return
+    }
+    const entry = this.mixer.clipAction(AnimationUtils.subclip(clip, `${clip.name}:entry`, 0, introFrame + 1, clipFps))
+    entry.setLoop(LoopOnce, 1)
+    entry.clampWhenFinished = true
+    entry.timeScale = 1
+    this.takePose(entry, previous, fade)
+    this.poseEntry = { action: entry, fadeSeconds: fade }
+    entry.reset().fadeIn(fade).play()
+    const onDone = (event: { action: AnimationAction }) => {
+      if (event.action !== entry)
+        return
+      this.mixer.removeEventListener('finished', onDone)
+      // Another pose took over while she went down.
+      if (this.pose !== entry)
+        return
+      // From the last frame of the entry into the loop, without a visible step: both frames are the same pose.
+      this.pose = loopAction
+      this.poseRemainingSeconds = options.holdSeconds ?? null
+      entry.fadeOut(0.2)
+      loopAction.reset().fadeIn(0.2).play()
+    }
+    this.mixer.addEventListener('finished', onDone)
+  }
+
+  /** Makes `action` the held pose. The base clips fade out when no pose held the body before. */
+  private takePose(action: AnimationAction, previous: AnimationAction | null, fade: number) {
+    if (this.poseExit) {
+      this.poseExit.fadeOut(fade)
+      this.poseExit = null
+    }
     if (previous && previous !== action)
       previous.fadeOut(fade)
     if (!previous) {
@@ -336,9 +463,51 @@ export class AvatarAnimator {
       this.thinking?.fadeOut(fade)
       this.thinking = null
     }
+    this.poseEntry = null
     this.pose = action
-    if (!this.emotePlaying)
-      action.reset().fadeIn(fade).play()
+  }
+
+  /** The action that holds the body against the idle and the talking clips: the pose, or the pose that leaves now. */
+  private get bodyHeld() {
+    return this.pose ?? this.poseExit
+  }
+
+  /** Plays the entry of the held pose backwards, from its end, and brings the idle back when it is done. */
+  private leavePoseBackwards(held: AnimationAction) {
+    const entry = this.poseEntry!
+    this.poseEntry = null
+    const exit = entry.action
+    const fade = entry.fadeSeconds
+    this.pose = null
+    this.poseExit = exit
+    if (held !== exit)
+      held.fadeOut(0.2)
+    exit.reset()
+    exit.timeScale = -1
+    exit.time = exit.getClip().duration
+    exit.fadeIn(0.2).play()
+    const onDone = (event: { action: AnimationAction }) => {
+      if (event.action !== exit)
+        return
+      this.mixer.removeEventListener('finished', onDone)
+      if (this.poseExit !== exit)
+        return
+      this.poseExit = null
+      exit.fadeOut(fade)
+      this.resumeAfterPose(fade)
+    }
+    this.mixer.addEventListener('finished', onDone)
+  }
+
+  /** Brings the base clip back after a pose, when no emote holds the stage. */
+  private resumeAfterPose(fade: number) {
+    if (this.emotePlaying)
+      return
+    const next = this.baseAction()
+    if (next) {
+      next.enabled = true
+      next.reset().fadeIn(fade).play()
+    }
   }
 
   /** Starts an emote action: once at 1.5x, or in a loop for `durationSeconds` at the recorded speed. */
@@ -375,15 +544,15 @@ export class AvatarAnimator {
 
   /** The action that holds the body when no emote plays: talking, or the idle. */
   private baseAction() {
-    if (this.pose)
-      return this.pose
+    if (this.bodyHeld)
+      return this.bodyHeld
     return this.hooks.isTalking() && this.talking && !this.talkingIsOverlay ? this.talking : this.idle
   }
 
   /** Fades the idle in when it does not hold the body now. A running idle goes on, so it does not jump to its start. */
   private ensureIdle() {
     const idle = this.idle
-    if (!idle || this.emotePlaying || this.pose)
+    if (!idle || this.emotePlaying || this.bodyHeld)
       return
     if (idle.enabled && idle.isRunning() && idle.getEffectiveWeight() > 0.99)
       return
@@ -473,10 +642,13 @@ export class AvatarAnimator {
 
   /** Advances the mixer and the idle cycle by one frame of the render clock. */
   update(deltaSeconds: number) {
+    // A hold time that starts in this frame, when the entry of a pose ends in the mixer, counts from the next frame.
+    const poseTimed = this.poseRemainingSeconds !== null
     this.mixer.update(deltaSeconds)
+    this.updatePooledTalking(deltaSeconds)
 
     // A pose with a hold time goes back to the idle, like the mood idle of TalkingHead replaces a pose.
-    if (this.pose && this.poseRemainingSeconds !== null) {
+    if (this.pose && poseTimed && this.poseRemainingSeconds !== null) {
       this.poseRemainingSeconds -= deltaSeconds
       if (this.poseRemainingSeconds <= 0)
         this.holdPose(null)
@@ -499,7 +671,7 @@ export class AvatarAnimator {
     if (this.idleCycleRemainingSeconds > 0)
       return
 
-    const busy = this.hooks.isTalking() || this.hooks.isThinking() || this.emotePlaying || this.pose !== null
+    const busy = this.hooks.isTalking() || this.hooks.isThinking() || this.emotePlaying || this.bodyHeld !== null
     if (busy)
       this.scheduleIdleCycle(this.idleClipDurationSeconds)
     else

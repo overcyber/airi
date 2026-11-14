@@ -21,6 +21,25 @@ import {
 } from './math'
 
 /**
+ * The look-at of the avatar: the eye bones turn toward the target.
+ *
+ * The first version turned the eyes 10 degrees for a target 90 degrees away, like a VRoid model. On this
+ * realistic face the eyes then never moved in the head: they did not hold the viewer when the head turned,
+ * and they read as static. A human eye follows a target about one to one up to 30 or 35 degrees.
+ */
+export function lookAtSettings(offsetFromHeadBone: [number, number, number]) {
+  const horizontal = { inputMaxValue: 40, outputScale: 30 }
+  return {
+    type: 'bone',
+    offsetFromHeadBone,
+    rangeMapHorizontalInner: horizontal,
+    rangeMapHorizontalOuter: horizontal,
+    rangeMapVerticalDown: { inputMaxValue: 30, outputScale: 18 },
+    rangeMapVerticalUp: { inputMaxValue: 30, outputScale: 14 },
+  }
+}
+
+/**
  * Converts a Ready Player Me avatar (GLB with an ARKit and Oculus viseme face) to VRM 1.0.
  *
  * Sprint V4 of Plan 04: the Eva avatar of the mirror becomes a VRM, so the AIRI motion layer
@@ -68,11 +87,13 @@ export const presetBlendShapes: Record<string, Record<string, number>> = {
   blink: { eyeBlinkLeft: 1, eyeBlinkRight: 1 },
   blinkLeft: { eyeBlinkLeft: 1 },
   blinkRight: { eyeBlinkRight: 1 },
-  happy: { mouthSmileLeft: 0.8, mouthSmileRight: 0.8, cheekSquintLeft: 0.5, cheekSquintRight: 0.5, eyeSquintLeft: 0.3, eyeSquintRight: 0.3 },
-  angry: { browDownLeft: 1, browDownRight: 1, noseSneerLeft: 0.4, noseSneerRight: 0.4, mouthPressLeft: 0.4, mouthPressRight: 0.4, eyeSquintLeft: 0.3, eyeSquintRight: 0.3 },
-  sad: { browInnerUp: 0.8, mouthFrownLeft: 0.7, mouthFrownRight: 0.7, mouthShrugLower: 0.3 },
-  relaxed: { mouthSmileLeft: 0.4, mouthSmileRight: 0.4, eyeSquintLeft: 0.4, eyeSquintRight: 0.4 },
-  surprised: { browInnerUp: 1, browOuterUpLeft: 1, browOuterUpRight: 1, eyeWideLeft: 1, eyeWideRight: 1, jawOpen: 0.35 },
+  // The emotion presets at full weight are a clear face, not a grimace: a viewer that plays a preset at 1
+  // (the VRM settings page, another VRM app) must not get a grin like the Joker or eyes out of their sockets.
+  happy: { mouthSmileLeft: 0.5, mouthSmileRight: 0.5, cheekSquintLeft: 0.3, cheekSquintRight: 0.3, eyeSquintLeft: 0.2, eyeSquintRight: 0.2 },
+  angry: { browDownLeft: 0.7, browDownRight: 0.7, noseSneerLeft: 0.25, noseSneerRight: 0.25, mouthPressLeft: 0.3, mouthPressRight: 0.3, eyeSquintLeft: 0.2, eyeSquintRight: 0.2 },
+  sad: { browInnerUp: 0.6, mouthFrownLeft: 0.5, mouthFrownRight: 0.5, mouthShrugLower: 0.2 },
+  relaxed: { mouthSmileLeft: 0.3, mouthSmileRight: 0.3, eyeSquintLeft: 0.3, eyeSquintRight: 0.3 },
+  surprised: { browInnerUp: 0.7, browOuterUpLeft: 0.6, browOuterUpRight: 0.6, eyeWideLeft: 0.6, eyeWideRight: 0.6, jawOpen: 0.25 },
   neutral: {},
   lookUp: { eyeLookUpLeft: 1, eyeLookUpRight: 1 },
   lookDown: { eyeLookDownLeft: 1, eyeLookDownRight: 1 },
@@ -277,7 +298,7 @@ export function convertRpmToVrm(glb: Glb, options: ConvertOptions): ConvertRepor
   }
   const head = translationOf(skeleton.world(nodeIndex.get('Head')!))
   const eye = nodeIndex.has('LeftEye') ? translationOf(skeleton.world(nodeIndex.get('LeftEye')!)) : head
-  const range = { inputMaxValue: 90, outputScale: 10 }
+  const lookAt = lookAtSettings([0, eye[1] - head[1], eye[2] - head[2]])
 
   json.extensionsUsed = [...new Set([...(json.extensionsUsed ?? []), 'VRMC_vrm'])]
   json.extensions = {
@@ -302,14 +323,7 @@ export function convertRpmToVrm(glb: Glb, options: ConvertOptions): ConvertRepor
       },
       humanoid: { humanBones },
       expressions: { preset, custom },
-      lookAt: {
-        type: 'bone',
-        offsetFromHeadBone: [0, eye[1] - head[1], eye[2] - head[2]],
-        rangeMapHorizontalInner: range,
-        rangeMapHorizontalOuter: range,
-        rangeMapVerticalDown: range,
-        rangeMapVerticalUp: range,
-      },
+      lookAt,
     },
   }
 

@@ -164,6 +164,10 @@ export const defaultMotionCatalogEntries: MotionCatalogEntry[] = [
   ...talkingHeadPoses.map(([pose, description]) =>
     clip(`pose_${pose}`, `th:pose:${pose}`, stance, poseCueMs, 45, description),
   ),
+  // The lying pose is an FBX of the VRM motion library (`lie_down`), not a TalkingHead template. NeoAlice sends
+  // `cmd/avatar/pose` with `lying` or `lie_down`, like `sitting`. The renderer holds it and gets up at the end.
+  clip('pose_lying', 'lie_down', stance, poseCueMs, 45, 'Lie down on the side'),
+  clip('pose_lie_down', 'lie_down', stance, poseCueMs, 45, 'Lie down on the side'),
   entry({ semanticAction: 'emoji', generatorId: 'facial/emoji', channels: ['facial'], durationMs: 2000, priority: 30, description: 'Show an emoji face' }),
 ]
 

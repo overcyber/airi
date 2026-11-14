@@ -69,7 +69,7 @@ A one-arm gesture owns only its arm channel, which includes the hand of that arm
 | `neoalice/v1/<site>/evt/stt/final` | `user-speech` |
 | `neoalice/v1/<site>/evt/mood`, `neoalice/v1/<site>/cmd/evt/mood` | `mood`, through `resolveMood` |
 | `neoalice/v1/<site>/cmd/avatar/gesture` | `intent` `gesture_<name>`. `wave` becomes `wave_right`. |
-| `neoalice/v1/<site>/cmd/avatar/pose` | `intent` `pose_<name>` on the `posture` channel |
+| `neoalice/v1/<site>/cmd/avatar/pose` | `intent` `pose_<name>` on the `posture` channel. `lying` and `lie_down` play the `lie-down.fbx` of the VRM motion library. |
 | `neoalice/v1/<site>/cmd/avatar/animation` | `intent` from the file name of the URL. A catalog action with the same name comes first, for example an imported `Wave_Hello.fbx` becomes `wave_hello`. Otherwise an alias applies: `walking.fbx` becomes `walk`. An unknown file is ignored. |
 | `neoalice/v1/<site>/cmd/avatar/emoji` | `intent` `emoji` on the `facial` channel |
 | `neoalice/v1/companion/evt/companion/state`, `.../affect` | `mood` from the companion service |

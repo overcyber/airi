@@ -151,38 +151,55 @@ export function useBlink() {
   return { update }
 }
 
+/** Largest idle saccade from the look-at target, as seen from the eyes. */
+const saccadeYawRadians = 4 * Math.PI / 180
+const saccadePitchRadians = 2.5 * Math.PI / 180
+/** How fast the eyes reach a new fixation, per second. */
+const saccadeRate = 45
+
 /**
- * This is to simulate idle eye saccades in a *pretty* naive way.
- * Not using any reactivity here as it's not yet needed.
- * Keeping it here as a composable for future extension.
+ * Idle eye saccades: every 0.8 to 4.4 s the eyes jump to a point a few degrees from the look-at target,
+ * like the eyes of a person who looks at a face. The target itself (the camera, the cursor, or the far
+ * point ahead) is followed in every frame.
  */
 export function useIdleEyeSaccades() {
   let nextSaccadeAfter = -1
+  /** Offset of the current fixation from the look-at target, in meters at the target distance. */
+  const fixationOffset = new Vector3()
   const fixationTarget = new Vector3()
+  const eyePosition = new Vector3()
   let timeSinceLastSaccade = 0
 
-  // Just a naive vector generator - Simulating random content on a 27in monitor at 65cm distance
-  function updateFixationTarget(lookAtTarget: Ref<{ x: number, y: number, z: number }>) {
-    fixationTarget.set(
-      lookAtTarget.value.x + randFloat(-0.25, 0.25),
-      lookAtTarget.value.y + randFloat(-0.25, 0.25),
-      lookAtTarget.value.z,
+  /**
+   * A new fixation, up to 4 degrees to the side and 2.5 degrees up or down of the target, as seen from the
+   * eyes. An offset in meters is wrong here: 25 cm is nothing at 100 m and a wide glance at 60 cm.
+   */
+  function pickFixationOffset(vrm: VRMCore, lookAtTarget: { x: number, y: number, z: number }) {
+    vrm.lookAt!.getLookAtWorldPosition(eyePosition)
+    const distance = Math.max(0.3, eyePosition.distanceTo(fixationTarget.set(lookAtTarget.x, lookAtTarget.y, lookAtTarget.z)))
+    fixationOffset.set(
+      distance * Math.tan(randFloat(-saccadeYawRadians, saccadeYawRadians)),
+      distance * Math.tan(randFloat(-saccadePitchRadians, saccadePitchRadians)),
+      0,
     )
   }
 
-  // Function to handle idle eye saccades
+  /**
+   * Advances the idle saccades and sets the eye target from `lookAtTarget`, every frame.
+   *
+   * It does not call `vrm.lookAt.update()`: the VRM render loop (`VRMModel.vue`) calls that once per
+   * frame itself, after it adds the mood gaze offset on top of the target this function sets.
+   */
   function update(vrm: VRMCore | undefined, lookAtTarget: Ref<{ x: number, y: number, z: number }>, delta: number) {
     if (!vrm?.expressionManager || !vrm.lookAt)
       return
 
     if (timeSinceLastSaccade >= nextSaccadeAfter) {
-      updateFixationTarget(lookAtTarget)
+      pickFixationOffset(vrm, lookAtTarget.value)
       timeSinceLastSaccade = 0
       nextSaccadeAfter = randomSaccadeInterval() / 1000
     }
-    else if (!fixationTarget) {
-      updateFixationTarget(lookAtTarget)
-    }
+    fixationTarget.set(lookAtTarget.value.x, lookAtTarget.value.y, lookAtTarget.value.z).add(fixationOffset)
 
     if (!vrm.lookAt.target) {
       // TODO: after bumping up to three 0.180.0 with @types/three 0.180.0,
@@ -213,8 +230,8 @@ export function useIdleEyeSaccades() {
       vrm.lookAt.target = new Object3D() as unknown as Object3D
     }
 
-    vrm.lookAt.target?.position.lerp(fixationTarget!, 1)
-    vrm.lookAt?.update(delta)
+    // A saccade takes about 50 ms: fast, but not a jump in one frame.
+    vrm.lookAt.target?.position.lerp(fixationTarget, 1 - Math.exp(-delta * saccadeRate))
 
     timeSinceLastSaccade += delta
   }
