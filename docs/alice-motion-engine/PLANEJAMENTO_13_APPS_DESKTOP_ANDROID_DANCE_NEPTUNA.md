@@ -38,6 +38,19 @@ Em Configurações > Módulos > Ponte NeoAlice:
 - **Android:** compile com `ALICE_SERVER_URL` (seção 2).
 - **Servidor:** com `AIRI_DEFAULT_NEOALICE_SITE` e `AIRI_DEFAULT_NEOALICE_ENABLED=true` no `.env`, todo app que carregar as configurações já sai com a ponte ligada.
 
+## 3.1 Desktop: ela deitava fora da janela (Planejamento 14)
+
+Com a ponte conectada, o desktop recebia o modo noite e a Eva deitava. Mas a janela do desktop mostra só a cabeça e o peito. Deitada no chão, ela ficava abaixo da janela, e a janela parecia vazia.
+
+**Correção:** numa vista sem o corpo inteiro (desktop e janelas pequenas), o modelo sobe enquanto está numa pose no chão. A cabeça fica perto da altura dos olhos da câmera. Quando ela levanta, o modelo desce de novo. O `/mirror` (corpo inteiro, com chão) não muda.
+
+- Código: `packages/stage-ui-three/src/composables/vrm/floor-lift.ts` e a prop `liftFloorPose` do `VRMModel.vue`.
+- Prova: o app desktop compilado, rodando no Xvfb, com o broker local e `evt/alice/night_mode` `{"active": true}`.
+
+| Acordada | Modo noite |
+| --- | --- |
+| ![](evidencias/D13/desktop-acordada.png) | ![](evidencias/D13/desktop-noite-deitada.png) |
+
 ## 4. Pose `dance` e nomes antigos
 
 - No espelho antigo, `dance` era um FBX parado (`poses/dance.fbx`) da página do TalkingHead. Pelo MQTT ele também não funcionava.

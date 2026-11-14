@@ -86,6 +86,7 @@ import { createCustomMotionClip, customMotionFace } from '../../composables/vrm/
 import { findVrmEmote } from '../../composables/vrm/emote-cue'
 import { useVRMEmote } from '../../composables/vrm/expression'
 import { loadFbxClip } from '../../composables/vrm/fbx-retarget'
+import { FloorLift } from '../../composables/vrm/floor-lift'
 import { createVrmInteractionColliders } from '../../composables/vrm/interaction'
 import { resolveInternalVrmHooks } from '../../composables/vrm/internal-hooks'
 import { useVRMLipSync } from '../../composables/vrm/lip-sync'
@@ -138,6 +139,12 @@ const props = withDefaults(defineProps<{
    * She opens the eyes while she speaks, and stays lying. It is not the sleepy mood (`setExpression('sleepy')`).
    */
   nightMode?: boolean
+  /**
+   * Lifts the model while a floor pose holds the body, so a lying body stays in a view of the head and the chest.
+   * The desktop app frames the upper body: on the floor she was below the window, and she seemed not to sleep.
+   * Leave it off for a full-body view with the floor in it, like the mirror.
+   */
+  liftFloorPose?: boolean
   /**
    * The center of the person in front of the screen, from 0 to 1 in the camera image, for the `person` tracking
    * mode. `null` when nobody is there.
@@ -235,6 +242,9 @@ const vrmGroup = shallowRef<Group>()
 const modelHeight = shallowRef(0)
 /** Scratch for {@link headAnchor}, so a rendered frame allocates nothing. */
 const headPosition = new Vector3()
+const floorHead = new Vector3()
+/** The lift of the model for a floor pose (`liftFloorPose`). */
+const floorLift = new FloorLift()
 const headUp = new Vector3()
 const modelLoaded = ref<boolean>(false)
 const interactionColliders = shallowRef<VrmInteractionColliderSet>()
@@ -744,6 +754,16 @@ function bindManagedVrmInstanceRenderLoop() {
     const humanoidMs = measureFrameStep(tracingEnabled, () => {
       activeVrm?.humanoid.update()
     })
+    // A lying body moves up to the height of the head at rest, so the view of the upper body still shows it.
+    if (activeVrm && activeVrmGroup && (props.liftFloorPose || floorLift.value !== 0)) {
+      let goal = 0
+      const head = activeVrm.humanoid.getNormalizedBoneNode('head')
+      if (props.liftFloorPose && onFloor && head) {
+        head.updateWorldMatrix(true, false)
+        goal = floorLift.goal(props.eyeHeight, head.getWorldPosition(floorHead).y)
+      }
+      activeVrmGroup.position.y = modelOffset.value.y + floorLift.step(goal, delta)
+    }
     const lookAtMs = measureFrameStep(tracingEnabled, () => {
       // Idle saccades and the tracking target (camera, mouse, or the default far point), every frame.
       // A one-shot update on mount froze the eyes at their first target forever: no idle glances, and no

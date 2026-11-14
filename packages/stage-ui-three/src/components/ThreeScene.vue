@@ -1204,6 +1204,7 @@ defineExpose({
         :speech-text="props.speechText"
         :thinking="props.thinking"
         :night-mode="props.nightMode"
+        :lift-floor-pose="props.framing !== 'full-body'"
         :person-position="props.personPosition"
         :motion-library="props.motionLibrary ?? defaultVrmMotionLibrary"
         :cursor-position="props.cursorPosition"
