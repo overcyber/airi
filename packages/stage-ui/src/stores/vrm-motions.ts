@@ -13,6 +13,7 @@ import { computed, ref, shallowRef } from 'vue'
 import * as v from 'valibot'
 
 import { vrmMotionPrefix, vrmMotionsRepo } from '../database/repos/vrm-motions.repo'
+import { isUnreachableFromPage } from '../libs/page-reach'
 import { useNeoAliceBrainStore } from './modules/neoalice-brain'
 
 /** Name and description of an imported motion. The LLM reads the description to choose it. */
@@ -66,19 +67,25 @@ export async function fetchServerMotions(origin: string | undefined, fetchList: 
   }
 }
 
-/** Origin of the Alice server: the saved server URL, or the page when it is served over HTTP. `undefined` without one. */
-export function aliceServerOrigin() {
+/**
+ * Origin of the Alice server: the saved server URL, or the page when it is served over HTTP. `undefined` without one.
+ *
+ * A saved URL that the page cannot call gives the page. For example, the web app on `https://192.0.2.10` with the
+ * saved `http://192.0.2.10:4173`: the browser blocks the `http://` files (mixed content), and the page is the server.
+ */
+export function aliceServerOrigin(page: Pick<Location, 'origin' | 'protocol'> | undefined = globalThis.location) {
+  const pageOrigin = page && /^https?:$/.test(page.protocol) ? page.origin : undefined
   const saved = useNeoAliceBrainStore().serverUrl.trim()
-  if (saved) {
-    try {
-      return new URL(saved).origin
-    }
-    catch {
-      return undefined
-    }
+  if (!saved)
+    return pageOrigin
+  if (page && pageOrigin && isUnreachableFromPage(saved, page))
+    return pageOrigin
+  try {
+    return new URL(saved).origin
   }
-  const page = globalThis.location
-  return page && /^https?:$/.test(page.protocol) ? page.origin : undefined
+  catch {
+    return undefined
+  }
 }
 
 /**

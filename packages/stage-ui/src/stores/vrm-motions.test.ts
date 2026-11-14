@@ -3,7 +3,8 @@ import type { VrmMotionRecord } from '../database/repos/vrm-motions.repo'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchServerMotions, useVrmMotionsStore } from './vrm-motions'
+import { useNeoAliceBrainStore } from './modules/neoalice-brain'
+import { aliceServerOrigin, fetchServerMotions, useVrmMotionsStore } from './vrm-motions'
 
 const records = vi.hoisted(() => new Map<string, VrmMotionRecord>())
 
@@ -151,5 +152,29 @@ describe('fetchServerMotions', () => {
     const html = vi.fn<typeof fetch>(async () => new Response('<!doctype html>', { headers: { 'content-type': 'text/html' } }))
     expect(await fetchServerMotions(undefined, html)).toEqual([])
     expect(await fetchServerMotions('https://192.0.2.10:4443', html)).toEqual([])
+  })
+})
+
+describe('aliceServerOrigin', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('uses the page when the HTTPS page cannot call the saved http:// server', () => {
+    useNeoAliceBrainStore().serverUrl = 'http://192.0.2.10:4173'
+    // The web app on HTTPS: the browser blocks http://192.0.2.10:4173/animations_arkit/Rumba.fbx (mixed content).
+    expect(aliceServerOrigin({ origin: 'https://192.0.2.10', protocol: 'https:' })).toBe('https://192.0.2.10')
+  })
+
+  it('keeps the saved server when the page can call it', () => {
+    useNeoAliceBrainStore().serverUrl = 'http://192.0.2.10:4173'
+    // The desktop app loads its pages from file:.
+    expect(aliceServerOrigin({ origin: 'null', protocol: 'file:' })).toBe('http://192.0.2.10:4173')
+    expect(aliceServerOrigin({ origin: 'http://192.0.2.10', protocol: 'http:' })).toBe('http://192.0.2.10:4173')
+  })
+
+  it('uses the page without a saved server', () => {
+    useNeoAliceBrainStore().serverUrl = ''
+    expect(aliceServerOrigin({ origin: 'https://192.0.2.10', protocol: 'https:' })).toBe('https://192.0.2.10')
   })
 })

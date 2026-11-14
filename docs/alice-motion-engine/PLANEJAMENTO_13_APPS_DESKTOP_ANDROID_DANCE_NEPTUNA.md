@@ -58,6 +58,13 @@ Com a ponte conectada, o desktop recebia o modo noite e a Eva deitava. Mas a jan
 - `ArmsOpen` e `TwoKnees` encontram as poses `arms_open` e `kneel`.
 - Os nomes de animação do espelho antigo (`rumba`, `laugh`, `cry`, `nod`, `shake`, `lookaround`...) e os arquivos do servidor tocam como pose ou gesto, pelo tempo pedido.
 
+### 4.1 A dança não tocava na web (Planejamento 15)
+
+- **Causa:** a web roda em HTTPS. Com a "Alice server URL" salva como `http://<ip>:4173`, o app pedia `http://<ip>:4173/animations_arkit/Rumba.fbx`. O navegador bloqueia um pedido `http://` numa página HTTPS (conteúdo misto), e a dança não carregava. O desktop não tem essa trava, por isso dançava.
+- **Correção:** `aliceServerOrigin()` (`packages/stage-ui/src/stores/vrm-motions.ts`) usa o servidor da página quando a página não pode chamar o endereço salvo. É a mesma regra que "Carregar configurações do servidor" já usava. A regra fica em `packages/stage-ui/src/libs/page-reach.ts`.
+- **Também corrige:** a lista de animações do servidor (`/animations/`) e a lista de modelos do servidor na web, que usam o mesmo endereço.
+- **No servidor:** depois do merge, recompile o `airi-web` (`docker compose -f deploy/alice/compose.yaml up -d --build`). A web usa o código da imagem, não o da sua pasta.
+
 ## 5. Neptuna
 
 `evidencias/D13/neptuna-poses-gestos.png` mostra a Neptuna (VRM 0.x do VRoid) com o código real:

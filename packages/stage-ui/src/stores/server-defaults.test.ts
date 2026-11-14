@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { deviceSite, fetchServerDefaults, isUnreachableFromPage, requestServerDefaults, resolveServerDefaults } from './server-defaults'
+import { isUnreachableFromPage } from '../libs/page-reach'
+import { deviceSite, fetchServerDefaults, requestServerDefaults, resolveServerDefaults } from './server-defaults'
 
 const page = { origin: 'https://192.0.2.10:4443', protocol: 'https:' }
 
