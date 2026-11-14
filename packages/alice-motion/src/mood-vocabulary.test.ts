@@ -11,7 +11,7 @@ describe('resolveMood', () => {
 
   it('projects the NeoAlice vocabulary', () => {
     expect(resolveMood('playful')).toEqual({ primary: 'playful', known: true, talkingheadMood: 'happy', airiEmotion: 'happy' })
-    expect(resolveMood('tired')).toEqual({ primary: 'tired', known: true, talkingheadMood: 'sleep', airiEmotion: 'neutral' })
+    expect(resolveMood('tired')).toEqual({ primary: 'tired', known: true, talkingheadMood: 'sleep', airiEmotion: 'sleepy' })
   })
 
   it.each([

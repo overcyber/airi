@@ -46,6 +46,8 @@ export interface NeoAliceStageBridgeOptions {
 
 /** The bridge stops thinking after this time without speech, so a lost reply cannot freeze the pose. */
 const thinkingTimeoutMs = 20_000
+/** A person position of the NeoAlice vision is stale after this time without a new message. */
+const visionPersonTimeoutMs = 5000
 /** The motion runtime ticks on this interval. It only starts cues. Frames play the clips on their own clock. */
 const tickIntervalMs = 100
 /** The microphone stays deaf for this time after the avatar speaks, so the room echo is not sent. */
@@ -135,6 +137,14 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   })
   /** `true` from the final user transcript until the speech starts. The VRM shows the thinking pose. */
   const thinking = ref(false)
+  /**
+   * The night mode of Alice (`evt/alice/night_mode`). The VRM lies down and closes the eyes. The body motions of
+   * NeoAlice and of the speech wait until it ends. A pose command ends it, for example `straight`.
+   */
+  const nightMode = ref(false)
+  /** The person that a NeoAlice camera sees, 0 to 1 in its image, for the `person` tracking mode. */
+  const visionPerson = ref<{ x: number, y: number } | null>(null)
+  let visionPersonAtMs = 0
   let thinkingSinceMs = 0
   let speechSequence = 0
   let currentSession: string | undefined
@@ -169,7 +179,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     sessionsOfConnection.add(sessionId)
     thinking.value = false
     runtime.speechStarted(sessionId, now)
-    if (text)
+    if (text && !nightMode.value)
       playBuiltinGesture(speechGestures.pick(text, now), 'speech', now)
     try {
       const blob = await audio()
@@ -279,8 +289,22 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         options.applyEmotion(event.mood.airiEmotion, event.intensity ?? 1)
         bridge.lastMood = JSON.stringify({ emotion: event.mood.airiEmotion, intensity: event.intensity ?? 1, atMs: Date.now() } satisfies StoredMood)
         return
+      case 'night-mode':
+        if (nightMode.value !== event.active)
+          console.info(`[neoalice-bridge] night mode ${event.active ? 'on' : 'off'}`)
+        nightMode.value = event.active
+        return
       case 'intent':
       {
+        if (nightMode.value) {
+          // In the night mode she lies with the eyes closed. A pose wakes her up and plays, other motions wait.
+          if (!event.intent.semanticAction.startsWith('pose_')) {
+            console.info(`[neoalice-bridge] night mode: ignored ${event.intent.semanticAction}`)
+            break
+          }
+          nightMode.value = false
+          console.info(`[neoalice-bridge] night mode off by ${event.intent.semanticAction}`)
+        }
         // NeoAlice sends an emoji to show on the face. The VRM has no emoji, so the face reacts with its emotion.
         const reaction = event.emoji && !options.reactEmoji?.(event.emoji) ? emotionOfEmoji(event.emoji) : undefined
         if (reaction)
@@ -320,13 +344,18 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
         })
         break
       case 'presence':
+        if (event.target) {
+          visionPerson.value = event.target
+          visionPersonAtMs = now
+        }
         // A person who arrives after a quiet time gets a wave and a smile. A person who stays does not.
-        if (now - lastPresenceMs > presenceGapMs)
+        if (now - lastPresenceMs > presenceGapMs && !nightMode.value)
           greet(now)
         lastPresenceMs = now
         break
       case 'greeting':
-        greet(now)
+        if (!nightMode.value)
+          greet(now)
         break
       default:
         break
@@ -566,6 +595,8 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     }
     if (thinking.value && waitingSince === undefined && now - thinkingSinceMs > thinkingTimeoutMs)
       thinking.value = false
+    if (visionPerson.value && now - visionPersonAtMs > visionPersonTimeoutMs)
+      visionPerson.value = null
     if (now - lastHeartbeatMs >= heartbeatIntervalMs) {
       lastHeartbeatMs = now
       announce(currentSession ? 'speaking' : waitingSince !== undefined ? 'thinking' : microphone.running ? 'listening' : 'idle')
@@ -603,7 +634,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
     options.applyEmotion(mood.emotion, mood.intensity)
   }
 
-  return { thinking, runtime, restoreMood }
+  return { thinking, nightMode, visionPerson, runtime, restoreMood }
 }
 
 /** Face emotion of an emoji of `cmd/avatar/emoji`. Unknown emoji give `undefined`. */

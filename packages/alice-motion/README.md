@@ -73,7 +73,11 @@ A one-arm gesture owns only its arm channel, which includes the hand of that arm
 | `neoalice/v1/<site>/cmd/avatar/animation` | `intent` from the file name of the URL. A catalog action with the same name comes first, for example an imported `Wave_Hello.fbx` becomes `wave_hello`. Otherwise an alias applies: `walking.fbx` becomes `walk`. An unknown file is ignored. |
 | `neoalice/v1/<site>/cmd/avatar/emoji` | `intent` `emoji` on the `facial` channel |
 | `neoalice/v1/companion/evt/companion/state`, `.../affect` | `mood` from the companion service |
+| `neoalice/v1/<site>/evt/alice/night_mode` | `night-mode` from `active` (also `enabled`, `night_mode`, or `state` `on`/`off`). The VRM lies down and closes the eyes. It is not the sleepy mood. |
+| `neoalice/v1/+/evt/vision/detection(s)`, with `vision` on | `presence`. With a `bbox` from 0 to 1, `target` is the center of the largest person box. |
 
+- The moods `tired` and `sleep` give the AIRI emotion `sleepy`: heavy eyelids and a slow breath, standing.
+- The contract with NeoAlice, in Portuguese: `docs/alice-motion-engine/PLANEJAMENTO_11_CONTRATO_NEOALICE_ESTADOS.md`.
 - `setCatalog` replaces the catalog, for example after a motion import. The stage gives it the default catalog plus the imported motions.
 - Other sites, repeated payloads within 2 s, broken JSON, and unknown commands are `ignored` events with a reason. Nothing throws.
 - An avatar command above 4096 bytes is ignored, as the accepted ADR requires for motion messages. Speech audio can be up to 10 MB.

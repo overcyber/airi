@@ -77,6 +77,10 @@ const props = withDefaults(defineProps<{
   speechText?: VRMSpeechText
   /** Whether the character waits for a reply. Forwarded to the VRM motion layer. */
   thinking?: boolean
+  /** The night mode of Alice: the VRM lies down and closes the eyes. See `VRMModel`. */
+  nightMode?: boolean
+  /** The person in front of the screen, 0 to 1 in the camera image, for the `person` tracking mode. */
+  personPosition?: { x: number, y: number } | null
   /** Idle pool, talking clip, and emotes of the VRM. Defaults to the bundled motions. */
   motionLibrary?: VrmMotionLibrary
   cursorPosition?: { x: number, y: number }
@@ -1196,6 +1200,8 @@ defineExpose({
         :lip-sync-mode="lipSyncMode"
         :speech-text="props.speechText"
         :thinking="props.thinking"
+        :night-mode="props.nightMode"
+        :person-position="props.personPosition"
         :motion-library="props.motionLibrary ?? defaultVrmMotionLibrary"
         :cursor-position="props.cursorPosition"
         :last-committed-model-id="lastCommittedModelId"

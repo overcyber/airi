@@ -45,8 +45,16 @@ export type NeoAliceBridgeEvent
     | { type: 'widget', site: string, action: 'spawn' | 'update' | 'remove' | 'clear', widget?: string, id?: string, props: Record<string, unknown>, ttlSeconds?: number }
     /** `cmd/avatar/tool` (Plan 07, W4): run a permitted tool of the avatar. The stage answers with `evt/avatar/tool_result`. */
     | { type: 'tool', site: string, tool: string, args: Record<string, unknown>, requestId: string }
-    /** A camera of NeoAlice sees people (F5). `people` is above 0. */
-    | { type: 'presence', site: string, people: number, camera?: string }
+    /**
+     * A camera of NeoAlice sees people (F5). `people` is above 0. `target` is the center of the largest person box,
+     * from 0 to 1 in the camera image (x to the right, y down), when the message has `bbox`.
+     */
+    | { type: 'presence', site: string, people: number, camera?: string, target?: { x: number, y: number } }
+    /**
+     * The night mode of Alice (`evt/alice/night_mode`), for example after "boa noite". It is not the sleepy mood:
+     * in the night mode the avatar lies down and closes the eyes until the mode ends.
+     */
+    | { type: 'night-mode', site: string, active: boolean }
     /** The face recognition greets someone by name, for example "Ola Ana" (F5). */
     | { type: 'greeting', site: string, text: string }
     | { type: 'ignored', topic: string, reason: string }
@@ -91,7 +99,7 @@ export interface NeoAliceTranslatorOptions {
 }
 
 /** The actions of the mood site: mood and avatar commands, no speech. */
-const moodActions = ['evt/mood', 'cmd/evt/mood', 'cmd/avatar/gesture', 'cmd/avatar/pose', 'cmd/avatar/animation', 'cmd/avatar/emoji', 'cmd/avatar/widget', 'cmd/avatar/tool']
+const moodActions = ['evt/mood', 'cmd/evt/mood', 'evt/alice/night_mode', 'cmd/avatar/gesture', 'cmd/avatar/pose', 'cmd/avatar/animation', 'cmd/avatar/emoji', 'cmd/avatar/widget', 'cmd/avatar/tool']
 /** The speech actions, read from the mood site with `moodSiteSpeech`. */
 const speechActions = ['cmd/tts/say', 'cmd/tts/audio', 'cmd/tts/stop']
 /** The same speech on two sites (a broadcast) within this window plays once. */
@@ -113,6 +121,7 @@ export function neoAliceBridgeTopics(options: Pick<NeoAliceTranslatorOptions, 's
     `${topicRoot}/${site}/evt/stt/final`,
     `${topicRoot}/${site}/evt/mood`,
     `${topicRoot}/${site}/cmd/evt/mood`,
+    `${topicRoot}/${site}/evt/alice/night_mode`,
     `${topicRoot}/${site}/cmd/avatar/gesture`,
     `${topicRoot}/${site}/cmd/avatar/pose`,
     `${topicRoot}/${site}/cmd/avatar/animation`,
@@ -138,7 +147,10 @@ const Percent = fallback(optional(pipe(number(), finite(), minValue(0), maxValue
 
 /** The NeoAlice YOLO class of a person. */
 const personClass = 'person'
-const VisionObject = looseObject({ class: Name, class_name: Name })
+/** A box from 0 to 1: `x` and `y` are the top left corner, `w` and `h` the size. */
+const BoxValue = pipe(number(), finite(), minValue(0), maxValue(1))
+const VisionBox = looseObject({ x: BoxValue, y: BoxValue, w: BoxValue, h: BoxValue })
+const VisionObject = looseObject({ class: Name, class_name: Name, bbox: fallback(optional(VisionBox), undefined) })
 const VisionPayload = looseObject({
   camera: Name,
   detection: fallback(optional(looseObject({ camera: Name, objects: fallback(optional(array(VisionObject)), undefined) })), undefined),
@@ -153,6 +165,14 @@ const SpeechPayload = looseObject({
   session_id: fallback(optional(pipe(string(), maxLength(128))), undefined),
   audio: fallback(optional(looseObject({ b64: fallback(optional(string()), undefined) })), undefined),
   audio_base64: fallback(optional(string()), undefined),
+})
+
+/** `{"active": true}`. `enabled`, `night_mode`, and `state` (`on` or `off`) are read too. */
+const NightModePayload = looseObject({
+  active: fallback(optional(boolean()), undefined),
+  enabled: fallback(optional(boolean()), undefined),
+  night_mode: fallback(optional(boolean()), undefined),
+  state: Name,
 })
 
 const MoodPayload = looseObject({
@@ -279,6 +299,14 @@ export class NeoAliceTranslator {
         if (!name)
           return ignored(topic, 'no mood')
         return { type: 'mood', site, mood: resolveMood(name), intensity: toUnit(parsed.success ? parsed.output.intensity : undefined), origin: 'neoalice' }
+      }
+      case 'evt/alice/night_mode': {
+        const parsed = safeParse(NightModePayload, data)
+        const state = parsed.success ? parsed.output.state?.trim().toLowerCase() : undefined
+        const active = parsed.success
+          ? parsed.output.active ?? parsed.output.enabled ?? parsed.output.night_mode ?? (state === 'on' ? true : state === 'off' ? false : undefined)
+          : undefined
+        return active === undefined ? ignored(topic, 'no night mode state') : { type: 'night-mode', site, active }
       }
       case 'cmd/avatar/animation':
         return translateAnimation(topic, site, data)
@@ -464,11 +492,15 @@ function translateVision(topic: string, site: string, payload: string): NeoAlice
   if (!parsed.success)
     return ignored(topic, 'vision payload is not an object')
   const objects = parsed.output.detection?.objects ?? parsed.output.detections ?? []
-  const people = objects.filter(object => (object.class ?? object.class_name) === personClass).length
-  if (people === 0)
+  const persons = objects.filter(object => (object.class ?? object.class_name) === personClass)
+  if (persons.length === 0)
     return ignored(topic, 'no person in the vision message')
   const camera = parsed.output.detection?.camera ?? parsed.output.camera
-  return { type: 'presence', site, people, ...(camera && { camera }) }
+  // The avatar looks at the largest person box, that is, the person nearest to the camera.
+  const boxes = persons.flatMap(person => person.bbox ? [person.bbox] : [])
+  const box = boxes.sort((a, b) => b.w * b.h - a.w * a.h)[0]
+  const target = box ? { x: Math.min(1, box.x + box.w / 2), y: Math.min(1, box.y + box.h / 2) } : undefined
+  return { type: 'presence', site, people: persons.length, ...(camera && { camera }), ...(target && { target }) }
 }
 
 function ignored(topic: string, reason: string): NeoAliceBridgeEvent {

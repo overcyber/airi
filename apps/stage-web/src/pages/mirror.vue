@@ -5,8 +5,8 @@ import type { VrmFrameCostSummary } from '@proj-airi/stage-ui-three/trace'
 import { useModelStore } from '@proj-airi/stage-ui-three'
 import { acquireStageThreeRuntimeTrace, getStageThreeRuntimeTraceContext, stageThreeTraceVrmUpdateFrameEvent, VrmFrameCostWindow } from '@proj-airi/stage-ui-three/trace'
 import { WidgetStage } from '@proj-airi/stage-ui/components/scenes'
-import { useBroadcastChannel } from '@vueuse/core'
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { useBroadcastChannel, useMouse } from '@vueuse/core'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 /**
  * The page of the MagicMirror (Plan 06, F3): the avatar only, on a transparent background.
@@ -44,6 +44,21 @@ const rotate = numberParam('rotate')
 if (rotate !== undefined)
   useModelStore().modelRotationY = ((rotate % 360) + 540) % 360 - 180
 const framingAdjust = { x: numberParam('x'), y: numberParam('y'), zoom: numberParam('zoom') }
+
+/**
+ * Where she looks, from the URL, because the mirror browser keeps its own settings. The browser keeps the value.
+ * - `look=person&source=webcam`: the person that the webcam of this device sees.
+ * - `look=person&source=vision`: the person that a NeoAlice camera sees (`evt/vision/detection` with `bbox`).
+ * - `look=camera`: the viewer, straight ahead. `look=mouse`: the mouse pointer. `look=none`: the rest gaze.
+ */
+const look = query.get('look')
+if (look === 'person' || look === 'camera' || look === 'mouse' || look === 'none')
+  useModelStore().trackingMode = look
+const source = query.get('source')
+if (source === 'webcam' || source === 'vision')
+  useModelStore().personSource = source
+const { x: mouseX, y: mouseY } = useMouse({ type: 'client' })
+const cursorPosition = computed(() => ({ x: mouseX.value, y: mouseY.value }))
 
 // The mirror shows the page over its black screen, so the page itself has no background.
 const saved = { html: '', body: '' }
@@ -110,6 +125,7 @@ if (new URLSearchParams(location.search).has('stats')) {
       :paused="false"
       :vrm-framing="framing"
       :vrm-framing-adjust="framingAdjust"
+      :cursor-position="cursorPosition"
     />
     <p
       v-if="speechCaption"

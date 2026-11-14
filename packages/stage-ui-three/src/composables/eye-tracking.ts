@@ -18,6 +18,13 @@ export interface VRMEyeFocusSource {
 }
 
 /**
+ * Size of the area in front of the screen that the person image covers, in meters at the camera.
+ * A webcam sees about 60 degrees wide, that is, about 1.6 m at 1.5 m from the screen.
+ */
+const personAreaWidthMeters = 1.6
+const personAreaHeightMeters = 0.9
+
+/**
  * Maps cursor and camera tracking modes into a VRM world-space eye focus target.
  *
  * Use when:
@@ -37,6 +44,11 @@ export function useVRMEyeFocusFor(options: {
   screenBoundingBox: MaybeRefOrGetter<{ top: number, left: number, height: number, width: number }>
   source: MaybeRefOrGetter<VRMEyeFocusSource | null | undefined>
   trackingMode: MaybeRefOrGetter<TrackingMode>
+  /**
+   * The center of the person in the camera image, from 0 to 1 (x to the right, y down), as the camera sees it,
+   * not mirrored. `null` when nobody is in front of the screen. Only the `person` mode reads it.
+   */
+  person?: MaybeRefOrGetter<VRMEyeFocusSource | null | undefined>
 }) {
   const focusPos = computed<Vector3>(() => {
     const trackingMode = toValue(options.trackingMode)
@@ -46,6 +58,12 @@ export function useVRMEyeFocusFor(options: {
     }
 
     const ctx = toValue(options.context)
+    if (trackingMode === 'person') {
+      const person = toValue(options.person)
+      if (!person)
+        return ctx.defaultLookAt
+      return personToWorld(ctx, toValue(options.cameraPosition), person)
+    }
     const trackingSource = toValue(options.source)
     if (trackingMode === 'none' || !trackingSource)
       return ctx.defaultLookAt
@@ -64,6 +82,21 @@ export function useVRMEyeFocusFor(options: {
   })
 
   return focusPos
+}
+
+/**
+ * The point where the person stands, near the scene camera. The camera faces the person, so a person on the left
+ * of the camera image stands on the right of the screen, as seen from the person.
+ */
+function personToWorld(ctx: VRMWorldContext, cameraPosition: Vec3, person: VRMEyeFocusSource): Vector3 {
+  ctx.camera.updateMatrixWorld?.()
+  const right = new Vector3().setFromMatrixColumn(ctx.camera.matrixWorld, 0).normalize()
+  const up = new Vector3().setFromMatrixColumn(ctx.camera.matrixWorld, 1).normalize()
+  const x = Math.min(1, Math.max(0, person.x))
+  const y = Math.min(1, Math.max(0, person.y))
+  return new Vector3(cameraPosition.x, cameraPosition.y, cameraPosition.z)
+    .addScaledVector(right, (0.5 - x) * personAreaWidthMeters)
+    .addScaledVector(up, (0.5 - y) * personAreaHeightMeters)
 }
 
 function castScreenToCam(ctx: VRMWorldContext, point: Vector2): Vector3 {

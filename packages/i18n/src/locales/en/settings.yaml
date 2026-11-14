@@ -2863,6 +2863,7 @@ vrm:
       title: Looking at
       options:
         option:
+          person: Person (webcam)
           camera: Camera
           mouse: Mouse
           disabled: Disabled

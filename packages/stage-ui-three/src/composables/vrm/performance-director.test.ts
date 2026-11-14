@@ -21,7 +21,7 @@ function sequence(values: number[]) {
 }
 
 /** Runs frames the way VRMModel does: restore, (mixer), apply. */
-function runFrames(director: PerformanceDirector, vrm: VRM, frames: number, deltaSeconds: number, input: { speaking: boolean, thinking: boolean, mouth: number }) {
+function runFrames(director: PerformanceDirector, vrm: VRM, frames: number, deltaSeconds: number, input: { speaking: boolean, thinking: boolean, mouth: number, attention?: { yaw: number, pitch: number } | null }) {
   for (let i = 0; i < frames; i++) {
     director.restore(vrm)
     director.apply(vrm, deltaSeconds, input)
@@ -134,5 +134,19 @@ describe('performanceDirector', () => {
     expect(afterSpeech.nudgeIdleAfterSeconds).toBeCloseTo(2.2)
     expect(afterThinking.nudgeIdleAfterSeconds).toBeCloseTo(1.9)
     expect(steady.nudgeIdleAfterSeconds).toBeNull()
+  })
+
+  it('turns the head toward a followed target, at most 20 degrees, and leaves it to the thinking look-away', () => {
+    const { vrm, bones } = createVrm()
+    const director = new PerformanceDirector(sequence([0.5]))
+
+    runFrames(director, vrm, 240, 1 / 60, { speaking: false, thinking: false, mouth: 0, attention: { yaw: 0.4, pitch: 0 } })
+    expect(bones.head.rotation.y).toBeCloseTo(0.22, 2)
+
+    runFrames(director, vrm, 240, 1 / 60, { speaking: false, thinking: false, mouth: 0, attention: { yaw: -1.5, pitch: 0 } })
+    expect(bones.head.rotation.y).toBeCloseTo(-0.35, 2)
+
+    runFrames(director, vrm, 240, 1 / 60, { speaking: false, thinking: false, mouth: 0, attention: null })
+    expect(Math.abs(bones.head.rotation.y)).toBeLessThan(0.01)
   })
 })

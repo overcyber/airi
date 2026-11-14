@@ -48,6 +48,9 @@ const moodFaces: Record<string, { candidates: string[], scale: number } | null> 
   surprised: { candidates: ['surprised'], scale: 0.45 },
   relaxed: { candidates: ['relaxed', 'fun'], scale: 0.45 },
   think: { candidates: ['think', 'surprised'], scale: 0.25 },
+  // NeoAlice `tired` and `sleep`. The preset is only a handle: the face is the ARKit shapes and the heavy lids below.
+  // `neutral` first, because `relaxed` is a smile on most models.
+  sleepy: { candidates: ['neutral', 'relaxed'], scale: 0.4 },
   neutral: null,
 }
 
@@ -73,7 +76,21 @@ const arkitMoodShapes: Record<string, Record<string, number>> = {
   relaxed: { mouthSmileLeft: 0.3, mouthSmileRight: 0.3, eyeSquintLeft: 0.2, eyeSquintRight: 0.2 },
   // Not from TalkingHead, which has no thinking mood: one brow up, lips pressed to the side.
   think: { browInnerUp: 0.3, browOuterUpLeft: 0.3, browDownRight: 0.25, mouthPressLeft: 0.3, mouthRollLower: 0.15, mouthLeft: 0.2, eyeSquintRight: 0.2 },
+  // Like the `sleep` mood of TalkingHead: a soft brow and a slack mouth. The heavy eyelids are in `moodLids`.
+  sleepy: { browInnerUp: 0.12, mouthRollLower: 0.08, mouthShrugUpper: 0.05, mouthClose: 0.03 },
 }
+
+/**
+ * How far a mood closes the eyelids at full intensity, through the blink expressions. The blink still runs,
+ * from the lowered lid to closed and back.
+ */
+const moodLids: Record<string, number> = {
+  sleepy: 0.45,
+}
+
+/** Rates of the closed eyes of the night mode, per second: they close in about 1.5 s and open in about 0.4 s. */
+const eyesCloseRate = 1.2
+const eyesOpenRate = 4
 
 /**
  * An emoji face of TalkingHead has shapes at 1, for example a frown or a stretched mouth, made for its own
@@ -216,6 +233,10 @@ export class MoodFace {
   private speechFace = 0
   private readonly hasArkit: boolean
   private readonly blinkExpressions: string[]
+  /** The night mode: the eyes close and the blink stops. She opens them while she speaks. */
+  private sleeping = false
+  /** How far the eyes of the night mode are closed, 0 to 1, on the frame clock. */
+  private eyesClosed = 0
 
   constructor(
     private readonly expressionNames: readonly string[],
@@ -238,6 +259,14 @@ export class MoodFace {
    */
   setMood(mood: string, intensity = 1) {
     this.moodTarget = targetFor(mood, intensity, this.expressionNames, 'mood')
+  }
+
+  /**
+   * Starts or ends the night mode of the face: the eyes close and stay closed, without the blink.
+   * It is not the sleepy mood, which only makes the eyelids heavy.
+   */
+  setSleeping(active: boolean) {
+    this.sleeping = active
   }
 
   /** Shows a short reaction on top of the mood. Same mapping as the mood, stronger and capped. */
@@ -398,10 +427,18 @@ export class MoodFace {
           arkit.set(name, Math.max(arkit.get(name) ?? 0, Math.round(smile * share * 1000) / 1000))
       }
     }
-    if (this.bond.energy < 0.4 && !input.emotePlaying) {
-      const lids = pickCandidate(['blink'], this.expressionNames)
-      if (lids)
-        arkit.set(lids, Math.max(arkit.get(lids) ?? 0, Math.round((0.4 - this.bond.energy) * 0.6 * 1000) / 1000))
+    // Eyelids: low energy and the sleepy mood make them heavy. The night mode closes them, except while she speaks.
+    const closedGoal = this.sleeping && !input.speaking ? 1 : 0
+    const closedRate = closedGoal > this.eyesClosed ? eyesCloseRate : eyesOpenRate
+    this.eyesClosed += (closedGoal - this.eyesClosed) * Math.min(1, delta * closedRate)
+    if (closedGoal === 0 && this.eyesClosed < 0.005)
+      this.eyesClosed = 0
+    const moodLid = mood?.key && moodLids[mood.key] && scale ? moodLids[mood.key] * Math.min(1, mood.weight / scale) : 0
+    const energyLid = this.bond.energy < 0.4 && !input.emotePlaying ? (0.4 - this.bond.energy) * 0.6 : 0
+    const lids = Math.round(Math.max(moodLid, energyLid, this.eyesClosed) * 1000) / 1000
+    if (lids > 0) {
+      for (const name of this.blinkExpressions)
+        arkit.set(name, Math.max(arkit.get(name) ?? 0, lids))
     }
     for (const name of this.arkitWritten) {
       if (!arkit.has(name) && !face.has(name))
@@ -423,7 +460,12 @@ export class MoodFace {
 
     // Blink, idle only, off during emotes: about 0.125 s, quick close (30%), slow open (70%).
     const blink = this.blink
-    if (!input.emotePlaying) {
+    if (this.eyesClosed > 0.9) {
+      // The eyes of the night mode are closed. A blink would open them for a frame.
+      blink.active = false
+      blink.timerSeconds = 0
+    }
+    else if (!input.emotePlaying) {
       blink.timerSeconds += delta
       if (!blink.active && blink.timerSeconds >= blink.nextSeconds) {
         blink.active = true
@@ -439,8 +481,9 @@ export class MoodFace {
           blink.nextSeconds = this.nextBlinkIn()
           weight = 0
         }
+        // The blink closes from the heavy lid, so it never opens the lid wider first.
         for (const name of this.blinkExpressions)
-          face.set(name, weight)
+          face.set(name, Math.max(lids, weight))
       }
     }
     else if (blink.active) {

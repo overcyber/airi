@@ -65,10 +65,11 @@ const fpsOptions = computed(() => [
 ])
 const canExtractColors = computed(() => props.runtimeSnapshot.canCapturePreview)
 const trackingOptions = computed<{
-  value: 'camera' | 'mouse' | 'none'
+  value: 'camera' | 'mouse' | 'person' | 'none'
   label: string
   class: string
 }[]>(() => [
+  { value: 'person', label: t('settings.vrm.scale-and-position.eye-tracking-mode.options.option.person'), class: 'col-start-2' },
   { value: 'camera', label: t('settings.vrm.scale-and-position.eye-tracking-mode.options.option.camera'), class: 'col-start-3' },
   { value: 'mouse', label: t('settings.vrm.scale-and-position.eye-tracking-mode.options.option.mouse'), class: 'col-start-4' },
   { value: 'none', label: t('settings.vrm.scale-and-position.eye-tracking-mode.options.option.disabled'), class: 'col-start-5' },
@@ -163,7 +164,6 @@ const envOptions = computed(() => [
       <div class="text-xs">
         {{ t('settings.vrm.scale-and-position.eye-tracking-mode.title') }}:
       </div>
-      <div />
       <template v-for="option in trackingOptions" :key="option.value">
         <GhostButton
           :class="[option.class, 'w-auto']"

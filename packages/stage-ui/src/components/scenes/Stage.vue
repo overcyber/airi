@@ -17,7 +17,7 @@ import { createLive2D, Live2DScene, useLive2dParams, useSettingsLive2d } from '@
 import { MMDScene } from '@proj-airi/stage-ui-mmd'
 import { SpineScene } from '@proj-airi/stage-ui-spine'
 import { TachieScene } from '@proj-airi/stage-ui-tachie'
-import { ThreeScene } from '@proj-airi/stage-ui-three'
+import { ThreeScene, useModelStore } from '@proj-airi/stage-ui-three'
 import { animations } from '@proj-airi/stage-ui-three/assets/vrm'
 import { vrmEmoteCue } from '@proj-airi/stage-ui-three/composables/vrm'
 import { createQueue } from '@proj-airi/stream-kit'
@@ -37,6 +37,7 @@ import { useNeoAliceStageBridge } from '../../composables/use-neoalice-stage-bri
 // import { useDuckDb } from '../../composables/use-duck-db'
 import { Emotion, EMOTION_EmotionMotionName_value, EMOTION_VRMExpressionName_value, EmotionThinkMotionName } from '../../constants/emotions'
 import { useLive2DStageMotionMagic } from '../../features/motions/live2d/use-live2d-stage-motion-magic'
+import { WebcamPersonTracker } from '../../libs/alice-motion/webcam-person'
 import { createAvatarTouchAggregator } from '../../libs/avatar-touch/notify'
 import { syncedRoles, usePiniaSynced } from '../../libs/pinia/synced-context'
 import { getSpeechBusContext, speechOutputGetPlaybackState, speechOutputPlaybackStateChangedEvent } from '../../services/speech/bus'
@@ -512,7 +513,7 @@ function showBridgeCaption(text: string) {
   }
 }
 
-const { thinking: neoAliceThinking, restoreMood: restoreNeoAliceMood } = useNeoAliceStageBridge({
+const { thinking: neoAliceThinking, nightMode: neoAliceNightMode, visionPerson: neoAliceVisionPerson, restoreMood: restoreNeoAliceMood } = useNeoAliceStageBridge({
   playClip: async (clipId, options) => stageModelRenderer.value === 'vrm' ? (await vrmViewerRef.value?.playMotion(clipId, options)) ?? false : false,
   playAnimation: async (url, durationMs) => stageModelRenderer.value === 'vrm' ? (await vrmViewerRef.value?.playMotionUrl(url, { durationMs })) ?? false : false,
   emotes: () => vrmMotions.motionLibrary.emotes,
@@ -577,10 +578,39 @@ const { thinking: neoAliceThinking, restoreMood: restoreNeoAliceMood } = useNeoA
       emotionsQueue.enqueue(payload)
   },
   applyEmotion: (emotion, intensity) => {
+    // The sleepy face of NeoAlice `tired` and `sleep` exists on the VRM only. The other renderers stay neutral.
+    if (emotion === 'sleepy') {
+      if (stageModelRenderer.value === 'vrm')
+        vrmViewerRef.value?.setExpression('sleepy', intensity)
+      else
+        emotionsQueue.enqueue({ name: Emotion.Neutral, intensity })
+      return
+    }
     const payload = toStageEmotionPayload({ name: emotion, intensity })
     if (payload)
       emotionsQueue.enqueue(payload)
   },
+})
+
+// The person in front of the screen, for the `person` look-at mode of the VRM: from a NeoAlice camera, or from
+// the webcam of this device. The webcam opens only in that mode, and closes when the mode or the renderer changes.
+const { trackingMode: vrmTrackingMode, personSource: vrmPersonSource } = storeToRefs(useModelStore())
+const webcamPerson = ref<{ x: number, y: number } | null>(null)
+const webcamPersonTracker = new WebcamPersonTracker((position) => {
+  webcamPerson.value = position
+})
+const followsWebcamPerson = computed(() => stageModelRenderer.value === 'vrm' && vrmTrackingMode.value === 'person' && vrmPersonSource.value === 'webcam')
+watch(followsWebcamPerson, (follows) => {
+  if (follows)
+    void webcamPersonTracker.start()
+  else
+    webcamPersonTracker.stop()
+}, { immediate: true })
+onUnmounted(() => webcamPersonTracker.stop())
+const vrmPersonPosition = computed(() => {
+  if (vrmTrackingMode.value !== 'person')
+    return null
+  return vrmPersonSource.value === 'vision' ? neoAliceVisionPerson.value : webcamPerson.value
 })
 
 function startLipSyncLoop() {
@@ -856,6 +886,8 @@ defineExpose({
         :speech-active="nowSpeaking"
         :speech-text="speechText"
         :thinking="(chatSending || neoAliceThinking) && !nowSpeaking"
+        :night-mode="neoAliceNightMode"
+        :person-position="vrmPersonPosition"
         :motion-library="vrmMotions.motionLibrary"
         :framing="props.vrmFraming"
         :framing-adjust="props.vrmFramingAdjust"

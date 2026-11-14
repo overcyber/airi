@@ -47,6 +47,8 @@ export const moodBodyProfiles: Record<string, MoodBodyProfile> = {
   surprised: { breathRate: 0.45, breathDepth: 0.02, spinePitch: -0.04, headPitch: -0.05, headRoll: 0, shoulderLift: 0.04, swayAmplitude: 0.008, swayRate: 0.1, eyeContact: 0.9, gazeAway: 'up' },
   relaxed: { breathRate: 0.2, breathDepth: 0.025, spinePitch: 0.01, headPitch: 0.01, headRoll: 0.05, shoulderLift: -0.02, swayAmplitude: 0.03, swayRate: 0.12, eyeContact: 0.7, gazeAway: 'side' },
   think: { breathRate: 0.24, breathDepth: 0.02, spinePitch: 0.02, headPitch: -0.03, headRoll: 0.06, shoulderLift: 0, swayAmplitude: 0.01, swayRate: 0.1, eyeContact: 0.3, gazeAway: 'up' },
+  // NeoAlice `tired` and `sleep`, like the `sleep` mood of TalkingHead: slow deep breath, head low, shoulders down.
+  sleepy: { breathRate: 0.15, breathDepth: 0.03, spinePitch: 0.04, headPitch: 0.1, headRoll: 0.045, shoulderLift: -0.04, swayAmplitude: 0.012, swayRate: 0.07, eyeContact: 0.45, gazeAway: 'down' },
 }
 
 const numericKeys = ['breathRate', 'breathDepth', 'spinePitch', 'headPitch', 'headRoll', 'shoulderLift', 'swayAmplitude', 'swayRate', 'eyeContact'] as const

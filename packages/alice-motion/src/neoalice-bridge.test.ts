@@ -219,3 +219,39 @@ describe('neoAliceTranslator widgets and tools (Plan 07, W4)', () => {
     expect(JSON.parse(refused.payload)).toMatchObject({ ok: false, error: 'not permitted' })
   })
 })
+
+describe('neoAliceTranslator night mode and person position', () => {
+  it('reads the night mode of Alice on the bridge site and the mood site, and it is not the sleepy mood', () => {
+    expect(neoAliceBridgeTopics({ site: 'airi-avatar', moodSite: 'magicmirror' })).toEqual(expect.arrayContaining([
+      'neoalice/v1/airi-avatar/evt/alice/night_mode',
+      'neoalice/v1/magicmirror/evt/alice/night_mode',
+    ]))
+    const bridge = translator({ moodSite: 'magicmirror' })
+    expect(bridge.translate('neoalice/v1/magicmirror/evt/alice/night_mode', JSON.stringify({ active: true }), 0))
+      .toEqual({ type: 'night-mode', site: 'magicmirror', active: true })
+    expect(bridge.translate('neoalice/v1/mirror/evt/alice/night_mode', JSON.stringify({ state: 'off' }), 0))
+      .toEqual({ type: 'night-mode', site: 'mirror', active: false })
+    expect(bridge.translate('neoalice/v1/mirror/evt/alice/night_mode', JSON.stringify({ mode: 'x' }), 5000))
+      .toMatchObject({ type: 'ignored', reason: 'no night mode state' })
+    expect(bridge.translate('neoalice/v1/mirror/evt/mood', JSON.stringify({ mood: 'sleep' }), 0))
+      .toMatchObject({ type: 'mood', mood: { airiEmotion: 'sleepy', talkingheadMood: 'sleep' } })
+  })
+
+  it('gives the center of the largest person box, and no target without a valid box', () => {
+    const bridge = translator({ vision: true })
+    const message = { detection: { camera: 'cam-espelho', objects: [
+      { class: 'person', bbox: { x: 0.1, y: 0.2, w: 0.1, h: 0.2 } },
+      { class: 'person', bbox: { x: 0.5, y: 0.1, w: 0.3, h: 0.6 } },
+      { class: 'person', bbox: { x: 40, y: 10, w: 100, h: 200 } },
+    ] } }
+    const event = bridge.translate('neoalice/v1/vision-espelho/evt/vision/detection', JSON.stringify(message), 0)
+    expect(event).toMatchObject({ type: 'presence', people: 3, camera: 'cam-espelho' })
+    if (event.type !== 'presence')
+      return
+    expect(event.target?.x).toBeCloseTo(0.65)
+    expect(event.target?.y).toBeCloseTo(0.4)
+    expect(bridge.translate('neoalice/v1/vision-sala/evt/vision/detections', JSON.stringify({ detections: [{ class_name: 'person' }] }), 0))
+      .not
+      .toHaveProperty('target')
+  })
+})

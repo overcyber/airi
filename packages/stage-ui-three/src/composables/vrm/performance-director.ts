@@ -29,7 +29,18 @@ export interface DirectorInput {
   thinking: boolean
   /** Mouth opening of the current speech, 0 to 1. */
   mouth: number
+  /**
+   * Direction of a followed target (a person, the mouse, or the viewer) from the head, in radians.
+   * `yaw` is positive to the left of the model, `pitch` positive up. `null` when nothing is followed.
+   */
+  attention?: { yaw: number, pitch: number } | null
 }
+
+/** The head turns this share of the way to a followed target. The eyes do the rest. */
+const attentionShare = 0.55
+/** Largest head turn toward a followed target: 20 degrees to the side, 10 degrees up or down. */
+const attentionMaxYaw = 0.35
+const attentionMaxPitch = 0.17
 
 const visemeNames = ['aa', 'ee', 'ih', 'oh', 'ou'] as const
 
@@ -52,6 +63,9 @@ export class PerformanceDirector {
 
   private readonly headCurrent = new Vector3()
   private readonly headTarget = new Vector3()
+  /** The head turn toward a followed target, eased on the frame clock. */
+  private readonly attentionCurrent = new Vector3()
+  private readonly attentionTarget = new Vector3()
   private lookAwaySide = 1
   private lookAwayRemainingSeconds = 0
   private energyAverage = 0
@@ -64,7 +78,21 @@ export class PerformanceDirector {
   /** Offsets written last frame, undone by {@link restore}. */
   private readonly applied = new Map<VRMHumanBoneName, Vector3>()
 
+  /** The head turn of the last frame, in radians: to the left of the model, and down. */
+  private headYaw = 0
+  private headPitchDown = 0
+
   constructor(private readonly random: () => number = Math.random) {}
+
+  /** The head turn to the left of the model that the last frame wrote, in radians. */
+  get headYawRadians() {
+    return this.headYaw
+  }
+
+  /** The head nod down that the last frame wrote, in radians. */
+  get headPitchDownRadians() {
+    return this.headPitchDown
+  }
 
   /** Removes the offsets of the last frame. Bones that the mixer rewrites lose nothing. */
   restore(vrm: VRM) {
@@ -107,9 +135,24 @@ export class PerformanceDirector {
     this.nodImpulse *= Math.exp(-delta * 6)
 
     this.updateHeadTarget(delta)
+    // A followed target turns the head toward it. The scan, the glances, and the nods stay on top, smaller.
+    const attention = this.state === 'thinking' ? null : input.attention
+    if (attention) {
+      const yaw = Math.max(-attentionMaxYaw, Math.min(attentionMaxYaw, attention.yaw * attentionShare))
+      const pitch = Math.max(-attentionMaxPitch, Math.min(attentionMaxPitch, attention.pitch * attentionShare))
+      // Head x is a nod down in the tuned axes, so a target above is a negative x.
+      this.attentionTarget.set(-pitch, yaw, 0)
+    }
+    else {
+      this.attentionTarget.set(0, 0, 0)
+    }
+    this.attentionCurrent.lerp(this.attentionTarget, 1 - Math.exp(-3 * delta))
     this.headCurrent.lerp(this.headTarget, 1 - Math.exp(-4.5 * delta))
+    const scanShare = attention ? 0.4 : 1
 
-    this.addOffset(vrm, 'head', this.headCurrent.x + this.nodImpulse, this.headCurrent.y, this.headCurrent.z)
+    this.headPitchDown = this.headCurrent.x * scanShare + this.attentionCurrent.x + this.nodImpulse
+    this.headYaw = this.headCurrent.y * scanShare + this.attentionCurrent.y
+    this.addOffset(vrm, 'head', this.headPitchDown, this.headYaw, this.headCurrent.z * scanShare)
     if (this.state === 'speaking')
       this.addOffset(vrm, 'chest', mouth * 0.018 + this.nodImpulse * 0.3, 0, 0)
 

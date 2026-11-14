@@ -295,3 +295,50 @@ describe('moodFace bond', () => {
     expect(run(face, 6).get('relaxed') ?? 0).toBe(0)
   })
 })
+
+describe('moodFace sleepy mood and night mode', () => {
+  const arkitNames = ['happy', 'relaxed', 'neutral', 'blink', 'mouthSmileLeft', 'mouthSmileRight', 'browInnerUp', 'mouthRollLower', 'eyeBlinkLeft', 'eyeBlinkRight']
+
+  it('makes the eyelids heavy with the sleepy mood, without a smile, and still blinks from the lowered lid', () => {
+    const face = new MoodFace(arkitNames, () => 0)
+    face.setMood('sleepy', 1)
+    const written = new Map<string, number>()
+    let lowest = 1
+    let highest = 0
+    for (let i = 0; i < 1000; i++) {
+      for (const [name, weight] of face.update({ deltaSeconds: 0.01, speaking: false, emotePlaying: false }))
+        written.set(name, weight)
+      if (i > 500) {
+        lowest = Math.min(lowest, written.get('blink') ?? 0)
+        highest = Math.max(highest, written.get('blink') ?? 0)
+      }
+    }
+    expect(lowest).toBeCloseTo(0.45, 2)
+    expect(highest).toBeGreaterThan(0.9)
+    expect(written.get('mouthSmileLeft') ?? 0).toBe(0)
+    expect(written.get('relaxed') ?? 0).toBe(0)
+    // The eyelids use the blink preset only, never the two shapes too (blinkExpressionsOf).
+    expect(written.get('eyeBlinkLeft') ?? 0).toBe(0)
+  })
+
+  it('closes the eyes in the night mode without blinks, opens them while she speaks, and after the night mode', () => {
+    const face = new MoodFace(vrm1Names, () => 0)
+    face.setSleeping(true)
+    let opened = false
+    const written = new Map<string, number>()
+    for (let i = 0; i < 120; i++) {
+      for (const [name, weight] of face.update({ deltaSeconds: 0.05, speaking: false, emotePlaying: false }))
+        written.set(name, weight)
+      if (i > 80 && (written.get('blink') ?? 0) < 0.95)
+        opened = true
+    }
+    expect(written.get('blink')).toBeGreaterThan(0.95)
+    expect(opened).toBe(false)
+
+    expect(run(face, 1.5, { speaking: true }).get('blink') ?? 0).toBeLessThan(0.05)
+    expect(run(face, 6).get('blink')).toBeGreaterThan(0.95)
+
+    face.setSleeping(false)
+    expect(run(face, 1.5).get('blink') ?? 0).toBeLessThan(0.05)
+  })
+})

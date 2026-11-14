@@ -6,7 +6,7 @@
  *   `mischief`, `grouchy`. It can also send `sleep`.
  * - TalkingHead renderer: `neutral`, `happy`, `angry`, `sad`, `fear`, `disgust`, `love`, `sleep`.
  * - AIRI emotions (`packages/stage-ui/src/constants/emotions.ts`): `happy`, `sad`, `angry`,
- *   `think`, `surprised`, `awkward`, `question`, `curious`, `neutral`.
+ *   `think`, `surprised`, `awkward`, `question`, `curious`, `neutral`. The VRM stage also has `sleepy`.
  *
  * Consumers read `talkingheadMood` and `airiEmotion` from the published state.
  * They do not keep their own tables.
@@ -18,8 +18,11 @@ const vocabulary = new Map<string, { talkinghead: string, airi: string }>(Object
   sad: { talkinghead: 'sad', airi: 'sad' },
   annoyed: { talkinghead: 'angry', airi: 'angry' },
   angry: { talkinghead: 'angry', airi: 'angry' },
-  tired: { talkinghead: 'sleep', airi: 'neutral' },
-  sleep: { talkinghead: 'sleep', airi: 'neutral' },
+  // A sleepy face, like the `sleep` mood of TalkingHead: heavy eyelids and slow breath. She stays standing.
+  // The night mode of Alice (`evt/alice/night_mode`) is a different thing: she lies down and closes the eyes.
+  tired: { talkinghead: 'sleep', airi: 'sleepy' },
+  sleep: { talkinghead: 'sleep', airi: 'sleepy' },
+  sleepy: { talkinghead: 'sleep', airi: 'sleepy' },
   calm: { talkinghead: 'neutral', airi: 'neutral' },
   neutral: { talkinghead: 'neutral', airi: 'neutral' },
   // NOTICE: These five NeoAlice moods have no direct TalkingHead or AIRI name. The nearest

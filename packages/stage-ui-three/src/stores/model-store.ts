@@ -22,7 +22,13 @@ export interface SceneBootstrap {
   modelOrigin: Vec3
   modelSize: Vec3
 }
-export type TrackingMode = 'camera' | 'mouse' | 'none'
+/**
+ * Where the eyes look. `camera` is the camera of the 3D scene, that is, the viewer. `person` is the person that a
+ * webcam or the NeoAlice vision sees in front of the screen (`personSource`).
+ */
+export type TrackingMode = 'camera' | 'mouse' | 'person' | 'none'
+/** The source of the person position for the `person` tracking mode. */
+export type PersonSource = 'webcam' | 'vision'
 export type ScenePhase = 'pending' | 'loading' | 'binding' | 'mounted' | 'no-model' | 'error'
 export type HexColor = string & { __hex?: true }
 
@@ -85,6 +91,7 @@ const { cameraDistance, cameraFOV, cameraPosition } = useThreeCamera()
 
 const modelRotationY = useLocalStorage('settings/stage-ui-three/modelRotationY', 0)
 const trackingMode = useLocalStorage<TrackingMode>('settings/stage-ui-three/trackingMode', 'none')
+const personSource = useLocalStorage<PersonSource>('settings/stage-ui-three/personSource', 'webcam')
 const maxFps = useLocalStorage('settings/stage-ui-three/max-fps', 0)
 /** The largest mouth opening of the VRM lip sync, from 0.2 to 1. 0.6 opens the mouth about 1 cm on a human-size model. */
 const lipSyncMouthOpening = useLocalStorage('settings/stage-ui-three/lip-sync-mouth-opening', 0.6)
@@ -260,6 +267,7 @@ export const useModelStore = defineStore('modelStore', () => {
 
     lookAtTarget,
     trackingMode,
+    personSource,
     maxFps,
     lipSyncMouthOpening,
     lipSyncMode,

@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { Raycaster, Vector3 } from 'three'
+import { PerspectiveCamera, Raycaster, Vector3 } from 'three'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 
 vi.mock('@vueuse/core', async () => {
   const vue = await import('vue')
@@ -88,5 +89,36 @@ describe('useVRMEyeFocusFor', () => {
 
     expect(focus.value).toEqual(new Vector3(0, 0, -0.8))
     expect(raycaster.setFromCamera).toHaveBeenCalled()
+  })
+
+  it('looks at the person that the camera sees, on the side where the person stands, and rests without a person', async () => {
+    const { useVRMEyeFocusFor } = await import('./eye-tracking')
+    // The scene camera stands in front of the model at -z and looks at it, like the VRM stage.
+    const camera = new PerspectiveCamera(40, 1, 0.1, 100)
+    camera.position.set(0, 1.4, -1.5)
+    camera.lookAt(0, 1.4, 0)
+    const defaultLookAt = new Vector3(0, 1.4, -100)
+    const person = ref<{ x: number, y: number } | null>({ x: 0.2, y: 0.5 })
+
+    const focus = useVRMEyeFocusFor({
+      cameraPosition: () => ({ x: 0, y: 1.4, z: -1.5 }),
+      context: () => ({ raycaster: new Raycaster(), camera, defaultLookAt }),
+      screenBoundingBox: () => ({ top: 0, left: 0, width: 100, height: 100 }),
+      source: () => null,
+      trackingMode: () => 'person',
+      person: () => person.value,
+    })
+
+    // Left in the camera image is the right of the screen, as seen by the person. That is -x here.
+    expect(focus.value.x).toBeCloseTo(-0.48)
+    expect(focus.value.y).toBeCloseTo(1.4)
+    expect(focus.value.z).toBeCloseTo(-1.5)
+
+    person.value = { x: 0.5, y: 0 }
+    expect(focus.value.x).toBeCloseTo(0)
+    expect(focus.value.y).toBeCloseTo(1.85)
+
+    person.value = null
+    expect(focus.value).toBe(defaultLookAt)
   })
 })

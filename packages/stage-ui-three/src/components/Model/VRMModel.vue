@@ -130,6 +130,16 @@ const props = withDefaults(defineProps<{
    * and the thinking clip of `motionLibrary` plays when one is set.
    */
   thinking?: boolean
+  /**
+   * The night mode of Alice: she lies down (`lie_down` of `motionLibrary`) and closes the eyes until it ends.
+   * She opens the eyes while she speaks, and stays lying. It is not the sleepy mood (`setExpression('sleepy')`).
+   */
+  nightMode?: boolean
+  /**
+   * The center of the person in front of the screen, from 0 to 1 in the camera image, for the `person` tracking
+   * mode. `null` when nobody is there.
+   */
+  personPosition?: { x: number, y: number } | null
   /** Idle pool, talking clip, and emotes. Defaults to the bundled Utsuwa motions. */
   motionLibrary?: VrmMotionLibrary
   cursorPosition?: { x: number, y: number }
@@ -157,6 +167,8 @@ const props = withDefaults(defineProps<{
 }>(), {
   paused: false,
   thinking: false,
+  nightMode: false,
+  personPosition: null,
   motionLibrary: () => defaultVrmMotionLibrary,
 })
 /*
@@ -264,7 +276,11 @@ const focusPos = useVRMEyeFocusFor({
   screenBoundingBox: props.screenBoundingBox,
   source: () => props.cursorPosition,
   trackingMode: () => props.trackingMode,
+  person: () => props.personPosition,
 })
+/** The head follows the target of the eyes in these modes. Without a person, the `person` mode rests. */
+const headFollowsTarget = computed(() => props.trackingMode === 'mouse' || props.trackingMode === 'camera'
+  || (props.trackingMode === 'person' && !!props.personPosition))
 // shallowRef: the composable object must stay non-reactive, otherwise Vue
 // deep-unwraps nested refs/computed (e.g. isEmoteActive) and breaks reads
 // like vrmEmote.value.isEmoteActive.value in the render loop.
@@ -419,6 +435,27 @@ function applyManagedVrmInstance(instance: ManagedVrmInstance) {
   bodyInertia = new BodyInertia()
   vrmEmote.value = instance.emote
   interactionColliders.value = instance.interactionColliders
+}
+
+/** Lies down with the `lie_down` pose of the motion library, held until the night mode ends. */
+async function lieDownForTheNight() {
+  const targetVrm = vrm.value
+  const animator = vrmAnimator.value
+  const emote = findVrmEmote(props.motionLibrary.emotes, 'lie_down')
+  if (!targetVrm || !animator || !emote?.pose) {
+    console.warn('[vrm] night mode: the motion library has no lie_down pose')
+    return
+  }
+  try {
+    const clip = await loadMotionClip(targetVrm, emote.url, emote.format)
+    // The model or the mode can change while the clip loads.
+    if (vrm.value !== targetVrm || vrmAnimator.value !== animator || !props.nightMode)
+      return
+    animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: null })
+  }
+  catch (error) {
+    console.error('[vrm] night mode: the lie_down clip failed to load:', error)
+  }
 }
 
 function destroyManagedVrmInstance(instance?: ManagedVrmInstance) {
@@ -626,10 +663,16 @@ function bindManagedVrmInstanceRenderLoop() {
     })
     const moodFace = vrmMoodFace.value
     if (activeVrm && director) {
+      // The look-at of the last frame measures the target from the turned head, so the head turn adds back.
+      const lookAt = activeVrm.lookAt
+      const attention = headFollowsTarget.value && lookAt && !props.nightMode
+        ? { yaw: MathUtils.degToRad(lookAt.yaw) + director.headYawRadians, pitch: MathUtils.degToRad(lookAt.pitch) - director.headPitchDownRadians }
+        : null
       const events = director.apply(activeVrm, delta, {
         speaking: props.speechActive === true,
-        thinking: props.thinking === true,
+        thinking: props.thinking === true && !props.nightMode,
         mouth: lastMouth,
+        attention,
       })
       // Beats of the xiaoke director: an expression on a speech beat, a micro expression
       // while idle, and an earlier idle switch right after speech or thinking. The beats are small:
@@ -1192,10 +1235,11 @@ onMounted(async () => {
   })
 
   // Speech and waiting drive the talking and thinking clips of the animator.
-  watch(() => props.speechActive === true, (speaking) => {
+  // Lying in the night mode, she speaks without the talking clip: its arm moves are for a standing body.
+  watch(() => props.speechActive === true && !props.nightMode, (speaking) => {
     vrmAnimator.value?.setTalking(speaking)
   })
-  watch(() => props.thinking === true && props.speechActive !== true, (thinking) => {
+  watch(() => props.thinking === true && props.speechActive !== true && !props.nightMode, (thinking) => {
     const animator = vrmAnimator.value
     if (!animator)
       return
@@ -1204,6 +1248,18 @@ onMounted(async () => {
     else
       animator.stopThinking(props.speechActive !== true)
   })
+
+  // The night mode: lie down and close the eyes, until it ends. A new model starts in the current mode.
+  watch([() => props.nightMode === true, vrmAnimator], ([night, animator], previous) => {
+    vrmMoodFace.value?.setSleeping(night)
+    if (!animator)
+      return
+    const wasNight = previous?.[0] === true && previous[1] === animator
+    if (night && !wasNight)
+      void lieDownForTheNight()
+    else if (!night && wasNight)
+      animator.holdPose(null)
+  }, { immediate: true })
 
   /*
     * Downward info flow
