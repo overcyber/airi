@@ -40,3 +40,11 @@ describe('resolveNeoAliceAnimationUrls', () => {
     expect(resolveNeoAliceAnimationUrls({ name: 'Moonwalk' }, server)).toEqual([])
   })
 })
+
+describe('resolveNeoAliceAnimationUrls by the name of a library motion', () => {
+  it('finds a motion of the library or the server by its name when the old mirror had no such animation', () => {
+    const bundled = [{ name: 'Wave Hello', url: 'https://example.com/a/wave-hello.fbx' }]
+    expect(resolveNeoAliceAnimationUrls({ name: 'wave_hello' }, 'https://example.com', bundled)).toEqual(['https://example.com/a/wave-hello.fbx'])
+    expect(resolveNeoAliceAnimationUrls({ name: 'nothing_here' }, 'https://example.com', bundled)).toEqual([])
+  })
+})

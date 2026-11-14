@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchServerDefaults, isUnreachableFromPage, requestServerDefaults, resolveServerDefaults } from './server-defaults'
+import { deviceSite, fetchServerDefaults, isUnreachableFromPage, requestServerDefaults, resolveServerDefaults } from './server-defaults'
 
 const page = { origin: 'https://192.0.2.10:4443', protocol: 'https:' }
 
@@ -100,5 +100,14 @@ describe('requestServerDefaults', () => {
     await expect(requestServerDefaults('http://192.0.2.10:4173', refused)).rejects.toThrow('did not answer')
     await expect(requestServerDefaults('http://192.0.2.10:4173', notFound)).rejects.toThrow('answered 404')
     await expect(requestServerDefaults('http://192.0.2.10:4173', html)).rejects.toThrow('did not answer JSON')
+  })
+})
+
+describe('deviceSite', () => {
+  it('names the site of the device when the server names none', () => {
+    expect(deviceSite({ capacitor: true })).toBe('airi-android')
+    expect(deviceSite({ protocol: 'file:' })).toBe('airi-desktop')
+    expect(deviceSite({ userAgent: 'Mozilla/5.0 Electron/43.0' })).toBe('airi-desktop')
+    expect(deviceSite({ protocol: 'https:', userAgent: 'Mozilla/5.0' })).toBe('airi-web')
   })
 })

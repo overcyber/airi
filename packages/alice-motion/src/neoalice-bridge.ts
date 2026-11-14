@@ -236,6 +236,24 @@ function bondOf(state: InferOutput<typeof CompanionStatePayload>): NeoAliceBond 
 const CompanionAffectPayload = looseObject({ emotion: Name, airiEmotion: Name, intensity: fallback(optional(Percent), undefined) })
 
 /**
+ * Other names of the old mirror for the same motion. `dance` was a still FBX pose of the TalkingHead page that the
+ * MQTT path never played. Here it is the dance animation of the mirror, Rumba.
+ */
+const motionAliases: Record<string, string> = {
+  dance: 'rumba',
+  dancar: 'rumba',
+  armsopen: 'arms_open',
+  twoknees: 'kneel',
+}
+
+/** The animations of the old mirror by name (`ANIMATIONS` of `neoalice_moves.mjs`), lower case without `_`. */
+const oldMirrorAnimations = new Set(['idle', 'talk', 'explain', 'emphatic', 'rumba', 'laugh', 'angry', 'cry', 'fear', 'nod', 'shake', 'lookaround', 'breathe', 'walking'])
+
+function aliasOf(name: string | undefined) {
+  return name ? motionAliases[name] ?? name : undefined
+}
+
+/**
  * Stateful translator: it remembers recent payloads to drop repeats and numbers the intents.
  *
  * Before: a topic, its payload text, and the receive time.
@@ -401,13 +419,13 @@ export class NeoAliceTranslator {
     let emoji: string | undefined
     switch (action) {
       case 'cmd/avatar/gesture': {
-        const name = normalizeName(command.gesture ?? command.name)
+        const name = aliasOf(normalizeName(command.gesture ?? command.name))
         const gesture = name && (command.mirror ? this.known(`gesture_${name}_mirror`) : undefined)
-        semanticAction = gesture || (name && (this.known(`gesture_${name}`) ?? this.known(name)))
+        semanticAction = gesture || (name && this.known(`gesture_${name}`))
         break
       }
       case 'cmd/avatar/pose': {
-        const name = normalizeName(command.pose ?? command.name)
+        const name = aliasOf(normalizeName(command.pose ?? command.name))
         semanticAction = name && this.known(`pose_${name}`)
         extra = { requestedChannels: ['posture'] }
         // NeoAlice also sends a gesture as a pose, for example `namaste`. It plays as that gesture, held for the
@@ -426,12 +444,19 @@ export class NeoAliceTranslator {
         break
     }
     if (!semanticAction) {
+      const motionName = aliasOf(normalizeName(command.pose ?? command.gesture ?? command.name))
       // A motion that NeoAlice created and saved plays by its name, as a pose or as a gesture.
-      const saved = action !== 'cmd/avatar/emoji' ? this.customMotions.get(normalizeName(command.pose ?? command.gesture ?? command.name) ?? '') : undefined
+      const saved = action !== 'cmd/avatar/emoji' ? this.customMotions.get(motionName ?? '') : undefined
       if (saved) {
         const kind = action === 'cmd/avatar/pose' ? 'pose' : saved.kind
         const duration = command.duration !== undefined && command.duration > 0 ? Math.min(60, command.duration) : saved.duration
         return { type: 'custom-motion', site, motion: { ...saved, kind, duration, mirror: command.mirror ?? saved.mirror }, play: true, save: false, warnings: [] }
+      }
+      // An animation file by name, for example `{"pose":"rumba"}` or `{"gesture":"Wave_Hello"}`: the animations of the
+      // old mirror and the files of the server. It loops for the time of the command, like `cmd/avatar/animation`.
+      if (action !== 'cmd/avatar/emoji' && motionName && (oldMirrorAnimations.has(motionName.replace(/_/g, '')) || this.known(motionName))) {
+        const seconds = command.duration !== undefined && command.duration > 0 ? command.duration : action === 'cmd/avatar/pose' ? 10 : 4
+        return { type: 'animation', site, name: motionName, durationMs: Math.round(Math.min(60, seconds) * 1000) }
       }
       return ignored(topic, 'the catalog has no action for this command')
     }

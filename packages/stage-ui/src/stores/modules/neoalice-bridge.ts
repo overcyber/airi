@@ -3,6 +3,7 @@ import type { MqttClient } from 'mqtt'
 
 import { errorMessageFrom } from '@moeru/std'
 import { isPublishableSite, neoAliceBridgeTopics, NeoAliceTranslator } from '@proj-airi/alice-motion'
+import { serverDefaultsOrigin } from '@proj-airi/stage-shared'
 import { useLocalStorageManualReset } from '@proj-airi/stage-shared/composables'
 import { createEventHook, watchDebounced } from '@vueuse/core'
 import { nanoid } from 'nanoid'
@@ -59,9 +60,14 @@ export type NeoAliceVoiceStatus = 'off' | 'starting' | 'listening' | 'transcribi
  * The Alice deployment (`airi-web` in `deploy/alice`) and the Vite dev server forward `/mqtt` to the
  * WebSocket listener of the broker. So the bridge works on any address of the machine, and an HTTPS
  * page uses `wss`, which the browser requires. Outside a web page, for example in Electron, the
- * default is a broker on this machine.
+ * default is the `/mqtt` of the Alice server of the build, or a broker on this machine.
  */
-export function defaultNeoAliceBrokerUrl(page: Pick<Location, 'protocol' | 'host'> | undefined = globalThis.location) {
+export function defaultNeoAliceBrokerUrl(page: Pick<Location, 'protocol' | 'host'> | undefined = globalThis.location, server: string | undefined = serverDefaultsOrigin()) {
+  // The desktop app (file://) and the Android app (https://localhost) are not served by the Alice server. A server
+  // of the build (`VITE_AIRI_SERVER_URL`) gives its /mqtt. Without one, the broker of this machine.
+  const notServed = !page || !/^https?:$/.test(page.protocol) || !page.host || page.host === 'localhost'
+  if (notServed && server)
+    return defaultNeoAliceBrokerUrl(new URL(server), undefined)
   if (!page || !/^https?:$/.test(page.protocol) || !page.host)
     return 'ws://localhost:9001'
   return `${page.protocol === 'https:' ? 'wss' : 'ws'}://${page.host}/mqtt`

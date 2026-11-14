@@ -64,7 +64,10 @@ const servedFolders = /^\/(?:animations|animations_arkit|poses)\//i
  */
 export function resolveNeoAliceAnimationUrls(input: { url?: string, name?: string }, serverOrigin: string | undefined, bundled: readonly BundledMotion[] = []): string[] {
   const path = input.url ?? (input.name ? talkingHeadAnimations[input.name.toLowerCase().replace(/[\s_-]+/g, '')] : undefined)
-  const own = path ? bundled.find(motion => motionKey(motion.name) === motionKey(fileStem(path))) : undefined
+  // A name that is not an animation of the old mirror can be a motion of the library or of the server, by its name.
+  const own = path
+    ? bundled.find(motion => motionKey(motion.name) === motionKey(fileStem(path)))
+    : input.name ? bundled.find(motion => motionKey(motion.name) === motionKey(input.name!)) : undefined
   if (own)
     return [own.url]
   if (!input.url)

@@ -62,7 +62,17 @@ describe('defaultNeoAliceBrokerUrl', () => {
   })
 
   it('falls back to a broker on this machine outside a web page', () => {
-    expect(defaultNeoAliceBrokerUrl({ protocol: 'file:', host: '' })).toBe('ws://localhost:9001')
+    expect(defaultNeoAliceBrokerUrl({ protocol: 'file:', host: '' }, undefined)).toBe('ws://localhost:9001')
+  })
+
+  // ROOT CAUSE:
+  //
+  // The desktop app (file://) and the Android app (https://localhost) are not served by the Alice server, so the
+  // bridge tried the broker of the device itself and no MQTT command, night mode included, reached them.
+  it('uses the /mqtt of the Alice server of the build in the desktop and the Android apps', () => {
+    expect(defaultNeoAliceBrokerUrl({ protocol: 'file:', host: '' }, 'http://192.0.2.10:4173')).toBe('ws://192.0.2.10:4173/mqtt')
+    expect(defaultNeoAliceBrokerUrl({ protocol: 'https:', host: 'localhost' }, 'http://192.0.2.10:4173')).toBe('ws://192.0.2.10:4173/mqtt')
+    expect(defaultNeoAliceBrokerUrl({ protocol: 'http:', host: '192.0.2.10:4173' }, 'http://198.51.100.5:4173')).toBe('ws://192.0.2.10:4173/mqtt')
   })
 })
 

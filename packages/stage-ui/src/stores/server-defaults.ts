@@ -137,6 +137,19 @@ export async function loadServerDefaults(options: { overwrite?: boolean } = {}) 
   return true
 }
 
+/** A NeoAlice site for this device when the server names none: one per kind of app, so the mirror keeps its own. */
+export function deviceSite(runtime: { capacitor?: boolean, userAgent?: string, protocol?: string } = {
+  capacitor: (globalThis as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.() === true,
+  userAgent: globalThis.navigator?.userAgent,
+  protocol: globalThis.location?.protocol,
+}) {
+  if (runtime.capacitor)
+    return 'airi-android'
+  if (runtime.protocol === 'file:' || runtime.userAgent?.includes('Electron'))
+    return 'airi-desktop'
+  return 'airi-web'
+}
+
 /** Removes empty values, and makes each path in a `baseUrl` an absolute URL on `origin`. */
 export function resolveServerDefaults(defaults: ServerDefaults, origin: string): ServerDefaults {
   const providers: Record<string, Record<string, string>> = {}
@@ -241,6 +254,17 @@ export async function applyServerDefaults(
       bridge.moodSite = defaults.neoalice.moodSite
     bridge.wakeWord = defaults.neoalice.wakeWord
     bridge.mirrorSpeech = defaults.neoalice.mirrorSpeech
+  }
+  else if (defaults.neoalice && overwrite) {
+    // The server names no site, so the old code left the bridge off, with no site and the broker of this
+    // machine (ws://localhost:9001 in the desktop app). Night mode, poses and gestures never reached the
+    // desktop and the Android apps. "Load settings from the server" now points the bridge at the broker of the
+    // server, reads the mirror site, and turns it on with a site of this device.
+    if (defaults.neoalice.brokerUrl)
+      bridge.brokerUrl = defaults.neoalice.brokerUrl
+    bridge.moodSite = defaults.neoalice.moodSite || bridge.moodSite || 'magicmirror'
+    bridge.site ||= deviceSite()
+    bridge.enabled = true
   }
 
   const providerStore = useProviderStore()

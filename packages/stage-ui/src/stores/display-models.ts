@@ -13,6 +13,7 @@ import { downloadVerified } from '../libs/file-transfer/transfer'
 import { requestDisplayModelDownload } from '../services/display-model-sync'
 import { useAuthStore } from './auth'
 import { resolveCloudOwnerId, useDisplayModelCloudStore } from './display-model-cloud'
+import { aliceServerOrigin } from './vrm-motions'
 
 export enum DisplayModelFormat {
   Live2dZip = 'live2d-zip',
@@ -160,7 +161,10 @@ export const useDisplayModelsStore = defineStore('display-models', () => {
         await until(displayModelsFromIndexedDBLoading).toBe(false)
 
         displayModelsFromIndexedDBLoading.value = true
-        const models = [...displayModelsPresets, ...await fetchServerDisplayModels()]
+        // The Alice server of the settings, not the page: the desktop app (file://) and the Android app
+        // (https://localhost) are not served by the server, so the page origin never listed Eva there.
+        const server = aliceServerOrigin()
+        const models = [...displayModelsPresets, ...await fetchServerDisplayModels(server ? new URL(server) : undefined)]
 
         try {
           for (const model of await displayModelsRepo.list()) {

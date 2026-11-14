@@ -315,3 +315,22 @@ describe('neoAliceTranslator motions that NeoAlice creates', () => {
       .toMatchObject({ type: 'custom-motion', motion: { name: 'aceno' } })
   })
 })
+
+describe('neoAliceTranslator names of the old mirror', () => {
+  // ROOT CAUSE:
+  //
+  // `{"pose":"dance"}` and other names of the old mirror had no catalog action, so the bridge dropped them.
+  it('plays dance as the Rumba animation in a loop, and knows ArmsOpen and TwoKnees', () => {
+    const bridge = translator()
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'dance' }), 0))
+      .toEqual({ type: 'animation', site: 'mirror', name: 'rumba', durationMs: 10_000 })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'Rumba', duration: 20 }), 10))
+      .toEqual({ type: 'animation', site: 'mirror', name: 'rumba', durationMs: 20_000 })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/gesture', JSON.stringify({ gesture: 'laugh' }), 20))
+      .toEqual({ type: 'animation', site: 'mirror', name: 'laugh', durationMs: 4000 })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'ArmsOpen' }), 30))
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'pose_arms_open' } })
+    expect(bridge.translate('neoalice/v1/mirror/cmd/avatar/pose', JSON.stringify({ pose: 'TwoKnees' }), 40))
+      .toMatchObject({ type: 'intent', intent: { semanticAction: 'pose_kneel' } })
+  })
+})
