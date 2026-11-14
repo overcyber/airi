@@ -98,10 +98,11 @@ const router = useRouter()
           >
             <ViewControlSlider />
           </div>
+          <!-- A phone has no mouse: one finger turns the camera and two fingers zoom. Without it the avatar could not be moved on Android. -->
           <WidgetStage
             v-model:state="modelRenderState"
             :class="['h-full w-full']"
-            :enable-orbit-controls="!isMobile"
+            :enable-orbit-controls="true"
             :paused="paused"
             :focus-at="{
               x: positionCursor.x.value,

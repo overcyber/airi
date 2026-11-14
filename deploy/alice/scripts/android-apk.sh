@@ -8,6 +8,11 @@
 # Use:
 #   deploy/alice/scripts/android-apk.sh
 #   ANDROID_SDK_ROOT=/caminho/do/Sdk deploy/alice/scripts/android-apk.sh
+#   ALICE_SERVER_URL=http://192.0.2.10:4173 deploy/alice/scripts/android-apk.sh
+#
+# ALICE_SERVER_URL is the address of the Alice server (airi-web, HTTP port). The app then loads the chat, the voice,
+# the models, and the NeoAlice bridge from it at the first start. Without it, set the address in the app:
+# Settings > Modules > NeoAlice bridge > Alice server URL, then "Load settings from the server".
 #
 # Needs: JDK 21, pnpm, curl, unzip, and about 6 GB of free disk.
 set -euo pipefail
@@ -52,6 +57,12 @@ for dir in .cache/assets/js public/assets/js; do
 done
 
 cd "$pocket"
+if [ -n "${ALICE_SERVER_URL:-}" ]; then
+  export VITE_AIRI_SERVER_URL="$ALICE_SERVER_URL"
+  echo "android-apk: the app loads its settings from $ALICE_SERVER_URL"
+else
+  echo "android-apk: WARNING no ALICE_SERVER_URL. The app has no chat, voice or NeoAlice bridge until the server URL is set in its settings." >&2
+fi
 echo "android-apk: building the web part"
 pnpm run build
 pnpm exec cap sync android
