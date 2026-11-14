@@ -73,9 +73,13 @@ A one-arm gesture owns only its arm channel, which includes the hand of that arm
 | `neoalice/v1/<site>/cmd/avatar/animation` | `intent` from the file name of the URL. A catalog action with the same name comes first, for example an imported `Wave_Hello.fbx` becomes `wave_hello`. Otherwise an alias applies: `walking.fbx` becomes `walk`. An unknown file is ignored. |
 | `neoalice/v1/<site>/cmd/avatar/emoji` | `intent` `emoji` on the `facial` channel |
 | `neoalice/v1/companion/evt/companion/state`, `.../affect` | `mood` from the companion service |
+| `neoalice/v1/<site>/cmd/avatar/motion` | `custom-motion`: a pose or a movement that NeoAlice or an LLM created, checked by `parseCustomMotion`. With `name` and `save`, the companion service keeps it. |
+| `neoalice/v1/<site>/cmd/avatar` | The `{"action": ...}` commands of the old mirror: `gesture`, `pose`, `animation`, `mood`, `face`, `stop`, `defineGesture`, `definePose`. |
+| `neoalice/v1/companion/evt/avatar/motions` | `motion-library`: the saved motions. A saved name plays with `cmd/avatar/pose` or `cmd/avatar/gesture`. |
 | `neoalice/v1/<site>/evt/alice/night_mode` | `night-mode` from `active` (also `enabled`, `night_mode`, or `state` `on`/`off`). The VRM lies down and closes the eyes. It is not the sleepy mood. |
 | `neoalice/v1/+/evt/vision/detection(s)`, with `vision` on | `presence`. With a `bbox` from 0 to 1, `target` is the center of the largest person box. |
 
+- `avatar-rig.ts` lists the bones of Eva with anatomical axes in degrees and limits, and her ARKit face shapes. See Plan 12 (`docs/alice-motion-engine/PLANEJAMENTO_12_POSES_DINAMICAS_E_DEITAR.md`).
 - The moods `tired` and `sleep` give the AIRI emotion `sleepy`: heavy eyelids and a slow breath, standing.
 - The contract with NeoAlice, in Portuguese: `docs/alice-motion-engine/PLANEJAMENTO_11_CONTRATO_NEOALICE_ESTADOS.md`.
 - `setCatalog` replaces the catalog, for example after a motion import. The stage gives it the default catalog plus the imported motions.

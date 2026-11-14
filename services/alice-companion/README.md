@@ -119,3 +119,11 @@ pnpm -F @proj-airi/alice-companion typecheck
 ```sh
 pnpm -F @proj-airi/alice-companion exec vitest run
 ```
+
+## Motion library
+
+The service keeps the poses and movements that NeoAlice or an LLM created and named (Plan 12).
+
+- It saves a motion from `cmd/avatar/motion` with `save`, from `evt/avatar/motion_save`, and from `cmd/avatar` with `defineGesture` or `definePose`. `cmd/avatar/motion_delete` with `name` removes one.
+- The file is `movimentos.json` in the data directory, or `ALICE_COMPANION_MOTIONS_FILE`. Each motion passes `parseCustomMotion` of alice-motion, also after an edit by hand.
+- It publishes the library on `evt/avatar/motions` and the bones and face shapes of the avatar on `evt/avatar/rig`, both retained, on its publish site.
