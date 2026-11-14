@@ -117,3 +117,15 @@ describe('createTalkingHeadClip', () => {
     expect(hips.values[1]).toBeLessThan(0.2)
   })
 })
+
+describe('talkingHead templates of NeoAlice', () => {
+  // ROOT CAUSE:
+  //
+  // The arm of `point` was a copy of the `wave` arm, so the hand went up to the head instead of pointing.
+  it('points with an arm of its own, and gives think and open their fingers', async () => {
+    const { talkingHeadGestures } = await import('./talkinghead-templates')
+    expect(talkingHeadGestures.point['LeftArm.rotation']).not.toEqual(talkingHeadGestures.wave['LeftArm.rotation'])
+    expect(talkingHeadGestures.think['LeftHandIndex1.rotation']).toBeDefined()
+    expect(talkingHeadGestures.open['RightHandIndex1.rotation']).toBeDefined()
+  })
+})

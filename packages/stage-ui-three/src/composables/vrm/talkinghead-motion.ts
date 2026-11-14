@@ -1,7 +1,7 @@
 import type { VRM } from '@pixiv/three-vrm'
 import type { KeyframeTrack } from 'three'
 
-import type { TalkingHeadAxis } from './talkinghead-templates'
+import type { TalkingHeadAxis, TalkingHeadProps } from './talkinghead-templates'
 
 import { AnimationClip, Euler, Quaternion, QuaternionKeyframeTrack, VectorKeyframeTrack } from 'three'
 
@@ -58,7 +58,15 @@ const waveSwingSeconds = 0.3
  * Returns `undefined` when no bone of the template maps to the VRM.
  */
 export function createTalkingHeadClip(vrm: VRM, id: TalkingHeadClipId, options: { durationSeconds: number, random?: () => number }): AnimationClip | undefined {
-  const props = (id.kind === 'gesture' ? talkingHeadGestures : talkingHeadPoses)[id.name]
+  return createTalkingHeadClipFromProps(vrm, (id.kind === 'gesture' ? talkingHeadGestures : talkingHeadPoses)[id.name], id, options)
+}
+
+/**
+ * A VRM clip of any template in the TalkingHead format, for example one that NeoAlice defines with
+ * `defineGesture` or `definePose`. `id` names the clip and says which hand plays it. Same rules as
+ * {@link createTalkingHeadClip}: rotations in radians on the Ready Player Me bones, `Hips.position` in meters.
+ */
+export function createTalkingHeadClipFromProps(vrm: VRM, props: TalkingHeadProps, id: TalkingHeadClipId, options: { durationSeconds: number, random?: () => number }): AnimationClip | undefined {
   const random = options.random ?? Math.random
   const duration = Math.max(0.5, options.durationSeconds)
   const tracks: KeyframeTrack[] = []
