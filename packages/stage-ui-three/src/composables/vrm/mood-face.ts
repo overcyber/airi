@@ -88,6 +88,38 @@ const moodLids: Record<string, number> = {
   sleepy: 0.45,
 }
 
+/**
+ * A yawn at its peak. The emoji caps do not apply: a yawn opens the mouth wide, which the emoji faces must not do.
+ * A model without the ARKit shapes opens the mouth with `aa`.
+ */
+const yawnShapes: Record<string, number> = {
+  jawOpen: 0.62,
+  mouthFunnel: 0.22,
+  mouthStretchLeft: 0.18,
+  mouthStretchRight: 0.18,
+  eyeSquintLeft: 0.45,
+  eyeSquintRight: 0.45,
+  browInnerUp: 0.3,
+  noseSneerLeft: 0.08,
+  noseSneerRight: 0.08,
+}
+/** The eyelids close this far at the peak of a yawn. */
+const yawnLids = 0.7
+/** A yawn: the mouth opens in 1 s, stays open until 2.2 s, and closes slowly until 3.6 s. */
+const yawnSeconds = 3.6
+
+/** How far a yawn is at `t` seconds, 0 to 1. */
+export function yawnEnvelope(t: number) {
+  if (t <= 0 || t >= yawnSeconds)
+    return 0
+  const ease = (x: number) => x * x * (3 - 2 * x)
+  if (t < 1)
+    return ease(t)
+  if (t < 2.2)
+    return 1
+  return 1 - ease((t - 2.2) / (yawnSeconds - 2.2))
+}
+
 /** Rates of the closed eyes of the night mode, per second: they close in about 1.5 s and open in about 0.4 s. */
 const eyesCloseRate = 1.2
 const eyesOpenRate = 4
@@ -237,6 +269,8 @@ export class MoodFace {
   private sleeping = false
   /** How far the eyes of the night mode are closed, 0 to 1, on the frame clock. */
   private eyesClosed = 0
+  /** Time of the yawn that plays, or `null`. */
+  private yawnT: number | null = null
 
   constructor(
     private readonly expressionNames: readonly string[],
@@ -246,6 +280,11 @@ export class MoodFace {
     this.emoteFace = findHappyExpression(expressionNames)
     this.hasArkit = expressionNames.includes('mouthSmileLeft')
     this.blinkExpressions = blinkExpressionsOf(expressionNames)
+  }
+
+  /** The key of the resting mood, for example `sleepy`, or `null` for neutral. */
+  get moodKey(): string | null {
+    return this.moodTarget?.key ?? null
   }
 
   /** The current resting mood name, or `null` for neutral. */
@@ -267,6 +306,21 @@ export class MoodFace {
    */
   setSleeping(active: boolean) {
     this.sleeping = active
+  }
+
+  /** Starts a yawn of 3.6 s. A yawn that plays starts again. She stops yawning when she speaks. */
+  yawn() {
+    this.yawnT = 0
+  }
+
+  /** `true` while a yawn plays. */
+  get yawning() {
+    return this.yawnT !== null
+  }
+
+  /** How far the yawn is, 0 to 1, for the body layer of the yawn (`YawnBody`). */
+  get yawnShare() {
+    return this.yawnT === null ? 0 : yawnEnvelope(this.yawnT)
   }
 
   /** Shows a short reaction on top of the mood. Same mapping as the mood, stronger and capped. */
@@ -435,7 +489,21 @@ export class MoodFace {
       this.eyesClosed = 0
     const moodLid = mood?.key && moodLids[mood.key] && scale ? moodLids[mood.key] * Math.min(1, mood.weight / scale) : 0
     const energyLid = this.bond.energy < 0.4 && !input.emotePlaying ? (0.4 - this.bond.energy) * 0.6 : 0
-    const lids = Math.round(Math.max(moodLid, energyLid, this.eyesClosed) * 1000) / 1000
+    // A yawn: the mouth opens wide and the eyes squeeze. It stops when she speaks.
+    let yawnLid = 0
+    if (this.yawnT !== null) {
+      this.yawnT = input.speaking ? null : this.yawnT + delta
+      const share = this.yawnT === null ? 0 : yawnEnvelope(this.yawnT)
+      if (this.yawnT !== null && this.yawnT >= yawnSeconds)
+        this.yawnT = null
+      const shapes = this.hasArkit ? yawnShapes : { aa: yawnShapes.jawOpen }
+      for (const [name, weight] of Object.entries(shapes)) {
+        if (share > 0 && this.expressionNames.includes(name))
+          arkit.set(name, Math.max(arkit.get(name) ?? 0, Math.round(weight * share * 1000) / 1000))
+      }
+      yawnLid = yawnLids * share
+    }
+    const lids = Math.round(Math.max(moodLid, energyLid, this.eyesClosed, yawnLid) * 1000) / 1000
     if (lids > 0) {
       for (const name of this.blinkExpressions)
         arkit.set(name, Math.max(arkit.get(name) ?? 0, lids))

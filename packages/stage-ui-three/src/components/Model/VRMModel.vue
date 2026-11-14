@@ -20,7 +20,7 @@ import type {
   WebGLRenderer,
 } from 'three'
 
-import type { VrmMotionLibrary } from '../../assets/vrm/animations'
+import type { VrmEmoteAnimation, VrmMotionLibrary } from '../../assets/vrm/animations'
 import type { AvatarAnimatorHooks } from '../../composables/vrm/avatar-animator'
 import type {
   VrmDisposeHookContext,
@@ -94,6 +94,7 @@ import { PerformanceDirector } from '../../composables/vrm/performance-director'
 import { talkingHeadEmojiFaces } from '../../composables/vrm/talkinghead-emoji-faces'
 import { createTalkingHeadClip, parseTalkingHeadClipId } from '../../composables/vrm/talkinghead-motion'
 import { createThinkingClip } from '../../composables/vrm/thinking-pose'
+import { YawnBody } from '../../composables/vrm/yawn-body'
 import {
   createThreeRendererMemorySnapshot,
   createVrmSceneSummarySnapshot,
@@ -248,6 +249,9 @@ const vrmMoodFace = shallowRef<MoodFace>()
 const vrmMoodBody = shallowRef<MoodBody>()
 /** Lag of the upper body after a turn or a push of the hips (Plan 08, M2). A new model starts a new one. */
 let bodyInertia = new BodyInertia()
+const yawnBody = new YawnBody()
+/** With the sleepy mood, she yawns now and then: the time to the next yawn, on the frame clock. */
+let sleepyYawnInSeconds = 20
 /** Mouth opening written by lip sync in the last frame, read by the director in the next one. */
 let lastMouth = 0
 let lastIdleUrl: string | null = null
@@ -438,6 +442,21 @@ function applyManagedVrmInstance(instance: ManagedVrmInstance) {
 }
 
 /** Lies down with the `lie_down` pose of the motion library, held until the night mode ends. */
+/** The clip of a pose emote and its exit clip (getting up), when it has one. A broken exit clip gets her up backwards. */
+async function loadPoseClips(targetVrm: VRM, emote: VrmEmoteAnimation): Promise<[AnimationClip, AnimationClip | undefined]> {
+  const exitUrl = emote.pose?.exitUrl
+  const [clip, exitClip] = await Promise.all([
+    loadMotionClip(targetVrm, emote.url, emote.format),
+    exitUrl
+      ? loadMotionClip(targetVrm, exitUrl, emote.format).catch((error: unknown) => {
+          console.warn(`[vrm] the exit clip of "${emote.id}" failed to load, she gets up backwards:`, error)
+          return undefined
+        })
+      : undefined,
+  ])
+  return [clip, exitClip]
+}
+
 async function lieDownForTheNight() {
   const targetVrm = vrm.value
   const animator = vrmAnimator.value
@@ -447,11 +466,11 @@ async function lieDownForTheNight() {
     return
   }
   try {
-    const clip = await loadMotionClip(targetVrm, emote.url, emote.format)
+    const [clip, exitClip] = await loadPoseClips(targetVrm, emote)
     // The model or the mode can change while the clip loads.
     if (vrm.value !== targetVrm || vrmAnimator.value !== animator || !props.nightMode)
       return
-    animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: null })
+    animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: null, exitClip })
   }
   catch (error) {
     console.error('[vrm] night mode: the lie_down clip failed to load:', error)
@@ -655,6 +674,8 @@ function bindManagedVrmInstanceRenderLoop() {
       moodBody.restore(activeVrm)
     if (activeVrm)
       bodyInertia.restore(activeVrm)
+    if (activeVrm)
+      yawnBody.restore(activeVrm)
     const animationMixerMs = measureFrameStep(tracingEnabled, () => {
       if (vrmAnimator.value)
         vrmAnimator.value.update(delta)
@@ -662,7 +683,10 @@ function bindManagedVrmInstanceRenderLoop() {
         vrmAnimationMixer.value?.update(delta)
     })
     const moodFace = vrmMoodFace.value
-    if (activeVrm && director) {
+    // On the floor, the clip breathes and holds the body. The standing layers (head scan, mood lean and breath,
+    // upper body lag) gave a second breath and a standing lean to the lying body.
+    const onFloor = vrmAnimator.value?.holdsClipPose === true
+    if (activeVrm && director && !onFloor) {
       // The look-at of the last frame measures the target from the turned head, so the head turn adds back.
       const lookAt = activeVrm.lookAt
       const attention = headFollowsTarget.value && lookAt && !props.nightMode
@@ -685,11 +709,21 @@ function bindManagedVrmInstanceRenderLoop() {
         vrmAnimator.value?.requestIdleSwitch(events.nudgeIdleAfterSeconds)
     }
     // Breathing, posture, and head by mood (V3). It returns the eye contact offset for the look-at below.
-    const bodyFrame = activeVrm && moodBody
+    const bodyFrame = activeVrm && moodBody && !onFloor
       ? moodBody.apply(activeVrm, delta, { speaking: props.speechActive === true, emotePlaying: vrmAnimator.value?.emotePlaying ?? false })
       : undefined
-    if (activeVrm)
+    if (activeVrm && !onFloor)
       bodyInertia.apply(activeVrm, delta)
+    if (moodFace?.moodKey === 'sleepy' && props.speechActive !== true && !moodFace.yawning) {
+      sleepyYawnInSeconds -= delta
+      if (sleepyYawnInSeconds <= 0) {
+        moodFace.yawn()
+        sleepyYawnInSeconds = 40 + Math.random() * 50
+      }
+    }
+    // The body of a yawn follows the face. Lying, only the face yawns: the head rests on the arm.
+    if (activeVrm && moodFace && !onFloor)
+      yawnBody.apply(activeVrm, moodFace.yawnShare)
     updateManagedVrmMaterials(activeVrm, delta)
     const vrmFrameHookMs = measureFrameStep(tracingEnabled, () => {
       if (activeVrm && activeVrmGroup) {
@@ -1252,6 +1286,9 @@ onMounted(async () => {
   // The night mode: lie down and close the eyes, until it ends. A new model starts in the current mode.
   watch([() => props.nightMode === true, vrmAnimator], ([night, animator], previous) => {
     vrmMoodFace.value?.setSleeping(night)
+    // She yawns as she gets ready for the night. The eyes close after the yawn, with the night mode.
+    if (night && !(previous?.[0] === true))
+      vrmMoodFace.value?.yawn()
     if (!animator)
       return
     const wasNight = previous?.[0] === true && previous[1] === animator
@@ -1395,6 +1432,10 @@ defineExpose({
    * Returns `false` for an emoji without a face, or a model without any of its expressions.
    */
   reactEmoji(emoji: string): boolean {
+    if (emoji.replace(/\uFE0F/g, '') === '\u{1F971}') {
+      vrmMoodFace.value?.yawn()
+      return !!vrmMoodFace.value
+    }
     const shapes = talkingHeadEmojiFaces[emoji.replace(/\uFE0F/g, '')] ?? talkingHeadEmojiFaces[emoji]
     return shapes ? vrmMoodFace.value?.showFace(shapes) ?? false : false
   },
@@ -1419,6 +1460,11 @@ defineExpose({
     const animator = vrmAnimator.value
     if (!targetVrm || !animator)
       return false
+    // A yawn is a face with a small body layer, not a clip. It also plays on the floor.
+    if (id === 'yawn' || id === 'gesture_yawn') {
+      vrmMoodFace.value?.yawn()
+      return true
+    }
     // NeoAlice sends the gestures and poses of the TalkingHead avatar. The VRM plays the same templates.
     const template = parseTalkingHeadClipId(id)
     const emoteOfId = template ? undefined : findVrmEmote(props.motionLibrary.emotes, id)
@@ -1456,7 +1502,7 @@ defineExpose({
     if (!emote)
       return false
     try {
-      const clip = await loadMotionClip(targetVrm, emote.url, emote.format)
+      const [clip, exitClip] = emote.pose ? await loadPoseClips(targetVrm, emote) : [await loadMotionClip(targetVrm, emote.url, emote.format), undefined]
       // The model can change while the clip loads.
       if (vrm.value !== targetVrm || vrmAnimator.value !== animator)
         return false
@@ -1464,7 +1510,7 @@ defineExpose({
       // or 10 s without one. The entry of the clip plays once, the rest loops, and she gets up at the end.
       if (emote.pose) {
         const requestedMs = options.durationMs !== undefined && options.durationMs > poseCueDefaultMs ? options.durationMs : defaultPoseHoldMs
-        animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: requestedMs / 1000 })
+        animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: requestedMs / 1000, exitClip })
         return true
       }
       // V6: a gesture of the arms or the head plays only on those bones, or adds to the pose,

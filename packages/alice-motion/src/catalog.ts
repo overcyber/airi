@@ -174,6 +174,8 @@ export const defaultMotionCatalogEntries: MotionCatalogEntry[] = [
   // `cmd/avatar/pose` with `lying` or `lie_down`, like `sitting`. The renderer holds it and gets up at the end.
   { ...clip('pose_lying', 'lie_down', stance, poseCueMs, 45, 'Lie down on the side'), held: true },
   { ...clip('pose_lie_down', 'lie_down', stance, poseCueMs, 45, 'Lie down on the side'), held: true },
+  // A yawn: a face with a small body layer on the VRM. `{"gesture":"yawn"}` or the emoji 🥱.
+  clip('gesture_yawn', 'yawn', ['head'], 3600, 40, 'Yawn, tired or sleepy'),
   entry({ semanticAction: 'emoji', generatorId: 'facial/emoji', channels: ['facial'], durationMs: 2000, priority: 30, description: 'Show an emoji face' }),
 ]
 

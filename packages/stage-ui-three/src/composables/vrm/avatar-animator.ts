@@ -12,7 +12,7 @@ import { additiveClip, maskClip } from './motion-layers'
 /**
  * A pose that comes from an animation file (V7): the first `introSeconds` of the clip bring her into the pose,
  * for example from standing to lying down, and the rest of the clip loops while she holds it. When the pose
- * ends, the entry plays backwards, so she gets up the way she lay down.
+ * ends, `exitClip` plays, for example getting up. Without it, the entry plays backwards.
  */
 export interface PoseClipOptions {
   /** Where the held loop starts in the clip, in seconds. 0 holds the whole clip in a loop. */
@@ -21,6 +21,11 @@ export interface PoseClipOptions {
   fadeSeconds?: number
   /** Time of the pose on the frame clock, after the entry. `null` holds it until the next pose. */
   holdSeconds?: number | null
+  /**
+   * The way out of the pose, from its loop to standing. Played backwards, the entry of lying down got her up hips
+   * first, and a person gets up another way: the arm pushes, she sits, comes to the knees, and stands.
+   */
+  exitClip?: AnimationClip
 }
 
 /** Frames per second of the baked FBX and VRMA clips, for `AnimationUtils.subclip`. */
@@ -109,7 +114,7 @@ export class AvatarAnimator {
   /** Time left of the held pose on the frame clock. `null` holds it until the next pose. */
   private poseRemainingSeconds: number | null = null
   /** The entry clip of the held pose from a file, played backwards when the pose ends. `null` for a template pose. */
-  private poseEntry: { action: AnimationAction, fadeSeconds: number } | null = null
+  private poseEntry: { action: AnimationAction, fadeSeconds: number, exitClip?: AnimationClip } | null = null
   /** The pose that leaves now, played backwards. The idle comes back when it ends. */
   private poseExit: AnimationAction | null = null
   /** The emote of a timed play and its remaining time on the frame clock. */
@@ -431,7 +436,7 @@ export class AvatarAnimator {
     entry.clampWhenFinished = true
     entry.timeScale = 1
     this.takePose(entry, previous, fade)
-    this.poseEntry = { action: entry, fadeSeconds: fade }
+    this.poseEntry = { action: entry, fadeSeconds: fade, exitClip: options.exitClip }
     entry.reset().fadeIn(fade).play()
     const onDone = (event: { action: AnimationAction }) => {
       if (event.action !== entry)
@@ -484,16 +489,25 @@ export class AvatarAnimator {
   private leavePoseBackwards(held: AnimationAction) {
     const entry = this.poseEntry!
     this.poseEntry = null
-    const exit = entry.action
     const fade = entry.fadeSeconds
+    const exit = entry.exitClip ? this.mixer.clipAction(entry.exitClip) : entry.action
     this.pose = null
     this.poseExit = exit
     if (held !== exit)
-      held.fadeOut(0.2)
+      held.fadeOut(entry.exitClip ? 0.4 : 0.2)
     exit.reset()
-    exit.timeScale = -1
-    exit.time = exit.getClip().duration
-    exit.fadeIn(0.2).play()
+    if (entry.exitClip) {
+      // The exit clip starts in the pose and plays forward to standing.
+      exit.setLoop(LoopOnce, 1)
+      exit.clampWhenFinished = true
+      exit.timeScale = 1
+      exit.fadeIn(0.4).play()
+    }
+    else {
+      exit.timeScale = -1
+      exit.time = exit.getClip().duration
+      exit.fadeIn(0.2).play()
+    }
     const onDone = (event: { action: AnimationAction }) => {
       if (event.action !== exit)
         return

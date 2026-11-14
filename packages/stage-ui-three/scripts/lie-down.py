@@ -1,8 +1,14 @@
 """
-Makes `lie-down.fbx`, the lying pose of the NeoAlice avatar, on the Ready Player Me skeleton.
+Makes `lie-down.fbx` and `get-up.fbx`, the lying pose of the NeoAlice avatar, on the Ready Player Me skeleton.
 
-The animation goes from standing to lying on the right side in 2.5 s, head on the right arm, then breathes in
-the pose for 6 s. The stage plays the first 2.5 s once, loops the rest, and plays the entry backwards to get up
+`lie-down.fbx` goes from standing to lying on the right side in 5 s, then breathes in the pose for 9 s. She
+looks at the floor first, bends the knees, puts the right hand on the floor, sits on the right hip, and lies down
+with the head on the right arm. The head leads and the hips follow, and the keys join without a stop.
+
+`get-up.fbx` (with `--get-up`) goes the human way up, not the same path backwards: she pushes up on the right arm,
+sits, comes to the knees with the hand on the floor, rises, and the head comes up last.
+
+The stage plays the first 5 s of `lie-down.fbx` once, loops the rest, and plays `get-up.fbx` to get up
 (`holdPoseClip` of `avatar-animator.ts`).
 
 The poses are world rotations on the rest skeleton of `packages/alice-motion/src/rpm-skeleton.ts`, the same rest
@@ -11,7 +17,7 @@ other NeoAlice motions.
 
 How to run, with the Blender Python module (bpy 4.2, Python 3.11):
 
-    python lie-down.py <skeleton.fbx> <output.fbx> [--check-rest]
+    python lie-down.py <skeleton.fbx> <output.fbx> [--check-rest | --get-up]
 
 `<skeleton.fbx>` is any NeoAlice FBX of the same skeleton, for example `breathing-idle.fbx`. The script takes its
 bones and bone lengths, drops its animation, and writes the new one. With `--check-rest`, it writes the rest
@@ -27,9 +33,12 @@ import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 FPS = 30
-ENTRY_SECONDS = 2.5
-LOOP_SECONDS = 6.0
-BREATH_SECONDS = 3.0
+ENTRY_SECONDS = 5.0
+GET_UP_SECONDS = 5.2
+LOOP_SECONDS = 9.0
+# A sleeping breath: about 13 per minute, the inhale shorter than the exhale.
+BREATH_SECONDS = 4.5
+INHALE_SHARE = 0.4
 
 HERE = Path(__file__).resolve().parent
 SKELETON_TABLE = HERE.parents[1] / 'alice-motion' / 'src' / 'rpm-skeleton.ts'
@@ -71,11 +80,32 @@ def smoothstep(t):
     return t * t * (3 - 2 * t)
 
 
+def breath(seconds):
+    """A breath from 0 (out) to 1 (in): a quick inhale, a slow exhale, and a short pause at the bottom."""
+    phase = (seconds / BREATH_SECONDS) % 1.0
+    if phase < INHALE_SHARE:
+        return smoothstep(phase / INHALE_SHARE)
+    return 1.0 - smoothstep((phase - INHALE_SHARE) / (1.0 - INHALE_SHARE) * 1.15)
+
+
 # A key pose: the hips position in centimeters (Y up, Z toward the viewer, X to her left), and for each bone either
 # `('aim', direction)`, the world direction of the bone, or `('turn', [(axis, degrees), ...])`, world rotations
 # applied in order on top of the rest. A bone that is not listed follows its parent.
 STANDING = {
     'hips': (0.0, 103.7, 0.0),
+}
+
+# The weight goes to the right foot, and she looks down and to the right, at the place where she will lie.
+LOOK_DOWN = {
+    'hips': (-2.0, 101.5, 1.5),
+    'Hips': ('turn', [('z', -3)]),
+    'Spine': ('turn', [('x', 3)]),
+    'Neck': ('turn', [('x', 12), ('y', -10)]),
+    'Head': ('turn', [('x', 10), ('y', -12)]),
+    'RightArm': ('aim', (-0.3, -0.92, 0.25)),
+    'RightForeArm': ('aim', (-0.25, -0.88, 0.4)),
+    'LeftArm': ('aim', (0.2, -0.97, 0.1)),
+    'LeftForeArm': ('aim', (0.15, -0.95, 0.25)),
 }
 
 CROUCH = {
@@ -93,6 +123,25 @@ CROUCH = {
     'LeftForeArm': ('aim', (0.25, -0.75, 0.6)),
     'RightArm': ('aim', (-0.45, -0.75, 0.5)),
     'RightForeArm': ('aim', (-0.25, -0.75, 0.6)),
+}
+
+# Low on the knees, the weight on the right hand on the floor beside her, the left hand on the left knee.
+HAND_DOWN = {
+    'hips': (-2.0, 38.0, 4.0),
+    'Hips': ('turn', [('x', 30), ('z', 10)]),
+    'Spine': ('turn', [('x', 12)]),
+    'Spine1': ('turn', [('x', 4)]),
+    'Neck': ('turn', [('x', 6), ('y', -6)]),
+    'Head': ('turn', [('x', 4), ('y', -8)]),
+    'RightUpLeg': ('aim', (-0.15, -0.2, 0.97)),
+    'RightLeg': ('aim', (-0.05, -0.95, -0.3)),
+    'LeftUpLeg': ('aim', (0.25, -0.25, 0.93)),
+    'LeftLeg': ('aim', (0.1, -0.95, -0.3)),
+    'RightArm': ('aim', (-0.5, -0.85, 0.15)),
+    'RightForeArm': ('aim', (-0.35, -0.93, 0.05)),
+    'RightHand': ('aim', (-0.3, -0.5, 0.8)),
+    'LeftArm': ('aim', (0.3, -0.8, 0.52)),
+    'LeftForeArm': ('aim', (0.15, -0.6, 0.78)),
 }
 
 # Sitting on the floor on the right hip, the legs folded to her left, the right hand on the floor.
@@ -137,12 +186,66 @@ LYING = {
     'LeftFoot': ('aim', (0.6, 0.0, -0.8)),
 }
 
+# Getting up: still lying, the right arm pushes the chest up from the floor.
+PUSH_UP = {
+    'hips': (8.0, 13.5, 1.0),
+    'Hips': ('turn', [('z', 60), ('x', -4)]),
+    'Spine': ('turn', [('z', -8)]),
+    'Spine1': ('turn', [('z', -8)]),
+    'Spine2': ('turn', [('z', -6)]),
+    'Neck': ('turn', [('z', -10)]),
+    'Head': ('turn', [('z', -12), ('x', 6)]),
+    'RightArm': ('aim', (-0.55, -0.82, 0.15)),
+    'RightForeArm': ('aim', (-0.45, -0.88, 0.15)),
+    'RightHand': ('aim', (-0.4, -0.3, 0.86)),
+    'LeftArm': ('aim', (0.5, -0.6, 0.62)),
+    'LeftForeArm': ('aim', (0.6, -0.3, 0.74)),
+    'RightUpLeg': ('aim', (0.86, -0.04, 0.5)),
+    'RightLeg': ('aim', (0.9, -0.02, -0.44)),
+    'LeftUpLeg': ('aim', (0.84, 0.1, 0.53)),
+    'LeftLeg': ('aim', (0.88, 0.08, -0.47)),
+}
+
+# Rising: the legs push, the chest is still bent forward, and the head is still down.
+RISE = {
+    'hips': (-1.0, 74.0, 6.0),
+    'Hips': ('turn', [('x', 20)]),
+    'Spine': ('turn', [('x', 10)]),
+    'Spine1': ('turn', [('x', 4)]),
+    'Neck': ('turn', [('x', 10)]),
+    'Head': ('turn', [('x', 8)]),
+    'LeftUpLeg': ('aim', (0.12, -0.75, 0.62)),
+    'LeftLeg': ('aim', (0.04, -0.98, -0.18)),
+    'RightUpLeg': ('aim', (-0.12, -0.75, 0.62)),
+    'RightLeg': ('aim', (-0.04, -0.98, -0.18)),
+    'LeftArm': ('aim', (0.3, -0.9, 0.3)),
+    'LeftForeArm': ('aim', (0.2, -0.85, 0.48)),
+    'RightArm': ('aim', (-0.3, -0.9, 0.3)),
+    'RightForeArm': ('aim', (-0.2, -0.85, 0.48)),
+}
+
 KEYS = [
     (0.0, STANDING),
-    (0.9, CROUCH),
-    (1.7, SIT_SIDE),
+    (0.8, LOOK_DOWN),
+    (1.7, CROUCH),
+    (2.7, HAND_DOWN),
+    (3.8, SIT_SIDE),
     (ENTRY_SECONDS, LYING),
 ]
+
+GET_UP_KEYS = [
+    (0.0, LYING),
+    (1.1, PUSH_UP),
+    (2.1, SIT_SIDE),
+    (3.2, HAND_DOWN),
+    (4.2, RISE),
+    (GET_UP_SECONDS, STANDING),
+]
+
+# How far ahead (+) or behind (-) of the others each bone moves, in seconds. A person turns the head first and the
+# body follows. Getting up, the head comes up last.
+LIE_DOWN_LEAD = {'Head': 0.3, 'Neck': 0.25, 'Spine2': 0.12, 'Spine1': 0.08, 'RightArm': 0.18, 'RightForeArm': 0.2, 'RightHand': 0.2, 'LeftUpLeg': -0.08, 'RightUpLeg': -0.08, 'LeftLeg': -0.1, 'RightLeg': -0.1}
+GET_UP_LEAD = {'Head': -0.3, 'Neck': -0.25, 'Spine2': -0.1, 'RightArm': 0.15, 'RightForeArm': 0.15, 'LeftUpLeg': 0.05, 'RightUpLeg': 0.05}
 
 
 def pose_deltas(table, rest, key):
@@ -175,34 +278,68 @@ def own_rotation(deltas, table):
     return own
 
 
-def frame_pose(table, rest, keys, seconds):
-    """World rotation per bone and the hips position at a time of the entry, eased between the key poses."""
-    times = [time for time, _ in keys]
-    if seconds >= times[-1]:
-        index = len(keys) - 2
-        t = 1.0
-    else:
-        index = max(i for i, time in enumerate(times) if time <= seconds)
-        t = smoothstep((seconds - times[index]) / (times[index + 1] - times[index]))
-    before, after = keys[index][1], keys[index + 1][1]
-    own_before = own_rotation(pose_deltas(table, rest, before), table)
-    own_after = own_rotation(pose_deltas(table, rest, after), table)
-    deltas = {}
-    for name, parent, _local in table:
-        inherited = deltas[parent] if parent else Quaternion()
-        deltas[name] = own_before[name].slerp(own_after[name], t) @ inherited
-    hips = Vector(before['hips']).lerp(Vector(after['hips']), t)
-    return deltas, hips
+def catmull_rom(p0, p1, p2, p3, t):
+    """A point between p1 and p2 on the curve through the four values: the speed does not drop to 0 at a key."""
+    t2, t3 = t * t, t * t * t
+    return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
 
 
-def breathing(table, rest, seconds):
-    """The lying pose with a breath of the chest and a slow settle of the head and the top leg. A cycle of 6 s."""
-    deltas, hips = frame_pose(table, rest, KEYS, ENTRY_SECONDS)
-    phase = 2 * math.pi * seconds / BREATH_SECONDS
+def quaternion_curve(q0, q1, q2, q3, t):
+    """Catmull-Rom on the four components, on one hemisphere, then normalized. Smooth for the small steps here."""
+    near = [q1]
+    for q in (q0, q2, q3):
+        near.append(q if q.dot(q1) >= 0 else -q)
+    a, b, c, d = (Vector((q.w, q.x, q.y, q.z)) for q in (near[1], near[0], near[2], near[3]))
+    v = catmull_rom(b, a, c, d, t)
+    return Quaternion((v[0], v[1], v[2], v[3])).normalized()
+
+
+class KeyCurve:
+    """The key poses of one motion, ready for sampling: the own rotation of each bone and the hips per key."""
+
+    def __init__(self, table, rest, keys):
+        self.table = table
+        self.times = [time for time, _ in keys]
+        self.own = [own_rotation(pose_deltas(table, rest, key), table) for _, key in keys]
+        self.hips = [Vector(key['hips']) for _, key in keys]
+        self.duration = self.times[-1]
+
+    def warp(self, seconds):
+        """The whole motion starts and ends slowly. Inside, it keeps moving through the keys."""
+        u = min(1.0, max(0.0, seconds / self.duration))
+        eased = u * u * (3 - 2 * u)
+        return (0.35 * u + 0.65 * eased) * self.duration
+
+    def segment(self, seconds):
+        seconds = min(max(seconds, 0.0), self.duration)
+        if seconds >= self.times[-1]:
+            return len(self.times) - 2, 1.0
+        index = max(i for i, time in enumerate(self.times) if time <= seconds)
+        return index, (seconds - self.times[index]) / (self.times[index + 1] - self.times[index])
+
+    def sample(self, seconds, lead):
+        """World rotation per bone and the hips position. `lead` moves some bones ahead of or behind the time."""
+        last = len(self.times) - 1
+        deltas = {}
+        for name, parent, _local in self.table:
+            index, t = self.segment(self.warp(seconds + lead.get(name, 0.0)))
+            q = [self.own[min(max(i, 0), last)][name] for i in (index - 1, index, index + 1, index + 2)]
+            inherited = deltas[parent] if parent else Quaternion()
+            deltas[name] = quaternion_curve(q[0], q[1], q[2], q[3], t) @ inherited
+        index, t = self.segment(self.warp(seconds))
+        h = [self.hips[min(max(i, 0), last)] for i in (index - 1, index, index + 1, index + 2)]
+        return deltas, catmull_rom(h[0], h[1], h[2], h[3], t)
+
+
+def breathing(table, curve, seconds):
+    """The lying pose with a sleeping breath of the chest and a slow settle of the head and the top leg."""
+    deltas, hips = curve.sample(curve.duration, {})
+    # 0 at the start of the loop, so the loop starts on the last frame of the entry.
+    inhale = breath(seconds)
     slow = 2 * math.pi * seconds / LOOP_SECONDS
     extra = {
-        'Spine1': rot('x', -0.8 * math.sin(phase)) @ rot('z', 0.5 * math.sin(phase)),
-        'Spine2': rot('x', -1.2 * math.sin(phase)) @ rot('z', 0.7 * math.sin(phase)),
+        'Spine1': rot('x', -1.6 * inhale) @ rot('z', 1.0 * inhale),
+        'Spine2': rot('x', -2.4 * inhale) @ rot('z', 1.4 * inhale),
         'Head': rot('z', 1.2 * math.sin(slow)) @ rot('x', -0.8 * math.sin(slow)),
         'LeftUpLeg': rot('z', 0.8 * math.sin(slow + 1.0)),
         'LeftArm': rot('z', 0.6 * math.sin(slow + 0.5)),
@@ -212,7 +349,7 @@ def breathing(table, rest, seconds):
     for name, parent, _local in table:
         inherited = result[parent] if parent else Quaternion()
         result[name] = (extra.get(name, Quaternion()) @ own[name]) @ inherited
-    return result, hips + Vector((0.0, 0.25 * math.sin(phase), 0.0))
+    return result, hips + Vector((0.0, 0.5 * inhale, 0.0))
 
 
 def local_rotations(table, rest, deltas):
@@ -224,18 +361,25 @@ def local_rotations(table, rest, deltas):
     return locals_
 
 
-def animation_frames(table, rest, check_rest):
+def animation_frames(table, rest, mode):
     frames = []
-    if check_rest:
+    if mode == 'check-rest':
         locals_ = local_rotations(table, rest, {name: Quaternion() for name, _, _ in table})
         return [(locals_, Vector(STANDING['hips']))] * 2
+    if mode == 'get-up':
+        curve = KeyCurve(table, rest, GET_UP_KEYS)
+        for frame in range(int(round(GET_UP_SECONDS * FPS)) + 1):
+            deltas, hips = curve.sample(frame / FPS, GET_UP_LEAD)
+            frames.append((local_rotations(table, rest, deltas), hips))
+        return frames
+    curve = KeyCurve(table, rest, KEYS)
     total = int(round((ENTRY_SECONDS + LOOP_SECONDS) * FPS)) + 1
     for frame in range(total):
         seconds = frame / FPS
         if seconds <= ENTRY_SECONDS:
-            deltas, hips = frame_pose(table, rest, KEYS, seconds)
+            deltas, hips = curve.sample(seconds, LIE_DOWN_LEAD)
         else:
-            deltas, hips = breathing(table, rest, seconds - ENTRY_SECONDS)
+            deltas, hips = breathing(table, curve, seconds - ENTRY_SECONDS)
         frames.append((local_rotations(table, rest, deltas), hips))
     return frames
 
@@ -323,11 +467,11 @@ def main(argv):
     if len(argv) < 2:
         raise SystemExit(__doc__)
     skeleton, output = Path(argv[0]), Path(argv[1])
-    check_rest = '--check-rest' in argv[2:]
+    mode = 'check-rest' if '--check-rest' in argv[2:] else 'get-up' if '--get-up' in argv[2:] else 'lie-down'
     table = read_rest_table()
     rest = world_rest(table)
     armature = import_skeleton(skeleton)
-    frames = animation_frames(table, rest, check_rest)
+    frames = animation_frames(table, rest, mode)
     write_animation(armature, frames)
     export(armature, output)
     print(f'wrote {output} with {len(frames)} frames at {FPS} fps')

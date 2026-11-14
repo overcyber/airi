@@ -332,6 +332,29 @@ describe('avatarAnimator layers (V6)', () => {
     expect(animator.idle?.getEffectiveWeight()).toBeCloseTo(1, 2)
   })
 
+  it('gets up with the exit clip of a pose, forward, and reports a floor pose until the idle is back', () => {
+    const { animator } = createAnimator()
+    animator.start(clip('idle-a', 2))
+    const idle = animator.idle!
+    const lying = new Clip('lie-down', 6, [new NumberKeyframeTrack('.position[x]', [0, 3, 6], [0, 1, 1])])
+    const getUp = clip('get-up', 2)
+
+    animator.holdPoseClip(lying, { introSeconds: 3, holdSeconds: 1, exitClip: getUp })
+    expect(animator.holdsClipPose).toBe(true)
+    animator.update(3.1)
+    animator.update(1.1)
+    // The hold time ended: the get-up clip plays forward, not the entry backwards.
+    expect(animator.pose).toBeNull()
+    const exit = animator.mixer.clipAction(getUp)
+    expect(exit.isRunning()).toBe(true)
+    expect(exit.timeScale).toBe(1)
+    expect(animator.holdsClipPose).toBe(true)
+    animator.update(2.1)
+    animator.update(1)
+    expect(animator.holdsClipPose).toBe(false)
+    expect(idle.getEffectiveWeight()).toBeCloseTo(1, 2)
+  })
+
   it('holds a pose from a clip: the entry once, then the rest in a loop, and gets up backwards at the end', () => {
     const { animator } = createAnimator()
     animator.start(clip('idle-a', 2))

@@ -13,9 +13,10 @@ export interface VrmEmoteAnimation {
   format?: 'vrma' | 'fbx'
   /**
    * The emote is a body pose that she holds, for example lying down. The clip up to `loopFromSeconds` brings her
-   * into the pose, and the rest of the clip loops while she holds it. At the end, the entry plays backwards.
+   * into the pose, and the rest of the clip loops while she holds it. At the end, `exitUrl` plays (a clip in the
+   * same format that starts in the pose), or the entry plays backwards without one.
    */
-  pose?: { loopFromSeconds: number }
+  pose?: { loopFromSeconds: number, exitUrl?: string }
 }
 
 /**
@@ -78,7 +79,8 @@ export const defaultVrmMotionLibrary: VrmMotionLibrary = {
     { id: 'point_forward', name: 'Point Forward', description: 'Point forward with the hand', url: new URL('./neoalice/point-forward.fbx', import.meta.url).toString(), format: 'fbx' },
     { id: 'thinking', name: 'Thinking', description: 'Think with a hand to the chin', url: new URL('./neoalice/thinking.fbx', import.meta.url).toString(), format: 'fbx' },
     { id: 'wave_hello', name: 'Wave Hello', description: 'Wave hello with the hand', url: new URL('./neoalice/wave-hello.fbx', import.meta.url).toString(), format: 'fbx' },
-    // A pose: 2.5 s from standing to lying on her side, then the rest of the clip loops while she rests.
-    { id: 'lie_down', name: 'Lie Down', description: 'Lie down on the side and rest, head on the arm', url: new URL('./neoalice/lie-down.fbx', import.meta.url).toString(), format: 'fbx', pose: { loopFromSeconds: 2.5 } },
+    // A pose: 5 s from standing to lying on her side, then the rest of the clip loops while she rests.
+    // She gets up with get-up.fbx: she pushes up on the arm, sits, comes to the knees, and stands.
+    { id: 'lie_down', name: 'Lie Down', description: 'Lie down on the side and rest, head on the arm', url: new URL('./neoalice/lie-down.fbx', import.meta.url).toString(), format: 'fbx', pose: { loopFromSeconds: 5, exitUrl: new URL('./neoalice/get-up.fbx', import.meta.url).toString() } },
   ],
 }

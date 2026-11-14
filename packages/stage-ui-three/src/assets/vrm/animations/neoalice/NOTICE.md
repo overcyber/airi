@@ -20,7 +20,8 @@ so the web, desktop, and mobile apps play them without the Alice server. The FBX
 | `point-forward.fbx` | `Point_Forward.fbx` | Point forward |
 | `thinking.fbx` | `Thinking.fbx` | Think, hand to the chin |
 | `wave-hello.fbx` | `Wave_Hello.fbx` | Wave hello |
-| `lie-down.fbx` | none yet | Lie down on the right side, head on the right forearm, then rest. The first 2.5 s go from standing to lying. The rest loops. Made on 2026-11-12 with `scripts/lie-down.py` of this package on the same skeleton, in Blender (bpy 4.2), under the same license. |
+| `lie-down.fbx` | none yet | Lie down on the right side, head on the right forearm, then rest. The first 5 s go from standing to lying: she looks down, bends the knees, puts a hand on the floor, and sits first. The rest loops. Made on 2026-11-14 with `scripts/lie-down.py` of this package on the same skeleton, in Blender (bpy 4.2), under the same license. |
+| `get-up.fbx` | none yet | Get up from `lie-down.fbx` in 5.2 s: push up on the right arm, sit, come to the knees, stand, the head up last. Made on 2026-11-14 with `scripts/lie-down.py --get-up`, under the same license. |
 
 The animations of the Ready Player Me library (`Talking_0`, `Rumba`, and others) and of Mixamo (`walking`, `dance`)
 are not here: their licenses do not permit redistribution in a public repository. The Alice Docker server takes them

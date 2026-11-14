@@ -342,3 +342,27 @@ describe('moodFace sleepy mood and night mode', () => {
     expect(run(face, 1.5).get('blink') ?? 0).toBeLessThan(0.05)
   })
 })
+
+describe('moodFace yawn', () => {
+  const arkitNames = ['happy', 'relaxed', 'neutral', 'blink', 'aa', 'jawOpen', 'mouthFunnel', 'eyeSquintLeft', 'eyeSquintRight', 'browInnerUp', 'mouthSmileLeft', 'mouthSmileRight']
+
+  it('opens the mouth wide over the emoji cap, squeezes the eyes, and ends after 3.6 s', () => {
+    const face = new MoodFace(arkitNames, noEarlyBlink)
+    face.yawn()
+    const peak = run(face, 1.5)
+    expect(peak.get('jawOpen')).toBeGreaterThan(0.5)
+    expect(peak.get('blink')).toBeGreaterThan(0.6)
+    expect(face.yawning).toBe(true)
+    const after = run(face, 2.5)
+    expect(after.get('jawOpen') ?? 0).toBe(0)
+    expect(face.yawning).toBe(false)
+  })
+
+  it('stops the yawn when she speaks', () => {
+    const face = new MoodFace(arkitNames, noEarlyBlink)
+    face.yawn()
+    run(face, 0.5)
+    expect(run(face, 0.2, { speaking: true }).get('jawOpen') ?? 0).toBe(0)
+    expect(face.yawning).toBe(false)
+  })
+})
