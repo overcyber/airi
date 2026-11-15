@@ -42,7 +42,7 @@ Em Configurações > Módulos > Ponte NeoAlice:
 
 Com a ponte conectada, o desktop recebia o modo noite e a Eva deitava. Mas a janela do desktop mostra só a cabeça e o peito. Deitada no chão, ela ficava abaixo da janela, e a janela parecia vazia.
 
-**Correção:** só na janela do desktop, o modelo sobe enquanto está numa pose no chão, até o chão dele ficar na borda de baixo da janela. Ele apoia nessa borda e não paira no meio (Planejamento 17). O desktop liga isso com `vrm-lift-floor-pose` no `Stage.vue`. A web, o Android e o `/mirror` não ligam: neles ela dorme no chão, sem subir.
+**Correção:** só na janela do desktop, a câmera recua para o corpo inteiro enquanto ela está numa pose no chão, com o chão na borda de baixo da janela, e volta ao busto quando ela levanta (Planejamento 17). O corpo não sobe. O desktop liga isso com `vrm-frame-floor-pose` no `Stage.vue`. A web, o Android e o `/mirror` não ligam: neles ela dorme no chão.
 
 - Código: `packages/stage-ui-three/src/composables/vrm/floor-lift.ts` e a prop `liftFloorPose` do `VRMModel.vue`.
 - Prova: o app desktop compilado, rodando no Xvfb, com o broker local e `evt/alice/night_mode` `{"active": true}`.

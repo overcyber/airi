@@ -26,6 +26,11 @@ export interface PoseClipOptions {
    * first, and a person gets up another way: the arm pushes, she sits, comes to the knees, and stands.
    */
   exitClip?: AnimationClip
+  /**
+   * The name of the pose, for example the id of the emote. A second call with the name of the pose that already
+   * holds the body does not start it again: the body would go back to standing and walk the entry once more.
+   */
+  key?: string
 }
 
 /** Frames per second of the baked FBX and VRMA clips, for `AnimationUtils.subclip`. */
@@ -113,6 +118,8 @@ export class AvatarAnimator {
   pose: AnimationAction | null = null
   /** Time left of the held pose on the frame clock. `null` holds it until the next pose. */
   private poseRemainingSeconds: number | null = null
+  /** The `key` of the pose from a file that holds the body, so a second call for it does nothing. */
+  private heldPoseKey: string | undefined
   /** The entry clip of the held pose from a file, played backwards when the pose ends. `null` for a template pose. */
   private poseEntry: { action: AnimationAction, fadeSeconds: number, exitClip?: AnimationClip } | null = null
   /** The pose that leaves now, played backwards. The idle comes back when it ends. */
@@ -410,6 +417,12 @@ export class AvatarAnimator {
    * entry backwards, so she gets up, and the idle comes back.
    */
   holdPoseClip(clip: AnimationClip, options: PoseClipOptions) {
+    if (options.key !== undefined && options.key === this.heldPoseKey && this.pose !== null) {
+      // The same pose holds the body already. Only a new hold time counts.
+      if (options.holdSeconds !== undefined && this.poseRemainingSeconds !== null)
+        this.poseRemainingSeconds = options.holdSeconds
+      return
+    }
     const fade = options.fadeSeconds ?? 0.6
     const introSeconds = Math.min(Math.max(0, options.introSeconds), clip.duration)
     const previous = this.pose
@@ -424,6 +437,7 @@ export class AvatarAnimator {
     const loopAction = this.mixer.clipAction(loop)
     loopAction.setLoop(LoopRepeat, Infinity)
     loopAction.timeScale = 1
+    this.heldPoseKey = undefined
     if (!hasEntry) {
       this.poseRemainingSeconds = options.holdSeconds ?? null
       this.takePose(loopAction, previous, fade)
@@ -436,6 +450,7 @@ export class AvatarAnimator {
     entry.clampWhenFinished = true
     entry.timeScale = 1
     this.takePose(entry, previous, fade)
+    this.heldPoseKey = options.key
     this.poseEntry = { action: entry, fadeSeconds: fade, exitClip: options.exitClip }
     entry.reset().fadeIn(fade).play()
     const onDone = (event: { action: AnimationAction }) => {
@@ -469,6 +484,7 @@ export class AvatarAnimator {
       this.thinking = null
     }
     this.poseEntry = null
+    this.heldPoseKey = undefined
     this.pose = action
   }
 
@@ -489,6 +505,7 @@ export class AvatarAnimator {
   private leavePoseBackwards(held: AnimationAction) {
     const entry = this.poseEntry!
     this.poseEntry = null
+    this.heldPoseKey = undefined
     const fade = entry.fadeSeconds
     const exit = entry.exitClip ? this.mixer.clipAction(entry.exitClip) : entry.action
     this.pose = null

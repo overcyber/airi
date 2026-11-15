@@ -747,7 +747,7 @@ const cursorPosition = computed(() => ({
           :cursor-position="cursorPosition"
           :paused="stagePaused"
           :device-tool-gate="remoteComputerGate"
-          vrm-lift-floor-pose h-full w-full flex-1
+          vrm-frame-floor-pose h-full w-full flex-1
           @error="handleStageRenderError"
           @reset="handleStageReset"
           @select-avatar-model="openSettings({ route: '/settings/models' })"

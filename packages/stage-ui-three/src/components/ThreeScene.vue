@@ -14,6 +14,7 @@ import type { TresContext } from '@tresjs/core'
 import type { DirectionalLight, SphericalHarmonics3, Texture, WebGLRenderer, WebGLRenderTarget } from 'three'
 
 import type { VrmMotionLibrary } from '../assets/vrm/animations'
+import type { CameraFraming } from '../composables/vrm/floor-framing'
 import type { VrmInteractionTarget } from '../composables/vrm/interaction'
 import type { VRMSpeechText } from '../composables/vrm/lip-sync'
 import type { SceneBootstrap, ScenePhase, Vec3 } from '../stores/model-store'
@@ -24,7 +25,7 @@ import { coverRect, presenceBubbleIdle } from '@proj-airi/stage-shared'
 import { Screen } from '@proj-airi/ui'
 import { TresCanvas } from '@tresjs/core'
 import { EffectComposerPmndrs, HueSaturationPmndrs } from '@tresjs/post-processing'
-import { defaultWindow, useElementBounding, useEventListener, useResizeObserver } from '@vueuse/core'
+import { defaultWindow, useElementBounding, useEventListener, useRafFn, useResizeObserver } from '@vueuse/core'
 import { formatHex } from 'culori'
 import { storeToRefs } from 'pinia'
 import { BlendFunction } from 'postprocessing'
@@ -46,6 +47,7 @@ import PresenceBubble from './presence-bubble.vue'
 // From stage-ui-three package
 import { defaultVrmMotionLibrary } from '../assets/vrm/animations'
 import { useRenderTargetRegionAtClientPoint } from '../composables/render-target'
+import { blendFraming, easeInOut, floorFraming } from '../composables/vrm/floor-framing'
 import { getVrmInteractionTargetFromObjectName, isClickLikePointerGesture } from '../composables/vrm/interaction'
 // pinia store
 import { useModelStore } from '../stores/model-store'
@@ -123,10 +125,11 @@ const props = withDefaults(defineProps<{
    */
   framingAdjust?: { x?: number, y?: number, zoom?: number }
   /**
-   * Lifts the model while she lies on the floor, so a window that frames only the head and the chest still shows
-   * her. Only the desktop window needs it. With a floor in the view, the lift makes her float.
+   * Frames the whole body while she goes to the floor, with the floor on the bottom edge of the window, and goes
+   * back to the usual view when she stands. Only the desktop window needs it: it shows only the head and the chest,
+   * so a body that lies down left the window, and lifting it made her hover. With a floor in the view, leave it off.
    */
-  liftFloorPose?: boolean
+  frameFloorPose?: boolean
 }>(), {
   presence: () => presenceBubbleIdle,
   enableOrbitControls: true,
@@ -260,20 +263,49 @@ const tresContextRef = shallowRef<TresContext>()
 
 const backgroundTexture = shallowRef<Texture>()
 
-/**
- * The world height of the bottom edge of the view, at the distance of the model, for `liftFloorPose`.
- * The camera looks at `modelOrigin` from where it stands. The view reaches `tan(fov / 2) * distance` below it.
- */
-function viewBottomEdgeY(): number | undefined {
-  const view = camera.value
-  const target = toVector3(modelOrigin.value)
-  const toTarget = target.clone().sub(view.position)
-  const distance = toTarget.length()
-  if (distance < 1e-6)
-    return undefined
-  const forward = toTarget.divideScalar(distance)
-  const up = new Vector3(0, 1, 0).addScaledVector(forward, -forward.y).normalize()
-  return target.y - up.y * distance * Math.tan((view.fov / 2) * Math.PI / 180)
+// The camera of the whole body while she is on the floor (`frameFloorPose`). It moves in and out over a second.
+const floorFramingSeconds = 1.2
+let usualFraming: CameraFraming | undefined
+let floorBlend = 0
+let floorBlendGoal = 0
+const floorFramingLoop = useRafFn(({ delta }) => {
+  const usual = usualFraming
+  if (!usual) {
+    floorFramingLoop.pause()
+    return
+  }
+  const step = (delta / 1000) / floorFramingSeconds
+  floorBlend = floorBlendGoal > floorBlend ? Math.min(floorBlendGoal, floorBlend + step) : Math.max(floorBlendGoal, floorBlend - step)
+  // Back to standing: the usual camera, exactly as it was.
+  const framing = floorBlend === 0
+    ? usual
+    : blendFraming(usual, floorFraming({
+        modelHeight: modelSize.value.y,
+        floorY: modelOffset.value.y,
+        fovDegrees: camera.value.fov,
+        target: usual.target,
+        direction: { x: usual.position.x - usual.target.x, z: usual.position.z - usual.target.z },
+      }), easeInOut(floorBlend))
+  modelOrigin.value = framing.target
+  cameraPosition.value = framing.position
+  cameraDistance.value = framing.distance
+  if (floorBlend === floorBlendGoal) {
+    if (floorBlend === 0)
+      usualFraming = undefined
+    floorFramingLoop.pause()
+  }
+}, { immediate: false })
+
+/** The pose from a file holds the body on the floor, or lets it go. The window frames the whole body meanwhile. */
+function onFloorPose(onFloor: boolean) {
+  if (!props.frameFloorPose)
+    return
+  if (onFloor && !usualFraming)
+    usualFraming = { target: { ...modelOrigin.value }, position: { ...cameraPosition.value }, distance: cameraDistance.value }
+  if (!usualFraming)
+    return
+  floorBlendGoal = onFloor ? 1 : 0
+  floorFramingLoop.resume()
 }
 
 const skyBoxEnvRef = ref<InstanceType<typeof SkyBox>>()
@@ -1225,7 +1257,6 @@ defineExpose({
         :speech-text="props.speechText"
         :thinking="props.thinking"
         :night-mode="props.nightMode"
-        :bottom-edge-y="props.liftFloorPose ? viewBottomEdgeY : undefined"
         :person-position="props.personPosition"
         :motion-library="props.motionLibrary ?? defaultVrmMotionLibrary"
         :cursor-position="props.cursorPosition"
@@ -1244,6 +1275,7 @@ defineExpose({
         :camera-position="cameraPosition"
         :camera="camera"
         :screen-bounding-box="getScreenBBox"
+        @floor-pose="onFloorPose"
         @loading-progress="(val: number) => emit('loadModelProgress', val)"
         @load-start="onVRMModelLoadStart"
         @scene-bootstrap="onVRMSceneBootstrap"

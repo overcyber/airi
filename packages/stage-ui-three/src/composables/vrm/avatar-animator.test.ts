@@ -355,6 +355,27 @@ describe('avatarAnimator layers (V6)', () => {
     expect(idle.getEffectiveWeight()).toBeCloseTo(1, 2)
   })
 
+  it('does not start a pose again while the same pose holds the body', () => {
+    const { animator } = createAnimator()
+    animator.start(clip('idle-a', 2))
+    const lying = new Clip('lie-down', 6, [new NumberKeyframeTrack('.position[x]', [0, 3, 6], [0, 1, 1])])
+
+    animator.holdPoseClip(lying, { introSeconds: 3, holdSeconds: null, key: 'lie_down' })
+    const entry = animator.pose!
+    animator.update(1.5)
+    const timeBefore = entry.time
+    // A second call, for example the night mode and a pose command together, must not walk the entry again.
+    animator.holdPoseClip(lying, { introSeconds: 3, holdSeconds: null, key: 'lie_down' })
+    expect(animator.pose).toBe(entry)
+    expect(entry.time).toBe(timeBefore)
+    animator.update(0.5)
+    expect(entry.time).toBeGreaterThan(timeBefore)
+
+    // Another pose is not the same pose.
+    animator.holdPoseClip(lying, { introSeconds: 3, holdSeconds: null, key: 'other' })
+    expect(animator.pose).not.toBe(entry)
+  })
+
   it('holds a pose from a clip: the entry once, then the rest in a loop, and gets up backwards at the end', () => {
     const { animator } = createAnimator()
     animator.start(clip('idle-a', 2))

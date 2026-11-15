@@ -86,7 +86,6 @@ import { createCustomMotionClip, customMotionFace } from '../../composables/vrm/
 import { findVrmEmote } from '../../composables/vrm/emote-cue'
 import { useVRMEmote } from '../../composables/vrm/expression'
 import { loadFbxClip } from '../../composables/vrm/fbx-retarget'
-import { FloorLift } from '../../composables/vrm/floor-lift'
 import { createVrmInteractionColliders } from '../../composables/vrm/interaction'
 import { resolveInternalVrmHooks } from '../../composables/vrm/internal-hooks'
 import { useVRMLipSync } from '../../composables/vrm/lip-sync'
@@ -140,13 +139,6 @@ const props = withDefaults(defineProps<{
    */
   nightMode?: boolean
   /**
-   * Gives the world height of the bottom edge of the view, in meters. While a floor pose holds the body, the model rises
-   * so that its floor is on that edge, and the lying body stays in a view of the head and the chest.
-   * The desktop app frames the upper body: on the floor she was below the window, and she seemed not to sleep.
-   * Leave it unset for a view with the floor in it, like the mirror: there she lies on the floor.
-   */
-  bottomEdgeY?: () => number | undefined
-  /**
    * The center of the person in front of the screen, from 0 to 1 in the camera image, for the `person` tracking
    * mode. `null` when nobody is there.
    */
@@ -196,6 +188,8 @@ const emit = defineEmits<{
 
   (e: 'error', value: unknown): void
   (e: 'loaded', value: string): void
+  /** A pose from a file holds the body on the floor (`true`), or the body is free again (`false`). */
+  (e: 'floorPose', value: boolean): void
 }>()
 /*
   * Props:
@@ -243,8 +237,10 @@ const vrmGroup = shallowRef<Group>()
 const modelHeight = shallowRef(0)
 /** Scratch for {@link headAnchor}, so a rendered frame allocates nothing. */
 const headPosition = new Vector3()
-/** The lift of the model for a floor pose (`liftFloorPose`). */
-const floorLift = new FloorLift()
+/** The most that one frame moves the animation, in seconds. */
+const maxAnimationFrameSeconds = 0.1
+/** The last `floorPose` that the stage was told. */
+let floorPoseReported = false
 const headUp = new Vector3()
 const modelLoaded = ref<boolean>(false)
 const interactionColliders = shallowRef<VrmInteractionColliderSet>()
@@ -482,7 +478,7 @@ async function lieDownForTheNight() {
     // The model or the mode can change while the clip loads.
     if (vrm.value !== targetVrm || vrmAnimator.value !== animator || !props.nightMode)
       return
-    animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: null, exitClip })
+    animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: null, exitClip, key: emote.id })
   }
   catch (error) {
     console.error('[vrm] night mode: the lie_down clip failed to load:', error)
@@ -690,7 +686,9 @@ function bindManagedVrmInstanceRenderLoop() {
       yawnBody.restore(activeVrm)
     const animationMixerMs = measureFrameStep(tracingEnabled, () => {
       if (vrmAnimator.value)
-        vrmAnimator.value.update(delta)
+        // A frame that comes late, after a load or a busy moment, must not make a motion jump: 0.1 s is the most
+        // that one frame moves. The motion is then late by that time, and it does not skip a part.
+        vrmAnimator.value.update(Math.min(delta, maxAnimationFrameSeconds))
       else
         vrmAnimationMixer.value?.update(delta)
     })
@@ -754,11 +752,10 @@ function bindManagedVrmInstanceRenderLoop() {
     const humanoidMs = measureFrameStep(tracingEnabled, () => {
       activeVrm?.humanoid.update()
     })
-    // A lying body rests on the bottom edge of a view that frames only the upper body, so the view still shows it.
-    if (activeVrm && activeVrmGroup && (props.bottomEdgeY !== undefined || floorLift.value !== 0)) {
-      const bottomEdge = onFloor ? props.bottomEdgeY?.() : undefined
-      const goal = bottomEdge !== undefined ? floorLift.goal(bottomEdge, modelOffset.value.y) : 0
-      activeVrmGroup.position.y = modelOffset.value.y + floorLift.step(goal, delta)
+    // The stage frames the whole body while she goes to the floor, and goes back when she stands.
+    if (onFloor !== floorPoseReported) {
+      floorPoseReported = onFloor
+      emit('floorPose', onFloor)
     }
     const lookAtMs = measureFrameStep(tracingEnabled, () => {
       // Idle saccades and the tracking target (camera, mouse, or the default far point), every frame.
@@ -1528,7 +1525,7 @@ defineExpose({
       // or 10 s without one. The entry of the clip plays once, the rest loops, and she gets up at the end.
       if (emote.pose) {
         const requestedMs = options.durationMs !== undefined && options.durationMs > poseCueDefaultMs ? options.durationMs : defaultPoseHoldMs
-        animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: requestedMs / 1000, exitClip })
+        animator.holdPoseClip(clip, { introSeconds: emote.pose.loopFromSeconds, holdSeconds: requestedMs / 1000, exitClip, key: emote.id })
         return true
       }
       // V6: a gesture of the arms or the head plays only on those bones, or adds to the pose,

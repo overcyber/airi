@@ -62,13 +62,21 @@ Imagens: `evidencias/D17/deitar-antes-quadros.png`, `deitar-depois-quadros-1.png
 
 O `get-up.fbx` foi gerado de novo com a mesma correção. O tempo de entrada no app passou de 5 s para 6,6 s (`loopFromSeconds` em `animations/index.ts`).
 
-## 4. Flutuar na janela do desktop
+## 4. Flutuar e travar na janela do desktop
 
-A janela do desktop mostra só a cabeça e o peito. Antes, o corpo deitado ficava abaixo da janela e sumia. Numa correção anterior, o modelo subia até a cabeça ficar na altura dos olhos. Isso fazia o corpo **pairar no meio da janela**.
+A janela do desktop mostra só a cabeça e o peito. O primeiro conserto subia o corpo para a janela, e o segundo o apoiava na borda de baixo. Os dois falharam, e a captura do app real mostrou por quê:
 
-Agora o corpo deitado apoia na **borda de baixo da janela**, que funciona como o chão. O cálculo (`viewBottomEdgeY` em `ThreeScene.vue` e `FloorLift`) usa a câmera real: a borda de baixo fica a `tan(fov / 2) * distância` abaixo do alvo. Só o desktop liga isso (`vrm-lift-floor-pose`). Na web, no Android e no `/mirror`, nada sobe: ela deita no chão.
+- A subida do corpo acontecia **ao mesmo tempo** que a descida. Na janela de busto, ela parecia parada por uns 5 s, "sustentada" no ar, e aparecia deitada de repente. Era o flutuar e o travado que você descreveu.
+- A pré-visualização do navegador não mostrava isso, porque ali a câmera é fixa.
 
-Prova: `evidencias/D17/desktop-deitada-na-borda.png`, o app desktop compilado, rodando no Xvfb, com `evt/alice/night_mode`.
+**Correção:** o corpo não sobe mais. Quando uma pose de arquivo segura o corpo no chão, a **câmera recua** (1,2 s) para o corpo inteiro, com o chão na borda de baixo da janela. Quando ela levanta, a câmera volta ao busto. O cálculo é a função pura `floorFraming` (`composables/vrm/floor-framing.ts`, com testes). `ThreeScene.vue` anima a câmera, e o `VRMModel.vue` avisa o palco com o evento `floorPose`. Só o desktop liga isso, com `vrm-frame-floor-pose`. Na web, no Android e no `/mirror`, nada muda.
+
+Mais duas proteções no animador:
+
+- **Pose repetida:** se a mesma pose (`key`) já segura o corpo, um segundo pedido não a reinicia. Antes, modo noite mais um comando de pose podiam reiniciar a entrada no meio.
+- **Quadro atrasado:** um quadro que chega atrasado, por exemplo depois de carregar o FBX, move a animação no máximo 0,1 s. Antes, o movimento pulava um pedaço.
+
+Prova: `evidencias/D17/desktop-sequencia-deitando.png`, 26 capturas da janela do app desktop compilado, uma a cada ~0,5 s, desde em pé até deitada.
 
 ## 5. O que este teste não prova
 

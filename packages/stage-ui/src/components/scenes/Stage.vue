@@ -67,8 +67,8 @@ const props = withDefaults(defineProps<{
   vrmFraming?: 'default' | 'full-body'
   /** Shift and zoom of the full-body framing, see `framingAdjust` of `ThreeScene`. */
   vrmFramingAdjust?: { x?: number, y?: number, zoom?: number }
-  /** Lifts a lying VRM into a window that frames the upper body. See `liftFloorPose` of `ThreeScene`. */
-  vrmLiftFloorPose?: boolean
+  /** Frames the whole body while a VRM lies on the floor, in a window of the upper body. See `frameFloorPose` of `ThreeScene`. */
+  vrmFrameFloorPose?: boolean
   /** Lets NeoAlice control the device with `cmd/avatar/tool`, when the user allows it. See `DeviceToolGate`. */
   deviceToolGate?: DeviceToolGate
 }>(), {
@@ -905,7 +905,7 @@ defineExpose({
         :motion-library="vrmMotions.motionLibrary"
         :framing="props.vrmFraming"
         :framing-adjust="props.vrmFramingAdjust"
-        :lift-floor-pose="props.vrmLiftFloorPose"
+        :frame-floor-pose="props.vrmFrameFloorPose"
         @error="reportStageRenderError"
         @vrm-interact="onVRMInteract"
         @model-ready="restoreNeoAliceMood()"
