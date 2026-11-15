@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import type { WakeWord } from '@proj-airi/stage-ui/libs/voice/wake-words'
 
-import { WakeWordStatus } from '@proj-airi/stage-ui/components'
+import { WakeWordChecklist, WakeWordStatus } from '@proj-airi/stage-ui/components'
+import { useWakeWordDiagnostics } from '@proj-airi/stage-ui/composables/use-wake-word-diagnostics'
+import { kwsVocabularyModel } from '@proj-airi/stage-ui/libs/voice/kws-model'
 import { wakeWordKey } from '@proj-airi/stage-ui/libs/voice/wake-words'
 import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
+import { useSmallScreenListeningStore } from '@proj-airi/stage-ui/stores/voice-small-screen'
 import { useWakeWordDetectionStore } from '@proj-airi/stage-ui/stores/wake-word-detection'
 import { useWakeWordsStore } from '@proj-airi/stage-ui/stores/wake-words'
-import { SettingsCard } from '@proj-airi/ui'
+import { Button, FieldCheckbox, SettingsCard } from '@proj-airi/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import WakeWordConflicts from '../components/wake-word-conflicts.vue'
+import WakeWordEditor from '../components/wake-word-editor.vue'
 
 import { wakeWordSearchKey } from './wake-words.search'
 
@@ -31,6 +35,15 @@ const { t } = useI18n()
 const cards = useAiriCardStore()
 const wakeWords = useWakeWordsStore()
 const detection = useWakeWordDetectionStore()
+const { findings } = useWakeWordDiagnostics()
+const smallScreen = useSmallScreenListeningStore()
+
+/** Removes one word from the card. The other words stay. */
+async function removeWord(characterId: string, text: string) {
+  const card = cards.cards.get(characterId)
+  const remaining = (card?.extensions.airi.wakeWords ?? NO_WAKE_WORDS).filter(word => word.text !== text)
+  await wakeWords.setWords(characterId, remaining, kwsVocabularyModel)
+}
 
 const characters = computed(() => {
   const conflicts = new Map(wakeWords.catalog.conflicts.map(conflict => [conflict.key, conflict]))
@@ -80,6 +93,19 @@ const stateClasses: Record<PronunciationState, string[]> = {
       <WakeWordStatus />
     </SettingsCard>
 
+    <SettingsCard>
+      <h2 :class="['text-lg text-neutral-700 font-medium dark:text-neutral-200']">
+        {{ t('settings.pages.modules.hearing.wake-words.check.title') }}
+      </h2>
+      <WakeWordChecklist :findings="findings" prefix="settings.pages.modules.hearing.wake-words.check" />
+      <FieldCheckbox
+        v-model="smallScreen.enabled"
+        :label="t('settings.pages.modules.hearing.wake-words.small-screen.label')"
+        :description="t('settings.pages.modules.hearing.wake-words.small-screen.description')"
+        data-testid="wake-word-small-screen"
+      />
+    </SettingsCard>
+
     <WakeWordConflicts />
 
     <div :class="['grid grid-cols-1 gap-4 md:grid-cols-2']">
@@ -96,9 +122,14 @@ const stateClasses: Record<PronunciationState, string[]> = {
           {{ t('settings.pages.modules.hearing.wake-words.empty') }}
         </p>
         <div v-for="word in character.words" :key="word.text" :data-settings-search="wakeWordSearchKey(character.id, word.text)" :class="['flex flex-col gap-2']">
-          <h3 :class="['font-medium text-neutral-800 dark:text-neutral-100']">
-            {{ word.text }}
-          </h3>
+          <div :class="['flex items-center gap-2']">
+            <h3 :class="['font-medium text-neutral-800 dark:text-neutral-100']">
+              {{ word.text }}
+            </h3>
+            <Button size="sm" variant="secondary" data-testid="wake-word-remove" @click="removeWord(character.id, word.text)">
+              {{ t('settings.pages.modules.hearing.wake-words.editor.remove') }}
+            </Button>
+          </div>
           <div
             v-for="pronunciation in word.pronunciations"
             :key="pronunciation.key"
@@ -117,6 +148,7 @@ const stateClasses: Record<PronunciationState, string[]> = {
             </span>
           </div>
         </div>
+        <WakeWordEditor :character-id="character.id" :words="cards.cards.get(character.id)?.extensions.airi.wakeWords ?? NO_WAKE_WORDS" />
       </SettingsCard>
     </div>
   </div>

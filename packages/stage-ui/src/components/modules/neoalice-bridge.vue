@@ -8,9 +8,11 @@ import { computed, onScopeDispose, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useBuildInfo } from '../../composables/use-build-info'
+import { useNeoAliceWakeWordDiagnostics } from '../../composables/use-wake-word-diagnostics'
 import { useNeoAliceBrainStore } from '../../stores/modules/neoalice-brain'
 import { useNeoAliceBridgeStore } from '../../stores/modules/neoalice-bridge'
 import { loadServerDefaults } from '../../stores/server-defaults'
+import { WakeWordChecklist } from '../scenarios/dialogs/audio-input'
 
 const { t } = useI18n()
 const bridge = useNeoAliceBridgeStore()
@@ -45,6 +47,7 @@ const {
 const { brainMode, serverUrl, widgetTools } = storeToRefs(useNeoAliceBrainStore())
 // The commit of this build, so a test can tell which version runs.
 const build = useBuildInfo()
+const { findings: wakeWordFindings } = useNeoAliceWakeWordDiagnostics()
 
 const serverLoad = ref<{ tone: 'success' | 'danger', text: string }>()
 const serverLoading = ref(false)
@@ -190,6 +193,13 @@ const statusTone = computed(() => status.value === 'connected' ? 'success' : sta
         placeholder="Eva"
         data-testid="neoalice-wake-word"
       />
+
+      <div :class="['flex flex-col gap-1.5']">
+        <h3 :class="['text-sm font-medium text-neutral-700 dark:text-neutral-200']">
+          {{ t('settings.pages.modules.neoalice-bridge.voice.check.title') }}
+        </h3>
+        <WakeWordChecklist :findings="wakeWordFindings" prefix="settings.pages.modules.neoalice-bridge.voice.check" />
+      </div>
 
       <Alert :tone="voiceTone" data-testid="neoalice-voice-status">
         <div>{{ t(`settings.pages.modules.neoalice-bridge.voice.status.${voiceStatus}`) }}</div>

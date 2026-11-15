@@ -74,15 +74,58 @@ No APK, o caminho da NeoAlice não depende da largura da tela: o microfone é ab
 | Tamagotchi | Existe. Sem criar a wake word na ficha, nada acontece. No modo cérebro da NeoAlice, ela **não pode ser criada**. | Existe. Precisa de microfone do avatar, campo preenchido e transcrição. |
 | APK | **Desligada por desenho** em telas menores que 768 px. | Existe, e é a opção viável. Precisa dos mesmos itens. |
 
-## 5. O que eu proponho (não foi feito)
+## 5. O que foi feito depois da análise
 
-1. **Campo para criar a wake word** na página Hearing, Wake words, em vez de depender do LLM. Aceitar texto simples, e converter para fonemas ou pinyin com um dicionário, ou deixar o usuário editar os fonemas.
-2. **Oferecer `configure_wake_words` também no modo cérebro da NeoAlice**, ou tirar a ferramenta do chat e usar o campo do item 1.
-3. **Escuta contínua no APK** com um interruptor claro e um aviso de bateria, e uma notificação do sistema enquanto escuta. Só depois disso a wake word do AIRI faz sentido no celular.
-4. **Mostrar o motivo** quando a wake word não roda: "sem wake word criada", "escuta desligada" e "sem provedor de transcrição". Hoje o motivo fica escondido.
-5. **Wake word da NeoAlice no celular:** a opção mais barata. Basta uma lista de verificação na página da ponte NeoAlice que mostre quais dos itens 1 a 3 faltam.
+### 5.1 Qual engine serve para o português
 
-## 6. O que esta análise não prova
+O modelo local de wake word (`sherpa-onnx-kws-zipformer-zh-en-3M`) só conhece sons de **inglês e chinês**. Não há modelo de português nele, e os modelos de transcrição locais do app também não têm português. Quem entende português hoje é o **Whisper do servidor Alice**.
 
-- Não rodei o detector aqui: o modelo KWS vem do Hugging Face, e este ambiente não alcança o site.
+Por isso:
+
+- **No celular e para nomes em português, a wake word da NeoAlice** (texto, pelo Whisper) é o caminho confiável. Ela não depende do tamanho da tela. Ganhou uma lista de verificação (5.4).
+- **A wake word do AIRI** (modelo local) ficou utilizável: dá para criar a palavra, a pronúncia é sugerida, e a escuta no celular pode ser ligada. Um nome em português é escrito com os sons ingleses mais próximos. Isso **não foi testado com o modelo**, porque este ambiente não alcança o Hugging Face. Confira a sugestão e ajuste.
+- **Um engine novo** (por exemplo Vosk em português ou Picovoice Porcupine) exigiria uma dependência nova e baixar um modelo. O `AGENTS.md` do projeto pede que você escolha a biblioteca antes. Eu não consegui baixar nem testar nenhum modelo aqui. A comparação está na seção 7.
+
+### 5.2 Campo para criar a wake word
+
+Na página Configurações, Módulos, Hearing, Wake words, cada personagem ganhou:
+
+- campo da palavra, botão **Sugerir pronúncia**, caixa da pronúncia (uma por linha, editável) e **Adicionar wake word**;
+- botão **Remover** em cada palavra.
+
+Não depende mais do LLM, então funciona também com o modo cérebro da NeoAlice. O código valida cada som contra o vocabulário do modelo e recusa o que não existe.
+
+`wake-word-pronunciation.ts` sugere os sons a partir da grafia, com regras do português (`ch`, `lh`, `nh`, `c` e `g` suaves, `l` final como `w`, acento e regra da sílaba tônica) e uma segunda sugestão com `L` no lugar de `R`. Exemplos testados: `Eva` dá `EH1 V AH0`, `Alice` dá `AH0 L IY1 S IY0`.
+
+### 5.3 Por que não roda, na tela
+
+A mesma página mostra uma lista "Por que a wake word pode não funcionar", lida do estado real do app: sem wake word, Hearing desligado, microfone desligado, escuta desligada, modo Push to Talk, tela pequena, sem provedor de transcrição, pronúncia em conflito e erro do detector. Cada linha diz o que fazer.
+
+### 5.4 Wake word da NeoAlice
+
+A página da ponte NeoAlice ganhou a lista: conectada ao broker, microfone do avatar ligado, campo preenchido, provedor de transcrição e o erro do microfone.
+
+### 5.5 Escuta no celular
+
+Nova chave "Escutar o tempo todo em tela pequena" na página Wake words (desligada por padrão). Ela vale no APK e na web em tela pequena (`useSmallScreenListeningStore`). Com ela ligada, o celular mantém o microfone aberto **enquanto o app está na frente**. O sistema para o microfone quando o app vai para o segundo plano, e o uso de bateria é maior.
+
+### 5.6 Testes
+
+- `wake-word-pronunciation.test.ts` (7) e `wake-word-diagnostics.test.ts` (9).
+- `wake-words.browser.test.ts`: criar uma wake word com a sugestão e confirmar que a ficha guarda, a outra palavra fica, e a lista mostra "sem wake word".
+
+## 6. O que isto não prova
+
+- Não rodei o detector aqui: o modelo KWS vem do Hugging Face, e este ambiente não alcança o site. **Que a pronúncia sugerida seja reconhecida pelo modelo não foi provado.**
 - Não testei no seu aparelho. Se você me disser qual estado a página Wake words mostra e se o modo cérebro está ligado, eu confirmo qual causa é a sua.
+
+## 7. Comparação de engines, se a wake word local precisar entender português
+
+| Engine | Português | Offline no navegador e no APK | Custo e licença | Risco |
+| --- | --- | --- | --- | --- |
+| Modelo atual (sherpa-onnx KWS zh-en) | Não, só fonemas ingleses e pinyin | Sim, já embutido | Livre | Nome em português é aproximado |
+| Whisper do servidor (caminho da NeoAlice) | Sim | Precisa do servidor | Livre, já existe | Atraso: transcreve depois da pausa |
+| Vosk, modelo `small-pt` | Sim, com gramática de palavras-chave | Sim, WebAssembly, uns 30 MB | Apache 2.0 | Dependência nova, modelo a baixar, desempenho no celular a medir |
+| Picovoice Porcupine | Sim, palavra treinada no console deles | Sim | Chave de acesso, com plano grátis limitado | Conta e chave, e licença de uso |
+
+Eu não escolho uma dessas por você sem poder testar. Se você quiser um engine novo, diga qual, e eu implemento com testes.

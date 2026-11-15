@@ -12,6 +12,7 @@ import { useVoiceHoldKey } from '@proj-airi/stage-ui/composables/voice-hold'
 import { useVoiceListening, useVoicePushToTalk } from '@proj-airi/stage-ui/composables/voice-input-mode'
 import { useSettings } from '@proj-airi/stage-ui/stores/settings'
 import { useStartupResourcesStore } from '@proj-airi/stage-ui/stores/startup-resources'
+import { useSmallScreenListeningStore } from '@proj-airi/stage-ui/stores/voice-small-screen'
 import { breakpointsTailwind, useBreakpoints, useMouse } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue'
@@ -69,7 +70,9 @@ const { syncBackgroundTheme } = useBackgroundThemeColor({ backgroundSurface, sel
 onMounted(() => syncBackgroundTheme())
 
 // Small screens offer no control for continuous listening, so only a voice call listens there.
-useVoiceListening({ continuous: () => !isMobile.value })
+// A small screen listens only in a voice call, unless the user allows it in Settings, Hearing, Wake words.
+const smallScreenListening = useSmallScreenListeningStore()
+useVoiceListening({ continuous: () => !isMobile.value || smallScreenListening.enabled })
 // The page has no global shortcut, so Push to Talk uses Space while the stage page has focus.
 useVoiceHoldKey(useVoicePushToTalk({
   onUnconfigured: () => toast(t('stage.chat.voice-composer.configure-title'), { description: t('stage.chat.voice-composer.configure-description') }),

@@ -1,5 +1,6 @@
 import en from '@proj-airi/i18n/locales/en'
 
+import { kwsVocabularyModel } from '@proj-airi/stage-ui/libs/voice/kws-model'
 import { kwsModel } from '@proj-airi/stage-ui/libs/voice/kws-model-info'
 import { wakeWordKey } from '@proj-airi/stage-ui/libs/voice/wake-words'
 import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
@@ -101,5 +102,42 @@ describe('wake words settings', () => {
     expect(pronunciationOf(aria, SHARED)?.dataset.state).toBe('other')
     expect(pronunciationOf(luna, SHARED)?.dataset.state).toBe('active')
     expect(wakeWords.catalog.conflicts[0]?.owner).toBe(luna)
+  })
+
+  it('adds a wake word from the page, with a suggested pronunciation, and removes it', async () => {
+    const { screen, aria } = await renderWithConflict()
+    const wakeWords = useWakeWordsStore(pinias[0])
+
+    // The editor of Aria is the first one on the page.
+    const editor = document.querySelector<HTMLElement>(`[data-testid="wake-word-character"][data-character-id="${aria}"] [data-testid="wake-word-editor"]`)!
+    const field = editor.querySelector<HTMLInputElement>('input')!
+    field.value = 'Eva'
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    await screen.getByTestId('wake-word-suggest').first().click()
+    const pronunciations = editor.querySelector<HTMLTextAreaElement>('[data-testid="wake-word-pronunciations"]')!
+    await expect.poll(() => pronunciations.value).toBe('EH1 V AH0')
+
+    await screen.getByTestId('wake-word-add').first().click()
+    await expect.poll(() => useAiriCardStore(pinias[0]).cards.get(aria)?.extensions.airi.wakeWords?.map(word => word.text)).toContain('Eva')
+    const saved = useAiriCardStore(pinias[0]).cards.get(aria)?.extensions.airi.wakeWords?.find(word => word.text === 'Eva')
+    expect(saved?.pronunciations).toEqual([['EH1', 'V', 'AH0']])
+    expect(saved?.modelId).toBe(kwsVocabularyModel.id)
+    // The other word of Aria stays.
+    expect(useAiriCardStore(pinias[0]).cards.get(aria)?.extensions.airi.wakeWords?.some(word => word.text === 'Hey AIRI')).toBe(true)
+    expect(wakeWords.catalog.active.some(item => item.text === 'Eva')).toBe(true)
+  })
+
+  it('tells why the wake word does not run when no character has one', async () => {
+    const pinia = createPinia()
+    pinias.push(pinia)
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:path(.*)*', component: { template: '<div />' } }] })
+    await router.push('/settings/modules/hearing/wake-words')
+    const screen = await render(WakeWordsPage, {
+      global: { plugins: [pinia, router, createI18n({ legacy: false, locale: 'en', messages: { en }, missingWarn: false, fallbackWarn: false })] },
+    })
+
+    await expect.element(screen.getByTestId('wake-word-check-word')).toHaveAttribute('data-status', 'blocked')
+    await expect.poll(() => document.querySelector('[data-testid="wake-word-check-word"]')?.textContent).toContain('Add one below')
+    await expect.element(screen.getByTestId('wake-word-checklist')).toBeVisible()
   })
 })

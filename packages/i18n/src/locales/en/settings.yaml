@@ -945,8 +945,53 @@ pages:
       wake-words:
         title: Wake words
         description: See the wake words of each character, and choose who answers a shared pronunciation.
-        intro: Each character keeps its wake words on its card. To change the words, ask the character in chat.
+        intro: Each character keeps its wake words on its card. Add a word below, or ask the character in chat. The wake word model knows English and Chinese sounds, so a name in Portuguese is written with the English sounds that are closest. Check the suggestion and edit it.
         empty: This character has no wake words.
+        check:
+          title: Why the wake word may not work
+          word:
+            ok: A wake word is ready.
+            blocked: No character has a wake word yet. Add one below.
+          hearing:
+            ok: Hearing is on.
+            blocked: Hearing is off. Turn it on in the Hearing settings.
+          microphone:
+            ok: The microphone is on.
+            blocked: The microphone switch is off. Turn it on, so that AIRI can listen.
+          listening:
+            ok: Listening is on.
+            blocked: Listening is off. Turn on listening in the Hearing settings.
+          mode:
+            ok: The input mode listens for a wake word.
+            blocked: The input mode is Push to Talk. It never listens for a wake word. Choose Always on or Wake word.
+          screen:
+            ok: This screen can listen all the time.
+            blocked: This screen is small, like a phone, and listens only in a voice call. Turn on the switch below to listen with the app in front.
+          transcription:
+            ok: A transcription provider is set.
+            warning: No transcription provider is set. The wake word can wake AIRI, but AIRI cannot understand what you say next.
+          conflict:
+            warning: Two characters use the same pronunciation, and no character answers it. Choose one in Shared pronunciations.
+          detector:
+            ok: The wake word model is ready.
+            warning: The wake word model is loading.
+            blocked: 'The wake word model is not available: {error}'
+        small-screen:
+          label: Listen all the time on a small screen
+          description: Lets a phone keep the microphone open while the app is in front, so a wake word can work. It uses more battery. The system stops the microphone when the app goes to the background.
+        editor:
+          title: Add a wake word
+          word: Word
+          word-description: What you say to call the character, for example its name.
+          pronunciation: Pronunciation
+          pronunciation-description: 'One pronunciation on each line, with the sounds of the model separated by spaces, for example EH1 V AH0. The digit marks the stressed vowel.'
+          suggest: Suggest pronunciation
+          add: Add wake word
+          remove: Remove
+          saved: Wake word saved.
+          incomplete: Write the word and at least one pronunciation.
+          no-suggestion: No sounds could be suggested for this word. Write the pronunciation yourself.
+          failed: The wake word was not saved.
         state:
           active: Active
           paused: Paused. Choose a character to answer it.
@@ -1038,7 +1083,7 @@ pages:
             wake-word: Wake words
             wake-word-description: The microphone stays on, but AIRI listens only after you say a character's wake word.
             wake-word-status:
-              no-words: No character has wake words. Ask a character in chat to set its wake words.
+              no-words: No character has wake words. Add one in the Wake words page, or ask a character in chat.
               unconfigured: Wake word detection starts when the microphone is on.
               preparing: Preparing the wake word model…
               ready: Wake words are ready.
@@ -1234,6 +1279,22 @@ pages:
         user-id-description: The UUID of the NeoAlice user. Empty uses the default user of NeoAlice.
         wake-word: Wake word
         wake-word-description: 'For example Eva. Separate other spellings with commas. When it is set, AIRI transcribes each phrase with the Hearing provider, and only a phrase that starts with the wake word goes to NeoAlice. The wake word also stops her speech. Empty: every phrase goes to NeoAlice.'
+        check:
+          title: Why the wake word may not work
+          connected:
+            ok: Connected to the broker.
+            blocked: Not connected to the broker. Turn on the bridge and check the broker address.
+          voice-input:
+            ok: The microphone of the avatar is on.
+            blocked: The microphone of the avatar is off. Turn it on above.
+          field:
+            ok: A wake word is set.
+            blocked: No wake word is set. Write one above, for example Eva. Without it, every phrase goes to NeoAlice.
+          transcription:
+            ok: A transcription provider and model are set.
+            blocked: No transcription provider and model. Set them in Hearing. The server Whisper understands Portuguese.
+          error:
+            blocked: 'The microphone reported: {error}'
         status:
           'off': The microphone is off. It listens only while the stage page is open.
           starting: Starting the microphone...
