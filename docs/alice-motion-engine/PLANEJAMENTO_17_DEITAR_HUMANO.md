@@ -78,6 +78,21 @@ Mais duas proteções no animador:
 
 Prova: `evidencias/D17/desktop-sequencia-deitando.png`, 26 capturas da janela do app desktop compilado, uma a cada ~0,5 s, desde em pé até deitada.
 
+## 4.1 O levantar (ajuste depois do deitar)
+
+O levantar antigo ia da posição sentada direto a um agachamento fundo, com os braços soltos, e só então se esticava. Nenhuma mão ou pé apoiava, e não parecia humano.
+
+O novo levantar (6 s) usa os mesmos contatos do deitar: empurra o antebraço direito, senta de lado, fica de joelhos com a mão direita no chão, traz um pé à frente (meio ajoelhada) e se levanta, com a cabeça por último. O quadril sobe no máximo a 0,8 m/s.
+
+Dois ajustes no gerador vieram desse trabalho, e melhoram também o deitar:
+
+- **Subida suave do quadril:** o quadril começa a subir antes de o chão exigir (`MAX_ASCENT_CM_PER_SECOND`). Sem isso, ele saltava 5 m/s quando o joelho deixava de tocar o chão.
+- **Braço e perna nunca totalmente esticados:** com a ponta fixada no chão, o cotovelo e o joelho trocavam de lado de uma vez perto do comprimento máximo (`MAX_LIMB_STRETCH`).
+
+O teste `lie-down-motion.test.ts` agora checa o levantar também: sem salto de quadril e nenhum osso girando mais de 25 graus num quadro.
+
+Provas: `evidencias/D17/levantar-novo-quadros.png` (pré-visualização) e `desktop-sequencia-levantando.png` (26 capturas do app desktop compilado, deitada, levantando e a câmera voltando ao busto).
+
 ## 5. O que este teste não prova
 
 - O app instalado no seu computador. Recompile com `pnpm -F @proj-airi/stage-tamagotchi build`.

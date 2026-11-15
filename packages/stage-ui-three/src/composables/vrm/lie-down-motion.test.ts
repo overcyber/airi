@@ -101,11 +101,25 @@ describe('get-up.fbx', () => {
   const lying = retargetFbxClip(createVrm(), loadBundledFbx('lie-down.fbx').animations[0])!
   const getUp = retargetFbxClip(createVrm(), loadBundledFbx('get-up.fbx').animations[0])!
 
+  it('has no jump: the hips rise at a person\'s pace and no bone turns fast on one frame', () => {
+    const frame = 1 / 30
+    const hips = getUp.tracks.find(track => track.name === 'Normalized_hips.position')!
+    for (let index = 1; index < hips.times.length; index++)
+      expect(Math.abs(hips.values[index * 3 + 1] - hips.values[(index - 1) * 3 + 1]) / frame, `hips at ${hips.times[index].toFixed(2)} s`).toBeLessThan(1.2)
+    for (const track of getUp.tracks.filter(item => item.name.endsWith('.quaternion') && !/Eye|Hand|Thumb|Index|Middle|Ring|Little/i.test(item.name))) {
+      for (let index = 1; index < track.times.length; index++) {
+        const before = new Quaternion().fromArray(track.values, (index - 1) * 4)
+        const after = new Quaternion().fromArray(track.values, index * 4)
+        expect(before.angleTo(after) * 180 / Math.PI, `${track.name} at ${track.times[index].toFixed(2)} s`).toBeLessThan(25)
+      }
+    }
+  })
+
   it('starts in the lying pose, goes through sitting, and ends standing', () => {
     const hipsOf = (clip: typeof getUp) => clip.tracks.find(track => track.name === 'Normalized_hips.position')!
-    expect(getUp.duration).toBeCloseTo(5.2, 2)
+    expect(getUp.duration).toBeCloseTo(6, 2)
     expect(valueAt(hipsOf(getUp).values, hipsOf(getUp).times, 0, 3)[1]).toBeCloseTo(valueAt(hipsOf(lying).values, hipsOf(lying).times, 6.6, 3)[1], 1)
     expect(valueAt(hipsOf(getUp).values, hipsOf(getUp).times, 2.1, 3)[1]).toBeLessThan(0.3)
-    expect(valueAt(hipsOf(getUp).values, hipsOf(getUp).times, 5.2, 3)[1]).toBeCloseTo(1, 2)
+    expect(valueAt(hipsOf(getUp).values, hipsOf(getUp).times, 6, 3)[1]).toBeCloseTo(1, 2)
   })
 })

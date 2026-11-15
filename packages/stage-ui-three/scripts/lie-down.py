@@ -12,8 +12,9 @@ themselves: the lowest supporting part touches it and nothing sinks. The hips ne
 lowers (`MAX_DESCENT_CM_PER_SECOND`). The old clip had no such rule: the feet sank up to 70 cm under the floor,
 and each key made the body jump, because the rotation curve had its four points in the wrong order.
 
-`get-up.fbx` (with `--get-up`) goes the human way up, not the same path backwards: she pushes up on the right arm,
-sits, comes to the knees with the hand on the floor, rises, and the head comes up last.
+`get-up.fbx` (with `--get-up`) goes the human way up: she pushes on the right forearm, sits on her hip, comes to her
+knees with the right hand on the floor, brings one foot forward (a half kneel), and stands. The head comes up last.
+It takes 6 s, and it uses the same floor contacts as the lie down.
 
 The stage plays the first 6.6 s of `lie-down.fbx` once, loops the rest, and plays `get-up.fbx` to get up
 (`holdPoseClip` of `avatar-animator.ts`, `loopFromSeconds` of `animations/index.ts`).
@@ -43,7 +44,7 @@ from mathutils import Matrix, Quaternion, Vector
 
 FPS = 30
 ENTRY_SECONDS = 6.6
-GET_UP_SECONDS = 5.2
+GET_UP_SECONDS = 6.0
 LOOP_SECONDS = 9.0
 # A sleeping breath: about 13 per minute, the inhale shorter than the exhale.
 BREATH_SECONDS = 4.5
@@ -201,44 +202,6 @@ LYING = {
     'LeftFoot': ('aim', (0.6, -0.2, -0.78)),
 }
 
-# Getting up: still lying, the right arm pushes the chest up from the floor.
-PUSH_UP = {
-    'hips': (8.0, 13.5, 1.0),
-    'Hips': ('turn', [('z', 60), ('x', -4)]),
-    'Spine': ('turn', [('z', -8)]),
-    'Spine1': ('turn', [('z', -8)]),
-    'Spine2': ('turn', [('z', -6)]),
-    'Neck': ('turn', [('z', -10)]),
-    'Head': ('turn', [('z', -12), ('x', 6)]),
-    'RightArm': ('aim', (-0.55, -0.82, 0.15)),
-    'RightForeArm': ('aim', (-0.45, -0.88, 0.15)),
-    'RightHand': ('aim', (-0.4, -0.3, 0.86)),
-    'LeftArm': ('aim', (0.5, -0.6, 0.62)),
-    'LeftForeArm': ('aim', (0.6, -0.3, 0.74)),
-    'RightUpLeg': ('aim', (0.86, -0.04, 0.5)),
-    'RightLeg': ('aim', (0.9, -0.02, -0.44)),
-    'LeftUpLeg': ('aim', (0.84, 0.1, 0.53)),
-    'LeftLeg': ('aim', (0.88, 0.08, -0.47)),
-}
-
-# Rising: the legs push, the chest is still bent forward, and the head is still down.
-RISE = {
-    'hips': (-1.0, 74.0, 6.0),
-    'Hips': ('turn', [('x', 20)]),
-    'Spine': ('turn', [('x', 10)]),
-    'Spine1': ('turn', [('x', 4)]),
-    'Neck': ('turn', [('x', 10)]),
-    'Head': ('turn', [('x', 8)]),
-    'LeftUpLeg': ('aim', (0.12, -0.75, 0.62)),
-    'LeftLeg': ('aim', (0.04, -0.98, -0.18)),
-    'RightUpLeg': ('aim', (-0.12, -0.75, 0.62)),
-    'RightLeg': ('aim', (-0.04, -0.98, -0.18)),
-    'LeftArm': ('aim', (0.3, -0.9, 0.3)),
-    'LeftForeArm': ('aim', (0.2, -0.85, 0.48)),
-    'RightArm': ('aim', (-0.3, -0.9, 0.3)),
-    'RightForeArm': ('aim', (-0.2, -0.85, 0.48)),
-}
-
 # ---- The lie down, in the way a person goes to the floor --------------------------------------------------------
 # 1. A look at the floor, the weight on the feet. 2. The right foot steps back and the body lowers, the right hand
 # reaches for the floor. 3. The right knee and the right hand take the weight (a half kneel). 4. The left knee comes
@@ -290,7 +253,7 @@ LD_HALF_KNEEL = {
     'LeftForeArm': ('aim', (0.2, -0.65, 0.73)),
     'ik': {'LeftFoot': {'target': (15.0, 13.0, 4.0), 'pole': KNEE_FORWARD, 'direction': FOOT_FLAT},
            'RightFoot': {'target': (-14.0, 16.0, -40.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
-           'RightHand': {'target': (-34.0, 7.0, 34.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR}},
+           'RightHand': {'target': (-34.0, 10.0, 34.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR}},
 }
 
 # Both knees on the floor, the right hand still holds her up.
@@ -305,14 +268,14 @@ LD_KNEEL = {
     'LeftForeArm': ('aim', (0.2, -0.65, 0.73)),
     'ik': {'LeftFoot': {'target': (14.0, 16.0, -40.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
            'RightFoot': {'target': (-14.0, 16.0, -40.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
-           'RightHand': {'target': (-34.0, 7.0, 34.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR}},
+           'RightHand': {'target': (-34.0, 10.0, 34.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR}},
 }
 
 # She sits on her right hip, the legs folded to her left, the right hand on the floor beside her.
 LD_SIT = {
     **SIT_SIDE,
     'hips': (-4.0, 14.0, 4.0),
-    'ik': {'RightHand': {'target': (-38.0, 7.0, 18.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR},
+    'ik': {'RightHand': {'target': (-38.0, 10.0, 18.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR},
            'LeftFoot': {'target': (52.0, 15.0, -12.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
            'RightFoot': {'target': (38.0, 15.0, -24.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK}},
 }
@@ -328,7 +291,7 @@ LD_RECLINE = {
     'Head': ('turn', [('z', -14), ('x', 4)]),
     'LeftArm': ('aim', (0.55, -0.7, 0.45)),
     'LeftForeArm': ('aim', (0.7, -0.5, 0.5)),
-    'ik': {'RightHand': {'target': (-48.0, 8.0, 12.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR},
+    'ik': {'RightHand': {'target': (-48.0, 11.0, 12.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR},
            'LeftFoot': {'target': (78.0, 14.0, -14.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
            'RightFoot': {'target': (66.0, 14.0, -20.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK}},
 }
@@ -338,6 +301,27 @@ LD_LYING = {
     **LYING,
     'ik': {'RightFoot': {'target': (86.0, 11.0, 0.0), 'pole': KNEE_FORWARD, 'direction': (0.6, -0.1, -0.8)},
            'LeftFoot': {'target': (86.0, 20.0, 4.0), 'pole': KNEE_FORWARD, 'direction': (0.6, -0.2, -0.78)}},
+}
+
+# ---- The get up ------------------------------------------------------------------------------------------------
+# A person does not play the lie down backwards: she pushes on the right forearm, sits on her hip, comes to her
+# knees with the right hand on the floor, brings one foot forward (a half kneel), puts the hands on the thighs, and
+# stands. The head comes up last. She uses the same contacts as the lie down, so a hand or a foot on the floor stays.
+
+# Rising from the half kneel: the feet are close, the chest is still bent, and the hands push on the thighs.
+GU_RISE = {
+    'hips': (-2.0, 84.0, 4.0),
+    'Hips': ('turn', [('x', 16), ('z', 3)]),
+    'Spine': ('turn', [('x', 8)]),
+    'Spine1': ('turn', [('x', 4)]),
+    'Neck': ('turn', [('x', 6), ('y', -4)]),
+    'Head': ('turn', [('x', 6), ('y', -6)]),
+    'LeftArm': ('aim', (0.25, -0.88, 0.4)),
+    'LeftForeArm': ('aim', (0.1, -0.7, 0.7)),
+    'RightArm': ('aim', (-0.25, -0.88, 0.4)),
+    'RightForeArm': ('aim', (-0.1, -0.7, 0.7)),
+    'ik': {'LeftFoot': {'target': (15.0, 13.0, 0.0), 'pole': KNEE_FORWARD, 'direction': FOOT_FLAT},
+           'RightFoot': {'target': (-14.0, 13.0, -16.0), 'pole': KNEE_FORWARD, 'direction': FOOT_FLAT}},
 }
 
 KEYS = [
@@ -352,12 +336,13 @@ KEYS = [
 ]
 
 GET_UP_KEYS = [
-    (0.0, LYING),
-    (1.1, PUSH_UP),
-    (2.1, SIT_SIDE),
-    (3.2, HAND_DOWN),
-    (4.2, RISE),
-    (GET_UP_SECONDS, STANDING),
+    (0.0, LD_LYING),
+    (1.1, LD_RECLINE),
+    (2.1, LD_SIT),
+    (3.1, LD_KNEEL),
+    (4.0, LD_HALF_KNEEL),
+    (5.0, GU_RISE),
+    (GET_UP_SECONDS, LD_STAND),
 ]
 
 # How far ahead (+) or behind (-) of the others each bone moves, in seconds. A person turns the head first and the
@@ -490,6 +475,10 @@ BOOT_TIP_CM = 7.0
 STAND_ANKLE_CM = 13.0
 # The most that the hips descend: a person lowers to the floor at about this pace, not faster.
 MAX_DESCENT_CM_PER_SECOND = 70.0
+# The most that the hips rise, in centimeters per second.
+MAX_ASCENT_CM_PER_SECOND = 80.0
+# How much of its full length a leg or an arm reaches with a pinned end: it keeps a small bend.
+MAX_LIMB_STRETCH = 0.992
 
 LIMBS = {
     # end joint: (root, middle, positive pole axis name for documentation)
@@ -503,7 +492,8 @@ LIMBS = {
 def two_bone(root, target, upper, lower, pole):
     """The middle joint of a two bone chain, and the end joint it reaches, for a target. The pole turns the knee or elbow."""
     to_target = target - root
-    reach = min(max(to_target.length, abs(upper - lower) + 0.5), upper + lower - 0.05)
+    # Never fully straight: at full length the elbow or the knee swings from one side to the other in one frame.
+    reach = min(max(to_target.length, abs(upper - lower) + 0.5), (upper + lower) * MAX_LIMB_STRETCH)
     direction = to_target.normalized()
     along = (upper * upper - lower * lower + reach * reach) / (2 * reach)
     height = math.sqrt(max(upper * upper - along * along, 0.0))
@@ -643,6 +633,10 @@ class Motion:
             if heights:
                 wanted = max(wanted, heights[-1] - MAX_DESCENT_CM_PER_SECOND / FPS)
             heights.append(wanted)
+        # The hips cannot jump up either: they start to rise before the floor needs it. A person pushes up with
+        # the legs and the arms, and the rise has a pace.
+        for index in range(len(heights) - 2, -1, -1):
+            heights[index] = max(heights[index], heights[index + 1] - MAX_ASCENT_CM_PER_SECOND / FPS)
         return heights
 
     def sample(self, seconds):
