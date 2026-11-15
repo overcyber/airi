@@ -22,6 +22,9 @@ const zAxis = new Vector3(0, 0, 1)
 
 const about = (axis: Vector3, degrees: number) => new Quaternion().setFromAxisAngle(axis, deg(degrees))
 
+/** The raise of an arm that a pose leaves out, in degrees from down: a relaxed arm, a little away from the body. */
+const restArmRaise = 8
+
 /** The rotation of one bone of the left side or the middle, from its axes. */
 function leftRotation(kind: RigJointKind, axes: Record<string, number>): Quaternion {
   const a = (name: string) => axes[name] ?? 0
@@ -130,6 +133,19 @@ export function createCustomMotionClip(vrm: VRM, motion: CustomMotion): Animatio
       values.push(...values.slice(-4))
     }
     tracks.push(new QuaternionKeyframeTrack(`${node.name}.quaternion`, times, values))
+  }
+
+  // A held pose fades the idle out, and an arm without a track goes back to the T pose of the VRM. So a pose that
+  // leaves an arm out keeps it down at the side, like the standing rest pose of the rig.
+  if (motion.kind === 'pose') {
+    const named = new Set([...bones].map(bone => motion.mirror ? otherSide(bone) : bone))
+    for (const arm of ['leftUpperArm', 'rightUpperArm'] as const) {
+      const node = vrm.humanoid.getNormalizedBoneNode(arm)
+      const down = boneRotation(vrm, arm, { levantar: restArmRaise })
+      if (named.has(arm) || !node || !down)
+        continue
+      tracks.push(new QuaternionKeyframeTrack(`${node.name}.quaternion`, [0, duration], [down.x, down.y, down.z, down.w, down.x, down.y, down.z, down.w]))
+    }
   }
 
   // `hips.subir` moves the body up or down, in centimeters from the rest height.
