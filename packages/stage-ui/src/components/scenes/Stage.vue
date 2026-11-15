@@ -66,6 +66,8 @@ const props = withDefaults(defineProps<{
   vrmFraming?: 'default' | 'full-body'
   /** Shift and zoom of the full-body framing, see `framingAdjust` of `ThreeScene`. */
   vrmFramingAdjust?: { x?: number, y?: number, zoom?: number }
+  /** Lifts a lying VRM into a window that frames the upper body. See `liftFloorPose` of `ThreeScene`. */
+  vrmLiftFloorPose?: boolean
 }>(), {
   enableOrbitControls: true,
   paused: false,
@@ -896,6 +898,7 @@ defineExpose({
         :motion-library="vrmMotions.motionLibrary"
         :framing="props.vrmFraming"
         :framing-adjust="props.vrmFramingAdjust"
+        :lift-floor-pose="props.vrmLiftFloorPose"
         @error="reportStageRenderError"
         @vrm-interact="onVRMInteract"
         @model-ready="restoreNeoAliceMood()"

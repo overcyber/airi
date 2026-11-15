@@ -730,10 +730,10 @@ const cursorPosition = computed(() => ({
         <WidgetStage
           ref="widgetStageRef"
           v-model:state="componentStateStage"
-          h-full w-full
-          flex-1
+
           :cursor-position="cursorPosition"
           :paused="stagePaused"
+          vrm-lift-floor-pose h-full w-full flex-1
           @error="handleStageRenderError"
           @reset="handleStageReset"
           @select-avatar-model="openSettings({ route: '/settings/models' })"

@@ -122,6 +122,11 @@ const props = withDefaults(defineProps<{
    * brings the camera closer (above 1) or farther (below 1). The mirror page reads it from its URL.
    */
   framingAdjust?: { x?: number, y?: number, zoom?: number }
+  /**
+   * Lifts the model while she lies on the floor, so a window that frames only the head and the chest still shows
+   * her. Only the desktop window needs it. With a floor in the view, the lift makes her float.
+   */
+  liftFloorPose?: boolean
 }>(), {
   presence: () => presenceBubbleIdle,
   enableOrbitControls: true,
@@ -1204,7 +1209,7 @@ defineExpose({
         :speech-text="props.speechText"
         :thinking="props.thinking"
         :night-mode="props.nightMode"
-        :lift-floor-pose="props.framing !== 'full-body'"
+        :lift-floor-pose="props.liftFloorPose"
         :person-position="props.personPosition"
         :motion-library="props.motionLibrary ?? defaultVrmMotionLibrary"
         :cursor-position="props.cursorPosition"
