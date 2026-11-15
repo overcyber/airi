@@ -256,8 +256,8 @@ describe('avatarAnimator layers (V6)', () => {
     // The talking clip adds a part of its motion to the idle, so she does not gesture with the full clip.
     expect(animator.idle?.getEffectiveWeight()).toBeCloseTo(1, 5)
     expect(animator.talking?.blendMode).toBe(AdditiveAnimationBlendMode)
-    expect(animator.talking?.getEffectiveWeight()).toBeGreaterThanOrEqual(0.3)
-    expect(animator.talking?.getEffectiveWeight()).toBeLessThanOrEqual(0.45)
+    expect(animator.talking?.getEffectiveWeight()).toBeGreaterThanOrEqual(0.12)
+    expect(animator.talking?.getEffectiveWeight()).toBeLessThanOrEqual(0.22)
     state.talking = false
     animator.setTalking(false)
     state.talking = true

@@ -93,6 +93,7 @@ import { MoodBody } from '../../composables/vrm/mood-body'
 import { MoodFace, releaseMoodOverrides } from '../../composables/vrm/mood-face'
 import { emoteLayerBones, inferEmoteLayering } from '../../composables/vrm/motion-layers'
 import { PerformanceDirector } from '../../composables/vrm/performance-director'
+import { SpeechGestureChoreographer } from '../../composables/vrm/speech-gestures'
 import { talkingHeadEmojiFaces } from '../../composables/vrm/talkinghead-emoji-faces'
 import { createTalkingHeadClip, parseTalkingHeadClipId } from '../../composables/vrm/talkinghead-motion'
 import { createThinkingClip } from '../../composables/vrm/thinking-pose'
@@ -254,6 +255,9 @@ const vrmAnimationMixer = ref<AnimationMixer>()
 const vrmAnimator = shallowRef<AvatarAnimator>()
 const vrmDirector = shallowRef<PerformanceDirector>()
 const vrmMoodFace = shallowRef<MoodFace>()
+const speechGestures = new SpeechGestureChoreographer()
+/** True while the body emote that plays is a gesture of speech. Reset when no emote plays. */
+let speechBeatPlaying = false
 const vrmMoodBody = shallowRef<MoodBody>()
 /** Lag of the upper body after a turn or a push of the hips (Plan 08, M2). A new model starts a new one. */
 let bodyInertia = new BodyInertia()
@@ -692,6 +696,19 @@ function bindManagedVrmInstanceRenderLoop() {
       else
         vrmAnimationMixer.value?.update(delta)
     })
+    // Gestures of speech start only after the audio does, and only while nothing else owns the body.
+    const speechAnimator = vrmAnimator.value
+    if (activeVrm && speechAnimator) {
+      const beat = speechGestures.update(delta, {
+        blocked: speechAnimator.emotePlaying || speechAnimator.holdsClipPose || props.nightMode === true || props.speechActive !== true,
+      })
+      if (beat) {
+        playCustomMotionNow(beat)
+        speechBeatPlaying = true
+      }
+      if (!speechAnimator.emotePlaying)
+        speechBeatPlaying = false
+    }
     const moodFace = vrmMoodFace.value
     // On the floor, the clip breathes and holds the body. The standing layers (head scan, mood lean and breath,
     // upper body lag) gave a second breath and a standing lean to the lying body.
@@ -784,7 +801,8 @@ function bindManagedVrmInstanceRenderLoop() {
       const face = moodFace.update({
         deltaSeconds: delta,
         speaking: props.speechActive === true,
-        emotePlaying: vrmAnimator.value?.emotePlaying ?? false,
+        // A gesture of speech moves the body only. The face keeps its mood and its blink while she talks.
+        emotePlaying: (vrmAnimator.value?.emotePlaying ?? false) && !speechBeatPlaying,
       })
       for (const [name, weight] of face)
         activeVrm.expressionManager.setValue(name, weight)
@@ -1288,6 +1306,16 @@ onMounted(async () => {
   watch(() => props.speechActive === true && !props.nightMode, (speaking) => {
     vrmAnimator.value?.setTalking(speaking)
   })
+  // Each sentence starts its own run of gestures when its audio starts, and the run ends with the speech.
+  watch(() => props.speechText?.id, () => {
+    const text = props.speechText?.text
+    if (text && props.speechActive === true)
+      speechGestures.start(text)
+  })
+  watch(() => props.speechActive === true, (speaking) => {
+    if (!speaking)
+      speechGestures.stop()
+  })
   watch(() => props.thinking === true && props.speechActive !== true && !props.nightMode, (thinking) => {
     const animator = vrmAnimator.value
     if (!animator)
@@ -1432,6 +1460,31 @@ function headAnchor() {
   return { position: headPosition, radius }
 }
 
+/** Plays a checked motion on the loaded model. `false` when nothing of it fits the model. */
+function playCustomMotionNow(motion: CustomMotion): boolean {
+  const targetVrm = vrm.value
+  const animator = vrmAnimator.value
+  if (!targetVrm || !animator)
+    return false
+  if (animator.holdsClipPose && motion.kind === 'gesture') {
+    console.info(`[vrm] motion "${motion.name ?? 'custom'}" skipped: she holds a floor pose`)
+    return true
+  }
+  const face = customMotionFace(motion)
+  const faceShown = Object.keys(face).length > 0 && (vrmMoodFace.value?.showFace(face) ?? false)
+  const clip = createCustomMotionClip(targetVrm, motion)
+  if (!clip)
+    return faceShown
+  if (motion.kind === 'pose') {
+    animator.holdPose(clip, 0.8, motion.duration)
+  }
+  else {
+    const nodes = new Set(clip.tracks.map(track => track.name.slice(0, track.name.lastIndexOf('.'))))
+    animator.playEmote(clip, undefined, { nodes, durationSeconds: motion.duration, fadeSeconds: 0.6 })
+  }
+  return true
+}
+
 defineExpose({
   headAnchor,
   getInteractionColliders: () => interactionColliders.value?.colliders ?? [],
@@ -1571,27 +1624,7 @@ defineExpose({
    * the motion shows for about 3 s. Resolves `false` when nothing of the motion fits the model.
    */
   playCustomMotion(motion: CustomMotion): boolean {
-    const targetVrm = vrm.value
-    const animator = vrmAnimator.value
-    if (!targetVrm || !animator)
-      return false
-    if (animator.holdsClipPose && motion.kind === 'gesture') {
-      console.info(`[vrm] motion "${motion.name ?? 'custom'}" skipped: she holds a floor pose`)
-      return true
-    }
-    const face = customMotionFace(motion)
-    const faceShown = Object.keys(face).length > 0 && (vrmMoodFace.value?.showFace(face) ?? false)
-    const clip = createCustomMotionClip(targetVrm, motion)
-    if (!clip)
-      return faceShown
-    if (motion.kind === 'pose') {
-      animator.holdPose(clip, 0.8, motion.duration)
-    }
-    else {
-      const nodes = new Set(clip.tracks.map(track => track.name.slice(0, track.name.lastIndexOf('.'))))
-      animator.playEmote(clip, undefined, { nodes, durationSeconds: motion.duration, fadeSeconds: 0.6 })
-    }
-    return true
+    return playCustomMotionNow(motion)
   },
   /** Ends the held pose now, like `cmd/avatar` with `stop`. A gesture and an animation end on their own. */
   stopPose() {

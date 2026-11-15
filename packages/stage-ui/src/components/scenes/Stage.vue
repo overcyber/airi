@@ -544,7 +544,7 @@ const { thinking: neoAliceThinking, nightMode: neoAliceNightMode, visionPerson: 
       createdAt: Date.now(),
     }, signal)
   },
-  playSpeech: async (audio, text) => {
+  playSpeech: async (audio, text, onStart) => {
     await audioContext.resume().catch(() => {})
     neoAliceGroup?.stop({ fadeMs: 80 }).catch(() => {})
     const group = playback.openGroup('neoalice-bridge')
@@ -559,6 +559,7 @@ const { thinking: neoAliceThinking, nightMode: neoAliceNightMode, visionPerson: 
         nowSpeaking.value = true
         speechText.value = { id: ++speechTextId, text }
         showBridgeCaption(text)
+        onStart()
       },
     })
     await group.finish().catch(() => {})

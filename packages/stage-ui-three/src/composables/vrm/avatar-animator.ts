@@ -74,7 +74,7 @@ const fadeSeconds = {
  * Weight of a talking clip of the pool, picked in this range for each speech. It adds to the idle, so she
  * gestures with a part of the arm motion of the clip and the mouth stays the focus of the speech.
  */
-const talkingOverlayWeightRange: readonly [number, number] = [0.3, 0.45]
+const talkingOverlayWeightRange: readonly [number, number] = [0.12, 0.22]
 
 /**
  * The talking clip starts this long after the speech, on the frame clock. A short answer ("Sim.", "Pronto.")

@@ -36,8 +36,11 @@ export interface NeoAliceStageBridgeOptions {
   emotes: () => readonly StageEmote[]
   /** Synthesizes text with the AIRI voice settings. Resolves `null` when no voice is configured. */
   synthesize: (text: string, signal: AbortSignal) => Promise<Blob | null>
-  /** Plays speech audio on the stage output, with lip sync. Resolves when it ends or stops. */
-  playSpeech: (audio: Blob, text: string) => Promise<void>
+  /**
+   * Plays speech audio on the stage output, with lip sync. Resolves when it ends or stops.
+   * `onStart` runs once, when the audio really starts to play. The body moves only from then on.
+   */
+  playSpeech: (audio: Blob, text: string, onStart: () => void) => Promise<void>
   stopSpeech: () => void
   /** Shows text that is not spoken, for example in the silent speech mode. */
   showCaption: (text: string) => void
@@ -193,30 +196,45 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
   watch(options.emotes, emotes => runtime.setEmotes(emotes), { immediate: true })
 
   async function speak(sessionId: string, text: string, audio: () => Promise<Blob | null>) {
-    const now = clock()
     stopWaiting()
     if (text)
       bridge.lastHeard = text
     announce('speaking', sessionId)
     currentSession = sessionId
     sessionsOfConnection.add(sessionId)
-    thinking.value = false
-    runtime.speechStarted(sessionId, now)
-    if (text && !nightMode.value)
-      playBuiltinGesture(speechGestures.pick(text, now), 'speech', now)
+    // The thinking pose stays until the audio starts. The audio arrives after the synthesis,
+    // and a gesture before it makes the avatar move with no voice.
+    let performed = false
+    const beginPerformance = () => {
+      if (performed || currentSession !== sessionId)
+        return
+      performed = true
+      thinking.value = false
+      const startedAt = clock()
+      runtime.speechStarted(sessionId, startedAt)
+      if (text && !nightMode.value)
+        playBuiltinGesture(speechGestures.pick(text, startedAt), 'speech', startedAt)
+    }
     try {
       const blob = await audio()
-      if (blob && currentSession === sessionId)
-        await options.playSpeech(blob, text)
-      else if (text)
+      if (blob && currentSession === sessionId) {
+        await options.playSpeech(blob, text, beginPerformance)
+      }
+      else if (text) {
+        beginPerformance()
         options.showCaption(text)
+      }
     }
     catch (error) {
       console.warn('[neoalice-bridge] speech failed:', errorMessageFrom(error) ?? 'unknown error')
-      if (text)
+      if (text) {
+        beginPerformance()
         options.showCaption(text)
+      }
     }
     finally {
+      if (currentSession === sessionId)
+        thinking.value = false
       runtime.speechEnded(sessionId, clock())
       if (currentSession === sessionId) {
         currentSession = undefined

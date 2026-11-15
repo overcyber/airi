@@ -165,6 +165,42 @@ Rode na raiz do repositório.
 
 6. Em cada aparelho que vai abrir o HTTPS, instale a autoridade local uma vez. Baixe em `http://<ip>:4173/airi-local-ca.crt` e instale como autoridade confiável. Sem isso, o navegador mostra um aviso; "Avançado" e "Continuar" também funcionam.
 
+## Compilar tudo: resumo dos comandos
+
+Rode na raiz do repositório. Cada comando leva a versão atual do avatar, com os gestos de fala, a lista de comandos, o controle do celular e do desktop, a palavra de ativação e o deitar e levantar.
+
+| Alvo | Comando |
+| --- | --- |
+| Web (Docker) | `docker compose -f deploy/alice/compose.yaml up -d --build` |
+| Web com broker de teste | `docker compose -f deploy/alice/compose.yaml --profile broker up -d --build` |
+| Web com a ponte do broker | `docker compose -f deploy/alice/compose.yaml --profile bridge up -d --build` |
+| Desktop (Tamagotchi) | `pnpm install` e depois `pnpm -F @proj-airi/stage-tamagotchi build` |
+| Android (APK) | `ALICE_SERVER_URL=http://<ip>:4173 deploy/alice/scripts/android-apk.sh` |
+
+Para o desktop, crie antes `apps/stage-tamagotchi/.env.local` com `VITE_AIRI_SERVER_URL=http://<ip-do-docker>:4173`.
+
+Para conferir o código antes de compilar:
+
+```bash
+pnpm -F @proj-airi/stage-ui-three exec vitest run
+```
+
+```bash
+pnpm -F @proj-airi/stage-ui exec vitest run
+```
+
+```bash
+pnpm exec eslint packages/stage-ui-three/src packages/stage-ui/src
+```
+
+Documentos do kit para o avatar:
+
+- Comandos de movimento que a NeoAlice envia: `docs/alice-motion-engine/movimentos/LISTA_COMANDOS.md`.
+- Prompt para criar movimentos novos: `docs/alice-motion-engine/movimentos/PROMPT_CRIAR_MOVIMENTOS.md`.
+- Gestos de fala: `docs/alice-motion-engine/PLANEJAMENTO_20_GESTOS_DE_FALA.md`.
+- Controle do celular e do desktop: `docs/alice-motion-engine/PLANEJAMENTO_18_CONTROLE_CELULAR_E_DESKTOP.md`.
+- Palavra de ativação: `docs/alice-motion-engine/PLANEJAMENTO_19_ANALISE_WAKE_WORD.md`.
+
 ## Migrar o espelho
 
 O passo a passo para trocar o avatar do MagicMirror está em [`MIGRACAO_MAGICMIRROR.md`](MIGRACAO_MAGICMIRROR.md).
