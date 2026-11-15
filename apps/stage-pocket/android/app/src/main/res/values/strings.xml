@@ -4,4 +4,5 @@
     <string name="title_activity_main">AIRI</string>
     <string name="package_name">ai.moeru.airi_pocket</string>
     <string name="custom_url_scheme">ai.moeru.airi_pocket</string>
+    <string name="accessibility_service_description">Lets AIRI read the text and the buttons on the screen, and tap, swipe, type, and press Back or Home, only when you ask AIRI in the app. You can turn it off here at any time.</string>
 </resources>

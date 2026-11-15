@@ -241,3 +241,25 @@ mosquitto_pub -h $BROKER -p 1883 -t 'neoalice/v1/magicmirror/cmd/avatar/motion' 
 mosquitto_pub -h $BROKER -p 1883 -t 'neoalice/v1/magicmirror/cmd/avatar/motion' -m '{"name":"aceno_talkinghead","description":"Aceno no formato TalkingHead: radianos nos ossos Ready Player Me, [min,max] sorteia um valor","kind":"gesture","format":"talkinghead","duration":3.0,"props":{"LeftShoulder.rotation":{"x":[1.5,2],"y":[0.2,0.4],"z":[-1.5,-1.3]},"LeftArm.rotation":{"x":[1.5,1.7],"y":[-0.6,-0.4],"z":[1,1.2]},"LeftForeArm.rotation":{"x":-0.815,"y":[-0.4,0],"z":1.575},"LeftHand.rotation":{"x":-0.529,"y":-0.2,"z":0.022}}}'
 mosquitto_pub -h $BROKER -p 1883 -t 'neoalice/v1/magicmirror/cmd/avatar/motion' -m '{"name":"continencia","description":"Continencia: mao direita na testa, postura firme","kind":"pose","format":"bones","duration":4.0,"bones":{"rightUpperArm":{"levantar":95,"frente":60},"rightLowerArm":{"dobrar":140},"rightHand":{"dobrar":0,"desviar":-10},"spine":{"frente":-3},"head":{"frente":-4}},"face":{"mouthPressLeft":0.3,"mouthPressRight":0.3}}'
 ```
+
+## Controle do celular e do desktop
+
+Estes comandos **só funcionam** com as duas chaves ligadas no app (a chave geral e "Permitir comandos da NeoAlice"). Sem elas, o app recusa e escreve o motivo na lista de ações. A resposta volta em `neoalice/v1/magicmirror/evt/avatar/tool_result`.
+
+| Nome | O que faz |
+| --- | --- |
+| `celular: ler a tela` | Le o texto e os botoes da tela do celular (Android) |
+| `celular: voltar` | Aperta Voltar no celular (Android) |
+| `celular: ir para o inicio` | Aperta Inicio no celular (Android) |
+| `celular: tocar num ponto` | Toca no ponto x=540, y=1200 da tela (Android) |
+| `celular: abrir um app` | Abre o app pelo pacote (Android) |
+| `desktop: ver ajuda do controle` | Pede a ajuda do controle do desktop (Tamagotchi) |
+
+```bash
+mosquitto_pub -h $BROKER -p 1883 -t 'neoalice/v1/magicmirror/cmd/avatar/tool' -m '{"tool":"android_screen_read","args":{},"request_id":"teste-celular-ler-a-tela"}'
+mosquitto_pub -h $BROKER -p 1883 -t 'neoalice/v1/magicmirror/cmd/avatar/tool' -m '{"tool":"android_screen_act","args":{"type":"key","key":"back"},"request_id":"teste-celular-voltar"}'
+mosquitto_pub -h $BROKER -p 1883 -t 'neoalice/v1/magicmirror/cmd/avatar/tool' -m '{"tool":"android_screen_act","args":{"type":"key","key":"home"},"request_id":"teste-celular-ir-para-o-inicio"}'
+mosquitto_pub -h $BROKER -p 1883 -t 'neoalice/v1/magicmirror/cmd/avatar/tool' -m '{"tool":"android_screen_act","args":{"type":"tap","x":540,"y":1200},"request_id":"teste-celular-tocar-num-ponto"}'
+mosquitto_pub -h $BROKER -p 1883 -t 'neoalice/v1/magicmirror/cmd/avatar/tool' -m '{"tool":"android_screen_act","args":{"type":"open_app","packageName":"com.android.settings"},"request_id":"teste-celular-abrir-um-app"}'
+mosquitto_pub -h $BROKER -p 1883 -t 'neoalice/v1/magicmirror/cmd/avatar/tool' -m '{"tool":"computer_use","args":{"argv":["invoke","--help"]},"request_id":"teste-desktop-ajuda"}'
+```

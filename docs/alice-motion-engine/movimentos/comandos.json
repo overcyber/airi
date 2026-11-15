@@ -1456,6 +1456,96 @@
         }
       },
       "needs": ""
+    },
+    {
+      "group": "Controle do celular e do desktop",
+      "name": "celular: ler a tela",
+      "description": "Le o texto e os botoes da tela do celular (Android)",
+      "topic": "neoalice/v1/magicmirror/cmd/avatar/tool",
+      "payload": {
+        "tool": "android_screen_read",
+        "args": {},
+        "request_id": "teste-celular-ler-a-tela"
+      },
+      "needs": "chave \"Permitir comandos da NeoAlice\" ligada no app"
+    },
+    {
+      "group": "Controle do celular e do desktop",
+      "name": "celular: voltar",
+      "description": "Aperta Voltar no celular (Android)",
+      "topic": "neoalice/v1/magicmirror/cmd/avatar/tool",
+      "payload": {
+        "tool": "android_screen_act",
+        "args": {
+          "type": "key",
+          "key": "back"
+        },
+        "request_id": "teste-celular-voltar"
+      },
+      "needs": "chave \"Permitir comandos da NeoAlice\" ligada no app"
+    },
+    {
+      "group": "Controle do celular e do desktop",
+      "name": "celular: ir para o inicio",
+      "description": "Aperta Inicio no celular (Android)",
+      "topic": "neoalice/v1/magicmirror/cmd/avatar/tool",
+      "payload": {
+        "tool": "android_screen_act",
+        "args": {
+          "type": "key",
+          "key": "home"
+        },
+        "request_id": "teste-celular-ir-para-o-inicio"
+      },
+      "needs": "chave \"Permitir comandos da NeoAlice\" ligada no app"
+    },
+    {
+      "group": "Controle do celular e do desktop",
+      "name": "celular: tocar num ponto",
+      "description": "Toca no ponto x=540, y=1200 da tela (Android)",
+      "topic": "neoalice/v1/magicmirror/cmd/avatar/tool",
+      "payload": {
+        "tool": "android_screen_act",
+        "args": {
+          "type": "tap",
+          "x": 540,
+          "y": 1200
+        },
+        "request_id": "teste-celular-tocar-num-ponto"
+      },
+      "needs": "chave \"Permitir comandos da NeoAlice\" ligada no app"
+    },
+    {
+      "group": "Controle do celular e do desktop",
+      "name": "celular: abrir um app",
+      "description": "Abre o app pelo pacote (Android)",
+      "topic": "neoalice/v1/magicmirror/cmd/avatar/tool",
+      "payload": {
+        "tool": "android_screen_act",
+        "args": {
+          "type": "open_app",
+          "packageName": "com.android.settings"
+        },
+        "request_id": "teste-celular-abrir-um-app"
+      },
+      "needs": "chave \"Permitir comandos da NeoAlice\" ligada no app"
+    },
+    {
+      "group": "Controle do celular e do desktop",
+      "name": "desktop: ver ajuda do controle",
+      "description": "Pede a ajuda do controle do desktop (Tamagotchi)",
+      "topic": "neoalice/v1/magicmirror/cmd/avatar/tool",
+      "payload": {
+        "tool": "computer_use",
+        "args": {
+          "argv": [
+            "invoke",
+            "--help"
+          ]
+        },
+        "request_id": "teste-desktop-ajuda"
+      },
+      "needs": "Controle do computador e Comandos da NeoAlice ligados nas configuracoes"
     }
   ]
 }

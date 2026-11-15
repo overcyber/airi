@@ -18,6 +18,8 @@ import { useRouter } from 'vue-router'
 
 import WebSocketStatusButton from '../components/websocket-status-button.vue'
 
+import { useAndroidDeviceControl } from '../composables/use-android-device-control'
+
 const paused = ref(false)
 const modelRenderState = ref<'pending' | 'loading' | 'mounted'>('pending')
 const modelRenderError = ref<Error>()
@@ -66,6 +68,9 @@ onMounted(() => syncBackgroundTheme())
 useVoiceListening({ continuous: () => !isMobile.value })
 
 const router = useRouter()
+
+// The chat and NeoAlice can read and control the phone only when the user allows it in Settings, System, Phone Control.
+const { deviceToolGate } = useAndroidDeviceControl()
 </script>
 
 <template>
@@ -104,6 +109,7 @@ const router = useRouter()
             :class="['h-full w-full']"
             :enable-orbit-controls="true"
             :paused="paused"
+            :device-tool-gate="deviceToolGate"
             :focus-at="{
               x: positionCursor.x.value,
               y: positionCursor.y.value,

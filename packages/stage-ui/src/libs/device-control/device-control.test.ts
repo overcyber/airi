@@ -119,6 +119,7 @@ describe('remote device gate and runNeoAliceTool', () => {
     const allowed = setup(on)
     expect(await runNeoAliceTool(allowed.find, 'android_screen_read', {}, 'r3', allowed.gate)).toEqual({ ok: true, result: 'done' })
     expect(allowed.confirm).not.toHaveBeenCalled()
+    expect(allowed.onActivity).toHaveBeenCalledWith({ source: 'neoalice', tool: 'android_screen_read', summary: 'read the screen', ok: true })
 
     const asked = setup({ ...on, confirmRemote: true }, false)
     expect(await runNeoAliceTool(asked.find, 'android_screen_act', { type: 'key', key: 'home' }, 'r4', asked.gate)).toEqual({ ok: false, error: 'the user said no' })

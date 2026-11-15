@@ -27,6 +27,12 @@ const settings = computed(() => [
     to: '/settings/system/permissions',
   },
   {
+    title: t('settings.pages.system.device-control.title'),
+    description: t('settings.pages.system.device-control.description'),
+    icon: 'i-solar:smartphone-bold-duotone',
+    to: '/settings/system/device-control',
+  },
+  {
     title: t('settings.pages.system.developer.title'),
     description: t('settings.pages.system.developer.description'),
     icon: 'i-solar:code-bold-duotone',

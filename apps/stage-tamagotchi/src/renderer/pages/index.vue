@@ -71,7 +71,7 @@ const remoteComputerGate = createRemoteDeviceGate({
   names: desktopControlToolNames,
   getSettings: () => readComputerUsePermission(),
   confirm: confirmOnDevice,
-  onActivity: entry => console.info(`[computer-control] ${entry.source} ${entry.tool}: ${entry.summary} ${entry.ok ? 'done' : `refused (${entry.error})`}`),
+  onActivity: entry => console.info(`[computer-control] ${entry.source} ${entry.tool}: ${entry.summary} ${entry.ok ? 'allowed' : `refused (${entry.error})`}`),
 })
 // The stage canvas alpha tells the sampler which pixels of the window AIRI
 // paints, so it can read the desktop showing through behind the character.

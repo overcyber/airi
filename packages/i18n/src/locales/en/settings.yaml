@@ -2528,6 +2528,32 @@ pages:
     permissions:
       description: View current permission status.
       title: Permission Management
+    device-control:
+      title: Phone Control
+      description: Let AIRI read the screen and tap, swipe, and type on this phone.
+      service:
+        title: Accessibility service
+        running: The service is on. AIRI can read the screen when you allow it below.
+        off: The service is off. Turn it on in the system settings to use these features.
+        open: Open accessibility settings
+        unsupported: This is not the Android app. Phone control works only there.
+      master:
+        title: Allow AIRI to control this phone
+        description: AIRI can read the text and the buttons on the screen, and tap, swipe, type, and press Back or Home when you ask in the chat. This is off until you turn it on.
+      remote:
+        title: Allow NeoAlice commands
+        description: NeoAlice can send control commands with MQTT. The broker has no password, so any device on the network that reaches it can send commands. Turn this on only on a network that you trust.
+      confirm:
+        title: Ask before each NeoAlice command
+        description: A window asks you to allow or refuse each command from NeoAlice.
+      note: Turn the first switch off to stop all control at once. AIRI never reads the text of a password field and never types in one.
+      activity:
+        title: Latest actions
+        empty: No action yet.
+        chat: Chat
+        neoalice: NeoAlice
+        refused: refused
+        done: done
     description: Customize your stage!
     sections:
       section:

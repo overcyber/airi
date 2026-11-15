@@ -41,7 +41,7 @@ export function describeRemoteCommand(name: string, args: Record<string, unknown
  * The gate for the commands of NeoAlice that control the device.
  *
  * A command runs only when the master switch and the remote switch are on, the rate limit has room, and, when the
- * user asked for it, the user says yes on the device. Every answer goes to `onActivity`.
+ * user asked for it, the user says yes on the device. Every answer, allowed or refused, goes to `onActivity`.
  */
 export function createRemoteDeviceGate(options: RemoteDeviceGateOptions): DeviceToolGate {
   const limiter = new ActionRateLimiter(options.maxCommands ?? 20, options.windowMs ?? 60_000)
@@ -61,6 +61,7 @@ export function createRemoteDeviceGate(options: RemoteDeviceGateOptions): Device
         return refuse('too many commands from NeoAlice in the last minute')
       if (decision.needsConfirmation && !(await options.confirm(`NeoAlice asks to ${summary}. Allow it?`)))
         return refuse('the user said no')
+      options.onActivity?.({ source: 'neoalice', tool: name, summary, ok: true })
       return { ok: true as const }
     },
   }
