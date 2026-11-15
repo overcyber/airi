@@ -5,6 +5,7 @@ import type { CaptionChannelEvent, PresenceBubbleState } from '@proj-airi/stage-
 import type { VrmInteractionTarget } from '@proj-airi/stage-ui-three'
 
 import type { EmotionPayload } from '../../constants/emotions'
+import type { DeviceToolGate } from '../../libs/alice-motion/neoalice-tools'
 
 import { defineInvokeHandler } from '@moeru/eventa'
 import { errorMessageFrom, sleep } from '@moeru/std'
@@ -68,6 +69,8 @@ const props = withDefaults(defineProps<{
   vrmFramingAdjust?: { x?: number, y?: number, zoom?: number }
   /** Lifts a lying VRM into a window that frames the upper body. See `liftFloorPose` of `ThreeScene`. */
   vrmLiftFloorPose?: boolean
+  /** Lets NeoAlice control the device with `cmd/avatar/tool`, when the user allows it. See `DeviceToolGate`. */
+  deviceToolGate?: DeviceToolGate
 }>(), {
   enableOrbitControls: true,
   paused: false,
@@ -516,6 +519,10 @@ function showBridgeCaption(text: string) {
 }
 
 const { thinking: neoAliceThinking, nightMode: neoAliceNightMode, visionPerson: neoAliceVisionPerson, restoreMood: restoreNeoAliceMood } = useNeoAliceStageBridge({
+  // A getter: the gate of the app can change while the stage lives.
+  get deviceToolGate() {
+    return props.deviceToolGate
+  },
   playClip: async (clipId, options) => stageModelRenderer.value === 'vrm' ? (await vrmViewerRef.value?.playMotion(clipId, options)) ?? false : false,
   playAnimation: async (url, durationMs) => stageModelRenderer.value === 'vrm' ? (await vrmViewerRef.value?.playMotionUrl(url, { durationMs })) ?? false : false,
   emotes: () => vrmMotions.motionLibrary.emotes,

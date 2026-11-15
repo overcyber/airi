@@ -72,6 +72,21 @@ pages:
       toggle-ignore-mouse-event:
         label: Toggle Ignore Mouse Event
       press-keys: Press Keys...
+    computer-control:
+      title: Computer Control
+      description: Let AIRI read the screen and use the mouse and keyboard.
+      master:
+        title: Allow AIRI to control this computer
+        description: AIRI can look at the screen and use the mouse and keyboard when you ask in the chat. This is off until you turn it on.
+      remote:
+        title: Allow NeoAlice commands
+        description: NeoAlice can send control commands with MQTT. The broker has no password, so any device on the network that reaches it can send commands. Turn this on only on a network that you trust.
+      confirm:
+        title: Ask before each NeoAlice command
+        description: A window asks you to allow or refuse each command from NeoAlice.
+      note: Turn the first switch off to stop all control at once. On macOS, also allow AIRI in Privacy and Security, under Accessibility and Screen Recording.
+      load-error: Failed to read the computer control settings.
+      save-error: Failed to change the computer control settings.
     developer:
       sections:
         section:

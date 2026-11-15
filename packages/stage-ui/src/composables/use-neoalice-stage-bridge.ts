@@ -1,5 +1,6 @@
 import type { CustomMotion, NeoAliceBridgeEvent, SpeechSegment } from '@proj-airi/alice-motion'
 
+import type { DeviceToolGate } from '../libs/alice-motion/neoalice-tools'
 import type { StageEmote } from '../libs/alice-motion/stage-motion'
 
 import { errorMessageFrom } from '@moeru/std'
@@ -22,6 +23,11 @@ import { useNeoAliceBrainTools } from './use-neoalice-brain-tools'
 import { useNeoAlicePhraseTranscriber } from './use-neoalice-phrase-transcriber'
 
 export interface NeoAliceStageBridgeOptions {
+  /**
+   * Decides the tools that control the device (the phone screen, the desktop) for a `cmd/avatar/tool` of NeoAlice.
+   * Without it, NeoAlice cannot run them.
+   */
+  deviceToolGate?: DeviceToolGate
   /** Plays a clip of the VRM stage. Resolves `false` when the stage is not VRM or has no such clip. */
   playClip: (clipId: string, options: { durationMs?: number }) => Promise<boolean>
   /** Plays an FBX or VRMA file by URL on the whole body, for `durationMs`. Resolves `false` when it cannot. */
@@ -376,7 +382,7 @@ export function useNeoAliceStageBridge(options: NeoAliceStageBridgeOptions) {
           .then(result => console.info(`[neoalice-bridge] widget ${event.action}${event.widget ? ` ${event.widget}` : ''}: ${result.ok ? 'done' : result.error}`))
         break
       case 'tool':
-        void runNeoAliceTool(name => llmTools.getToolsByNames(name)[0], event.tool, event.args, event.requestId).then((result) => {
+        void runNeoAliceTool(name => llmTools.getToolsByNames(name)[0], event.tool, event.args, event.requestId, options.deviceToolGate).then((result) => {
           console.info(`[neoalice-bridge] tool ${event.tool}: ${result.ok ? 'done' : result.error}`)
           const site = bridge.site.trim()
           if (!isPublishableSite(site))

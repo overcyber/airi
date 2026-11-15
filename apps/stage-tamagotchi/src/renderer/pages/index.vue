@@ -21,6 +21,8 @@ import {
 import { WidgetStage } from '@proj-airi/stage-ui/components/scenes'
 import { useCanvasPixelIsTransparentAtPoint } from '@proj-airi/stage-ui/composables/canvas-alpha'
 import { useVoiceListening } from '@proj-airi/stage-ui/composables/voice-input-mode'
+import { confirmOnDevice } from '@proj-airi/stage-ui/libs/device-control/confirm'
+import { createRemoteDeviceGate, desktopControlToolNames } from '@proj-airi/stage-ui/libs/device-control/remote-gate'
 import { FULLSCREEN_WORKSPACE_FLAG } from '@proj-airi/stage-ui/libs/feature-flags'
 import { useFeatureFlagsStore } from '@proj-airi/stage-ui/stores/feature-flags'
 import { useOnboardingStore } from '@proj-airi/stage-ui/stores/onboarding'
@@ -41,6 +43,7 @@ import ResourceStatusIsland from '../components/stage-islands/resource-status-is
 import WindowResizeBorder from '../components/window-resize-border.vue'
 
 import { defaultFullscreenSurface, electronAppIsWayland, electronFullscreenExit, electronFullscreenSetMode, electronMainPageMounted, electronMainWindowEnterFullscreen, electronMainWindowGetFullscreenState, electronMainWindowSetFullscreenBounds, electronOpenInlay, electronOpenOnboarding, electronOpenSettings } from '../../shared/eventa'
+import { computerUsePermissionGet } from '../../shared/eventa/computer-use'
 import { fullscreenHostPages, fullscreenSurfaceOf } from '../components/fullscreen/surfaces'
 import { useModelSettingsRuntimeOwner } from '../composables/model-settings-runtime-owner'
 import { useFullscreenHost } from '../composables/use-fullscreen-host'
@@ -60,6 +63,16 @@ const { isOutside: outsideAuthStatus } = useElectronMouseInElement(authStatusEle
 const controlsIslandRef = ref<InstanceType<typeof ControlsIsland>>()
 const controlsIslandInteractionActive = shallowRef(false)
 const widgetStageRef = ref<InstanceType<typeof WidgetStage>>()
+
+// NeoAlice can control the desktop with MQTT only when the user allows it in Settings, System, Computer control.
+// The main process also refuses every call while the master switch is off.
+const readComputerUsePermission = useElectronEventaInvoke(computerUsePermissionGet)
+const remoteComputerGate = createRemoteDeviceGate({
+  names: desktopControlToolNames,
+  getSettings: () => readComputerUsePermission(),
+  confirm: confirmOnDevice,
+  onActivity: entry => console.info(`[computer-control] ${entry.source} ${entry.tool}: ${entry.summary} ${entry.ok ? 'done' : `refused (${entry.error})`}`),
+})
 // The stage canvas alpha tells the sampler which pixels of the window AIRI
 // paints, so it can read the desktop showing through behind the character.
 useScreenAmbientLight({ stageCanvas: () => widgetStageRef.value?.canvasElement() })
@@ -733,6 +746,7 @@ const cursorPosition = computed(() => ({
 
           :cursor-position="cursorPosition"
           :paused="stagePaused"
+          :device-tool-gate="remoteComputerGate"
           vrm-lift-floor-pose h-full w-full flex-1
           @error="handleStageRenderError"
           @reset="handleStageReset"

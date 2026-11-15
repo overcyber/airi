@@ -7,7 +7,7 @@ import { errorMessageFrom } from '@moeru/std'
  * The tools that NeoAlice can run on the avatar with `cmd/avatar/tool` (Plan 07, W4).
  *
  * The broker has no access control, so any device of the network can publish. `computer_use` (keyboard and
- * mouse) is never on this list: it needs a confirmation on the screen. `avatar_motion` only moves the avatar,
+ * mouse) is not on this list. It runs only through a `DeviceToolGate`, which needs the remote switch of the user. `avatar_motion` only moves the avatar,
  * within the limits of its bones.
  */
 export const neoAliceToolAllowlist: readonly string[] = ['get_weather', 'stage_widgets', 'image_journal', 'avatar_motion', 'avatar_rig']
@@ -31,12 +31,28 @@ export function widgetToolInput(event: WidgetEvent): Record<string, unknown> {
 export type NeoAliceToolResult = { ok: true, result: unknown } | { ok: false, error: string }
 
 /**
+ * A gate for the tools that control the device (the phone screen or the desktop). NeoAlice reaches them only
+ * through `check`, which the app answers from the settings of the user. Without a gate, they stay refused.
+ */
+export interface DeviceToolGate {
+  /** The tool names that this gate decides. */
+  names: readonly string[]
+  check: (name: string, args: Record<string, unknown>) => Promise<{ ok: true } | { ok: false, error: string }>
+}
+
+/**
  * Runs one permitted tool of the app. A tool outside {@link neoAliceToolAllowlist}, or one that this app does not
  * have (the web app has no widgets), gives `ok: false` with the reason. It never throws.
  */
-export async function runNeoAliceTool(findTool: (name: string) => Tool | undefined, name: string, args: Record<string, unknown>, requestId: string): Promise<NeoAliceToolResult> {
-  if (!neoAliceToolAllowlist.includes(name))
+export async function runNeoAliceTool(findTool: (name: string) => Tool | undefined, name: string, args: Record<string, unknown>, requestId: string, deviceGate?: DeviceToolGate): Promise<NeoAliceToolResult> {
+  if (deviceGate?.names.includes(name)) {
+    const decision = await deviceGate.check(name, args)
+    if (!decision.ok)
+      return decision
+  }
+  else if (!neoAliceToolAllowlist.includes(name)) {
     return { ok: false, error: `the tool ${name} is not permitted from NeoAlice` }
+  }
   const tool = findTool(name)
   if (!tool)
     return { ok: false, error: `this app has no ${name} tool (widgets and tools need the desktop app)` }

@@ -31,6 +31,7 @@ import { resolveIsWayland } from './app/ozone'
 import { installSingleInstanceGuard } from './app/single-instance'
 import { trustSystemCACertificates } from './app/system-ca'
 import { createArtistryConfig } from './configs/artistry'
+import { createComputerUsePermissionConfig } from './configs/computer-use-permission'
 import { createGlobalAppConfig } from './configs/global'
 import { createIOTraceHubConfig } from './configs/io-trace-hub'
 import { createIOTraceRecordingConfig } from './configs/io-trace-recording'
@@ -41,6 +42,7 @@ import { setupAppleSpeechTranscriptionService } from './services/airi/apple-spee
 import { setupAppleVisionService } from './services/airi/apple-vision'
 import { setupServerChannel } from './services/airi/channel-server'
 import { setupComputerUse } from './services/airi/computer-use'
+import { ComputerUsePermissionState } from './services/airi/computer-use/permission'
 import { setupGodotStageManager } from './services/airi/godot-stage'
 import { setupHomeAssistant } from './services/airi/home-assistant'
 import { setupBuiltInServer } from './services/airi/http-server'
@@ -522,7 +524,11 @@ app.whenReady().then(async () => {
     dependsOn: { mainWindow, tray, serverChannel, airiHttpServer, godotStageManager, pluginHost, mcpManager, onboardingWindow: onboardingWindowManager, widgetsWindow: widgetsManager, spotlightWindow, artistryConfig },
     callback: async (deps) => {
       const { context } = createContext(ipcMain)
-      setupComputerUse(context)
+      const computerUsePermissionConfig = createComputerUsePermissionConfig()
+      setupComputerUse(context, new ComputerUsePermissionState({
+        load: () => computerUsePermissionConfig.get(),
+        save: permission => computerUsePermissionConfig.update(permission),
+      }))
       setupHomeAssistant(context)
       await setupArtistryBridge({
         widgetsManager: deps.widgetsWindow,
