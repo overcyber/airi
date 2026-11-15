@@ -260,6 +260,22 @@ const tresContextRef = shallowRef<TresContext>()
 
 const backgroundTexture = shallowRef<Texture>()
 
+/**
+ * The world height of the bottom edge of the view, at the distance of the model, for `liftFloorPose`.
+ * The camera looks at `modelOrigin` from where it stands. The view reaches `tan(fov / 2) * distance` below it.
+ */
+function viewBottomEdgeY(): number | undefined {
+  const view = camera.value
+  const target = toVector3(modelOrigin.value)
+  const toTarget = target.clone().sub(view.position)
+  const distance = toTarget.length()
+  if (distance < 1e-6)
+    return undefined
+  const forward = toTarget.divideScalar(distance)
+  const up = new Vector3(0, 1, 0).addScaledVector(forward, -forward.y).normalize()
+  return target.y - up.y * distance * Math.tan((view.fov / 2) * Math.PI / 180)
+}
+
 const skyBoxEnvRef = ref<InstanceType<typeof SkyBox>>()
 // The composer owns render targets of its own and follows TresCanvas's debounced sizing,
 // so it has to be resized alongside the renderer or it draws nothing for those frames.
@@ -1209,7 +1225,7 @@ defineExpose({
         :speech-text="props.speechText"
         :thinking="props.thinking"
         :night-mode="props.nightMode"
-        :lift-floor-pose="props.liftFloorPose"
+        :bottom-edge-y="props.liftFloorPose ? viewBottomEdgeY : undefined"
         :person-position="props.personPosition"
         :motion-library="props.motionLibrary ?? defaultVrmMotionLibrary"
         :cursor-position="props.cursorPosition"

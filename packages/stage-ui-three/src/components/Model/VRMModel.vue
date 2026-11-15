@@ -140,11 +140,12 @@ const props = withDefaults(defineProps<{
    */
   nightMode?: boolean
   /**
-   * Lifts the model while a floor pose holds the body, so a lying body stays in a view of the head and the chest.
+   * Gives the world height of the bottom edge of the view, in meters. While a floor pose holds the body, the model rises
+   * so that its floor is on that edge, and the lying body stays in a view of the head and the chest.
    * The desktop app frames the upper body: on the floor she was below the window, and she seemed not to sleep.
-   * Leave it off for a full-body view with the floor in it, like the mirror.
+   * Leave it unset for a view with the floor in it, like the mirror: there she lies on the floor.
    */
-  liftFloorPose?: boolean
+  bottomEdgeY?: () => number | undefined
   /**
    * The center of the person in front of the screen, from 0 to 1 in the camera image, for the `person` tracking
    * mode. `null` when nobody is there.
@@ -242,7 +243,6 @@ const vrmGroup = shallowRef<Group>()
 const modelHeight = shallowRef(0)
 /** Scratch for {@link headAnchor}, so a rendered frame allocates nothing. */
 const headPosition = new Vector3()
-const floorHead = new Vector3()
 /** The lift of the model for a floor pose (`liftFloorPose`). */
 const floorLift = new FloorLift()
 const headUp = new Vector3()
@@ -754,14 +754,10 @@ function bindManagedVrmInstanceRenderLoop() {
     const humanoidMs = measureFrameStep(tracingEnabled, () => {
       activeVrm?.humanoid.update()
     })
-    // A lying body moves up to the height of the head at rest, so the view of the upper body still shows it.
-    if (activeVrm && activeVrmGroup && (props.liftFloorPose || floorLift.value !== 0)) {
-      let goal = 0
-      const head = activeVrm.humanoid.getNormalizedBoneNode('head')
-      if (props.liftFloorPose && onFloor && head) {
-        head.updateWorldMatrix(true, false)
-        goal = floorLift.goal(props.eyeHeight, head.getWorldPosition(floorHead).y)
-      }
+    // A lying body rests on the bottom edge of a view that frames only the upper body, so the view still shows it.
+    if (activeVrm && activeVrmGroup && (props.bottomEdgeY !== undefined || floorLift.value !== 0)) {
+      const bottomEdge = onFloor ? props.bottomEdgeY?.() : undefined
+      const goal = bottomEdge !== undefined ? floorLift.goal(bottomEdge, modelOffset.value.y) : 0
       activeVrmGroup.position.y = modelOffset.value.y + floorLift.step(goal, delta)
     }
     const lookAtMs = measureFrameStep(tracingEnabled, () => {

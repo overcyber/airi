@@ -1,23 +1,25 @@
 import { describe, expect, it } from 'vitest'
 
-import { FloorLift } from './floor-lift'
+import { FloorLift, windowFloorMargin } from './floor-lift'
 
 describe('floorLift', () => {
-  it('lifts a lying head up to the view of the upper body', () => {
+  it('puts the floor of the model on the bottom edge of the window, and not in the middle', () => {
     const lift = new FloorLift()
-    // Eye height 1.4 m, the head of the lying body at 0.2 m.
-    const goal = lift.goal(1.4, 0.2)
-    expect(goal).toBeCloseTo(1.05)
+    // The window shows from 0.9 m up. The model stands at 0.
+    const goal = lift.goal(0.9, 0)
+    expect(goal).toBeCloseTo(0.9 + windowFloorMargin)
     for (let frame = 0; frame < 600; frame++)
       lift.step(goal, 1 / 60)
-    expect(lift.value).toBeCloseTo(1.05, 2)
-    // With the lift on, the measured head is higher. The goal stays the same.
-    expect(lift.goal(1.4, 0.2 + lift.value)).toBeCloseTo(1.05, 2)
+    // The lowest part of the lying body, at 0 in the model, is now just above the bottom edge.
+    expect(lift.value + 0).toBeCloseTo(0.9 + windowFloorMargin, 2)
   })
 
-  it('does not lift a standing body', () => {
-    const lift = new FloorLift()
-    expect(lift.goal(1.4, 1.5)).toBe(0)
+  it('does not lift when the floor is already in the view', () => {
+    expect(new FloorLift().goal(-0.1, 0)).toBe(0)
+  })
+
+  it('counts the offset of the model, so a model that sits higher lifts less', () => {
+    expect(new FloorLift().goal(0.9, 0.2)).toBeCloseTo(0.7 + windowFloorMargin)
   })
 
   it('comes back down to exactly 0 after the pose', () => {
