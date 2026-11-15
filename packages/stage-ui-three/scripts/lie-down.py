@@ -1,15 +1,22 @@
 """
 Makes `lie-down.fbx` and `get-up.fbx`, the lying pose of the NeoAlice avatar, on the Ready Player Me skeleton.
 
-`lie-down.fbx` goes from standing to lying on the right side in 5 s, then breathes in the pose for 9 s. She
-looks at the floor first, bends the knees, puts the right hand on the floor, sits on the right hip, and lies down
-with the head on the right arm. The head leads and the hips follow, and the keys join without a stop.
+`lie-down.fbx` goes from standing to lying on the right side in 6.6 s, then breathes in the pose for 9 s. She goes
+to the floor the way a person does: she looks down, steps the right foot back and lowers with the right hand
+reaching for the floor, kneels on the right knee, then on both, sits on her right hip with the legs folded to her
+left, lowers onto the right forearm, and lets the head rest on the arm.
+
+The key poses give the posture. A key can also pin a foot or a hand to a place on the floor (`ik`), and the script
+solves the leg or the arm on every frame, so a planted foot does not slide. The hips rest on the floor by
+themselves: the lowest supporting part touches it and nothing sinks. The hips never descend faster than a person
+lowers (`MAX_DESCENT_CM_PER_SECOND`). The old clip had no such rule: the feet sank up to 70 cm under the floor,
+and each key made the body jump, because the rotation curve had its four points in the wrong order.
 
 `get-up.fbx` (with `--get-up`) goes the human way up, not the same path backwards: she pushes up on the right arm,
 sits, comes to the knees with the hand on the floor, rises, and the head comes up last.
 
-The stage plays the first 5 s of `lie-down.fbx` once, loops the rest, and plays `get-up.fbx` to get up
-(`holdPoseClip` of `avatar-animator.ts`).
+The stage plays the first 6.6 s of `lie-down.fbx` once, loops the rest, and plays `get-up.fbx` to get up
+(`holdPoseClip` of `avatar-animator.ts`, `loopFromSeconds` of `animations/index.ts`).
 
 The poses are world rotations on the rest skeleton of `packages/alice-motion/src/rpm-skeleton.ts`, the same rest
 that the FBX retarget (`fbx-retarget.ts`) reads. So the file plays on any VRM through the same retarget as the
@@ -17,11 +24,13 @@ other NeoAlice motions.
 
 How to run, with the Blender Python module (bpy 4.2, Python 3.11):
 
-    python lie-down.py <skeleton.fbx> <output.fbx> [--check-rest | --get-up]
+    python lie-down.py <skeleton.fbx> <output.fbx> [--check-rest | --get-up | --analyze | --smooth]
 
 `<skeleton.fbx>` is any NeoAlice FBX of the same skeleton, for example `breathing-idle.fbx`. The script takes its
 bones and bone lengths, drops its animation, and writes the new one. With `--check-rest`, it writes the rest
-pose of the table instead, so a reader can check that the file gives the table back.
+pose of the table instead, so a reader can check that the file gives the table back. With `--analyze`, it prints
+the floor clearance and the speeds of each frame. With `--smooth`, it lists the fastest hips and joints and the
+speed jumps. Both do not write a file. Add `--get-up` to check the get-up.
 """
 
 import math
@@ -33,7 +42,7 @@ import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 FPS = 30
-ENTRY_SECONDS = 5.0
+ENTRY_SECONDS = 6.6
 GET_UP_SECONDS = 5.2
 LOOP_SECONDS = 9.0
 # A sleeping breath: about 13 per minute, the inhale shorter than the exhale.
@@ -73,6 +82,12 @@ def rot(axis, degrees):
 def aim(from_direction, to_direction):
     """The smallest rotation that turns one world direction into another."""
     return Vector(from_direction).normalized().rotation_difference(Vector(to_direction).normalized())
+
+
+def slerp_direction(a, b, t):
+    """A direction between two directions, turning at a steady rate, so a foot does not flip through the middle."""
+    a, b = Vector(a).normalized(), Vector(b).normalized()
+    return (Quaternion().slerp(a.rotation_difference(b), t) @ a).normalized()
 
 
 def smoothstep(t):
@@ -181,9 +196,9 @@ LYING = {
     'RightUpLeg': ('aim', (0.86, -0.04, 0.5)),
     'RightLeg': ('aim', (0.9, -0.02, -0.44)),
     'RightFoot': ('aim', (0.6, -0.1, -0.8)),
-    'LeftUpLeg': ('aim', (0.84, 0.1, 0.53)),
-    'LeftLeg': ('aim', (0.88, 0.08, -0.47)),
-    'LeftFoot': ('aim', (0.6, 0.0, -0.8)),
+    'LeftUpLeg': ('aim', (0.86, -0.12, 0.5)),
+    'LeftLeg': ('aim', (0.9, -0.1, -0.43)),
+    'LeftFoot': ('aim', (0.6, -0.2, -0.78)),
 }
 
 # Getting up: still lying, the right arm pushes the chest up from the floor.
@@ -224,13 +239,116 @@ RISE = {
     'RightForeArm': ('aim', (-0.2, -0.85, 0.48)),
 }
 
+# ---- The lie down, in the way a person goes to the floor --------------------------------------------------------
+# 1. A look at the floor, the weight on the feet. 2. The right foot steps back and the body lowers, the right hand
+# reaches for the floor. 3. The right knee and the right hand take the weight (a half kneel). 4. The left knee comes
+# down. 5. She shifts onto the right hip, the legs fold to her left, the right hand holds her. 6. She lowers onto the
+# right forearm and the legs stretch. 7. The head settles on the arm: the pose of `LYING`.
+# `ik` pins a foot or a hand to a place on the floor, in centimeters. The hips rest on the floor by themselves.
+FOOT_FLAT = (0.0, -0.61, 0.79)
+FOOT_BACK = (0.0, -0.3, -0.95)
+HAND_FLOOR = (0.0, -0.25, 0.97)
+KNEE_FORWARD = (0.0, 0.0, 1.0)
+ELBOW_OUT = (-0.7, 0.2, -0.7)
+
+LD_STAND = {
+    **STANDING,
+    'ik': {'LeftFoot': {'target': (15.0, 13.0, -8.0), 'pole': KNEE_FORWARD, 'direction': FOOT_FLAT},
+           'RightFoot': {'target': (-15.0, 13.0, -8.0), 'pole': KNEE_FORWARD, 'direction': FOOT_FLAT}},
+}
+
+LD_LOOK = {
+    **LOOK_DOWN,
+    'ik': {'LeftFoot': {'target': (15.0, 13.0, -8.0), 'pole': KNEE_FORWARD, 'direction': FOOT_FLAT},
+           'RightFoot': {'target': (-15.0, 13.0, -8.0), 'pole': KNEE_FORWARD, 'direction': FOOT_FLAT}},
+}
+
+# The weight goes forward onto the left foot. The right foot steps back onto the toes. The right hand reaches down.
+LD_STEP_DOWN = {
+    'hips': (-3.0, 80.0, 8.0),
+    'Hips': ('turn', [('x', 18), ('z', 4)]),
+    'Spine': ('turn', [('x', 8)]),
+    'Spine1': ('turn', [('x', 6)]),
+    'Neck': ('turn', [('x', -4), ('y', -6)]),
+    'Head': ('turn', [('x', -6), ('y', -8)]),
+    'LeftArm': ('aim', (0.25, -0.9, 0.35)),
+    'LeftForeArm': ('aim', (0.25, -0.75, 0.6)),
+    'ik': {'LeftFoot': {'target': (15.0, 13.0, -4.0), 'pole': KNEE_FORWARD, 'direction': FOOT_FLAT},
+           'RightFoot': {'target': (-14.0, 20.0, -30.0), 'pole': KNEE_FORWARD, 'direction': (0.0, -0.85, 0.5)},
+           'RightHand': {'target': (-32.0, 28.0, 34.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR}},
+}
+
+# Half kneel: the right knee and the right hand are on the floor, the left foot is flat in front.
+LD_HALF_KNEEL = {
+    'hips': (-6.0, 56.0, 8.0),
+    'Hips': ('turn', [('x', 28), ('z', 8)]),
+    'Spine': ('turn', [('x', 12), ('z', -3)]),
+    'Spine1': ('turn', [('x', 6)]),
+    'Neck': ('turn', [('x', -8), ('y', -8)]),
+    'Head': ('turn', [('x', -8), ('y', -10)]),
+    'LeftArm': ('aim', (0.3, -0.85, 0.45)),
+    'LeftForeArm': ('aim', (0.2, -0.65, 0.73)),
+    'ik': {'LeftFoot': {'target': (15.0, 13.0, 4.0), 'pole': KNEE_FORWARD, 'direction': FOOT_FLAT},
+           'RightFoot': {'target': (-14.0, 16.0, -40.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
+           'RightHand': {'target': (-34.0, 7.0, 34.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR}},
+}
+
+# Both knees on the floor, the right hand still holds her up.
+LD_KNEEL = {
+    'hips': (-8.0, 46.0, 4.0),
+    'Hips': ('turn', [('x', 24), ('z', 10)]),
+    'Spine': ('turn', [('x', 12), ('z', -4)]),
+    'Spine1': ('turn', [('x', 6)]),
+    'Neck': ('turn', [('x', -4), ('y', -8)]),
+    'Head': ('turn', [('x', -4), ('y', -10)]),
+    'LeftArm': ('aim', (0.3, -0.85, 0.45)),
+    'LeftForeArm': ('aim', (0.2, -0.65, 0.73)),
+    'ik': {'LeftFoot': {'target': (14.0, 16.0, -40.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
+           'RightFoot': {'target': (-14.0, 16.0, -40.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
+           'RightHand': {'target': (-34.0, 7.0, 34.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR}},
+}
+
+# She sits on her right hip, the legs folded to her left, the right hand on the floor beside her.
+LD_SIT = {
+    **SIT_SIDE,
+    'hips': (-4.0, 14.0, 4.0),
+    'ik': {'RightHand': {'target': (-38.0, 7.0, 18.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR},
+           'LeftFoot': {'target': (52.0, 15.0, -12.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
+           'RightFoot': {'target': (38.0, 15.0, -24.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK}},
+}
+
+# Lowering onto the right forearm, the legs stretch to her left.
+LD_RECLINE = {
+    'hips': (6.0, 14.0, 2.0),
+    'Hips': ('turn', [('z', 62), ('x', 2)]),
+    'Spine': ('turn', [('z', -8)]),
+    'Spine1': ('turn', [('z', -8)]),
+    'Spine2': ('turn', [('z', -8)]),
+    'Neck': ('turn', [('z', -14)]),
+    'Head': ('turn', [('z', -14), ('x', 4)]),
+    'LeftArm': ('aim', (0.55, -0.7, 0.45)),
+    'LeftForeArm': ('aim', (0.7, -0.5, 0.5)),
+    'ik': {'RightHand': {'target': (-48.0, 8.0, 12.0), 'pole': ELBOW_OUT, 'direction': HAND_FLOOR},
+           'LeftFoot': {'target': (78.0, 14.0, -14.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK},
+           'RightFoot': {'target': (66.0, 14.0, -20.0), 'pole': KNEE_FORWARD, 'direction': FOOT_BACK}},
+}
+
+# The end of the lie down: the pose of `LYING`, with the feet on the floor, the top foot on the bottom foot.
+LD_LYING = {
+    **LYING,
+    'ik': {'RightFoot': {'target': (86.0, 11.0, 0.0), 'pole': KNEE_FORWARD, 'direction': (0.6, -0.1, -0.8)},
+           'LeftFoot': {'target': (86.0, 20.0, 4.0), 'pole': KNEE_FORWARD, 'direction': (0.6, -0.2, -0.78)}},
+}
+
 KEYS = [
-    (0.0, STANDING),
-    (0.8, LOOK_DOWN),
-    (1.7, CROUCH),
-    (2.7, HAND_DOWN),
-    (3.8, SIT_SIDE),
-    (ENTRY_SECONDS, LYING),
+    (0.0, LD_STAND),
+    (0.9, LD_LOOK),
+    (1.9, LD_STEP_DOWN),
+    (2.8, LD_HALF_KNEEL),
+    (3.6, LD_KNEEL),
+    (4.5, LD_SIT),
+    (5.5, LD_RECLINE),
+    (ENTRY_SECONDS, LD_LYING),
 ]
 
 GET_UP_KEYS = [
@@ -289,8 +407,9 @@ def quaternion_curve(q0, q1, q2, q3, t):
     near = [q1]
     for q in (q0, q2, q3):
         near.append(q if q.dot(q1) >= 0 else -q)
-    a, b, c, d = (Vector((q.w, q.x, q.y, q.z)) for q in (near[1], near[0], near[2], near[3]))
-    v = catmull_rom(b, a, c, d, t)
+    # near is [q1, q0, q2, q3] on one hemisphere. The curve goes from q1 (t = 0) to q2 (t = 1).
+    p0, p1, p2, p3 = (Vector((q.w, q.x, q.y, q.z)) for q in (near[1], near[0], near[2], near[3]))
+    v = catmull_rom(p0, p1, p2, p3, t)
     return Quaternion((v[0], v[1], v[2], v[3])).normalized()
 
 
@@ -331,9 +450,214 @@ class KeyCurve:
         return deltas, catmull_rom(h[0], h[1], h[2], h[3], t)
 
 
-def breathing(table, curve, seconds):
+# The parts of the body that can touch the floor, with the distance in centimeters from the joint to the floor when
+# that part rests on it: the thickness of the flesh, the clothes, and the boots. Used to rest the body on the floor
+# and to check, frame by frame, that it does not float or sink.
+SUPPORT = {
+    'LeftFoot': 8.0, 'RightFoot': 8.0, 'LeftToeBase': 3.0, 'RightToeBase': 3.0,
+    'LeftLeg': 10.0, 'RightLeg': 10.0, 'LeftUpLeg': 13.0, 'RightUpLeg': 13.0,
+    'Hips': 14.0, 'Spine': 13.0, 'Spine1': 13.0, 'Spine2': 13.0,
+    'LeftArm': 7.0, 'RightArm': 7.0, 'LeftForeArm': 4.5, 'RightForeArm': 4.5, 'LeftHand': 4.0, 'RightHand': 4.0,
+    'Head': 11.0,
+}
+
+
+def joint_positions(table, rest, translations, deltas, hips):
+    """World position of each joint in centimeters (Y up, Z toward the viewer, X to her left) for a posed skeleton."""
+    posed = {name: deltas[name] @ rest[name] for name, _, _ in table}
+    positions = {}
+    for name, parent, _local in table:
+        if parent is None:
+            positions[name] = Vector(hips)
+        else:
+            positions[name] = positions[parent] + posed[parent] @ translations[name]
+    return positions
+
+
+def floor_clearance(positions):
+    """How far the lowest supporting part is above the floor, in centimeters. 0 means it rests on the floor.
+
+    Also gives the part that is lowest. A negative value means a part is under the floor."""
+    low = min(SUPPORT, key=lambda name: positions[name].y - SUPPORT[name])
+    return positions[low].y - SUPPORT[low], low
+
+
+# A part may be this far under the floor, in centimeters, before the hips are lifted: the radii are close, not exact.
+FLOOR_TOLERANCE = 0.6
+# How far the boot goes past the toe joint, in centimeters.
+BOOT_TIP_CM = 7.0
+# The height of the ankle of a foot that stands flat, in centimeters.
+STAND_ANKLE_CM = 13.0
+# The most that the hips descend: a person lowers to the floor at about this pace, not faster.
+MAX_DESCENT_CM_PER_SECOND = 70.0
+
+LIMBS = {
+    # end joint: (root, middle, positive pole axis name for documentation)
+    'LeftFoot': ('LeftUpLeg', 'LeftLeg'),
+    'RightFoot': ('RightUpLeg', 'RightLeg'),
+    'LeftHand': ('LeftArm', 'LeftForeArm'),
+    'RightHand': ('RightArm', 'RightForeArm'),
+}
+
+
+def two_bone(root, target, upper, lower, pole):
+    """The middle joint of a two bone chain, and the end joint it reaches, for a target. The pole turns the knee or elbow."""
+    to_target = target - root
+    reach = min(max(to_target.length, abs(upper - lower) + 0.5), upper + lower - 0.05)
+    direction = to_target.normalized()
+    along = (upper * upper - lower * lower + reach * reach) / (2 * reach)
+    height = math.sqrt(max(upper * upper - along * along, 0.0))
+    side = Vector(pole) - direction * Vector(pole).dot(direction)
+    side = side.normalized() if side.length > 1e-6 else Vector((0.0, 0.0, 1.0))
+    return root + direction * along + side * height, root + direction * reach
+
+
+class Motion:
+    """A motion made of key poses, with contacts. Used for the lie down and for the get up.
+
+    The key poses give the posture of the body (angles, as before). A key can also pin a hand or a foot to a place on
+    the floor with `'ik': {'RightHand': {'target': (x, y, z), 'pole': (x, y, z), 'direction': (x, y, z)}}`. The
+    app then solves the arm or the leg for that place on every frame, so a planted foot does not slide and a hand
+    on the floor stays on the floor. The pin fades in and out between keys.
+
+    The hips height comes from the keys, but never lower than the floor allows: the lowest supporting part of the
+    body rests on the floor. So the body does not sink into the floor, and a key that sits on the floor stays on it.
+    """
+
+    def __init__(self, table, rest, translations, keys, lead):
+        self.table = table
+        self.rest = rest
+        self.translations = translations
+        self.keys = keys
+        self.lead = lead
+        self.curve = KeyCurve(table, rest, keys)
+        self.duration = self.curve.duration
+        self._heights = None
+        self.lengths = {end: (translations[mid].length, translations[end].length) for end, (_root, mid) in LIMBS.items()}
+
+    def pins(self, seconds):
+        """For each pinned end joint: the weight (0 to 1), the target, the pole, and the direction of the end bone."""
+        index, t = self.curve.segment(self.curve.warp(seconds))
+        eased = smoothstep(t)
+        result = {}
+        for end in LIMBS:
+            a = self.keys[index][1].get('ik', {}).get(end)
+            b = self.keys[min(index + 1, len(self.keys) - 1)][1].get('ik', {}).get(end)
+            if a is None and b is None:
+                continue
+            weight = (1.0 if a else 0.0) * (1 - eased) + (1.0 if b else 0.0) * eased
+            if weight <= 0.0:
+                continue
+            ref = [Vector(item[name]) for item, name in ((a, 'target'), (b, 'target')) if item]
+            poles = [Vector(item['pole']) for item in (a, b) if item]
+            dirs = [Vector(item['direction']) for item in (a, b) if item and 'direction' in item]
+            target = ref[0].lerp(ref[-1], eased) if len(ref) == 2 else ref[0]
+            pole = poles[0].lerp(poles[-1], eased) if len(poles) == 2 else poles[0]
+            direction = (slerp_direction(dirs[0], dirs[-1], eased) if len(dirs) == 2 else dirs[0]) if dirs else None
+            target = self._above_floor(end, target, direction)
+            result[end] = (weight, target, pole, direction)
+        return result
+
+    def _above_floor(self, end, target, direction):
+        """Lifts a pinned place so that the toes or the hand never go under the floor while the pin fades."""
+        target = Vector(target)
+        if end.endswith('Foot'):
+            # The boot goes past the toe joint, so the tip of the boot is the lowest point of a foot that points down.
+            toe = self.translations[end.replace('Foot', 'ToeBase')].length + BOOT_TIP_CM
+            tip_y = target.y + (direction.normalized().y if direction is not None else -0.61) * toe
+            # Standing flat, the tip of the boot is at this height: it is the floor level for a tip.
+            flat = Vector(FOOT_FLAT).normalized()
+            tip_floor = STAND_ANKLE_CM + flat.y * toe
+            lowest = min(tip_y - tip_floor, target.y - SUPPORT[end])
+        else:
+            lowest = target.y - SUPPORT[end]
+        if lowest < 0.0:
+            target.y -= lowest
+        return target
+
+    def pose(self, seconds, hips_y, fk=None):
+        """The world rotations and the joint positions for a time and a hips height."""
+        deltas_fk, hips_key = fk if fk else self.curve.sample(seconds, self.lead)
+        own = own_rotation(deltas_fk, self.table)
+        pins = self.pins(seconds)
+        hips = Vector((hips_key.x, hips_y, hips_key.z))
+        deltas, posed, positions, ik_plan = {}, {}, {}, {}
+        up = Vector((0.0, 1.0, 0.0))
+        for name, parent, _local in self.table:
+            inherited = deltas[parent] if parent else Quaternion()
+            deltas[name] = own[name] @ inherited
+            posed[name] = deltas[name] @ self.rest[name]
+            positions[name] = hips.copy() if parent is None else positions[parent] + posed[parent] @ self.translations[name]
+            # Which limb bone is this, and is its end joint pinned?
+            for end, (root, middle) in LIMBS.items():
+                pin = pins.get(end)
+                if pin is None:
+                    continue
+                weight, target, pole, direction = pin
+                end_bone = end
+                if name == root:
+                    upper, lower = self.lengths[end]
+                    knee, reach = two_bone(positions[name], target, upper, lower, pole)
+                    ik_plan[end] = (knee, reach)
+                    wanted = (knee - positions[name]).normalized()
+                    self._aim(name, inherited, wanted, weight, deltas, posed, up)
+                elif name == middle:
+                    reach = ik_plan[end][1]
+                    wanted = (reach - positions[name]).normalized()
+                    self._aim(name, inherited, wanted, weight, deltas, posed, up)
+                elif name == end_bone and direction is not None:
+                    self._aim(name, inherited, direction.normalized(), weight, deltas, posed, up)
+        return deltas, positions, hips
+
+    def _aim(self, name, inherited, wanted, weight, deltas, posed, up):
+        """Turns the bone toward a world direction, by `weight`, from what the key pose gave."""
+        current = posed[name] @ up
+        direction = slerp_direction(current, wanted, weight)
+        base = (inherited @ self.rest[name]) @ up
+        deltas[name] = aim(base, direction) @ inherited
+        posed[name] = deltas[name] @ self.rest[name]
+
+    def _lowest_hips(self, seconds, fk):
+        """The first hips height at or above the key where no part is under the floor."""
+        key_y = fk[1].y
+
+        def clearance(y):
+            _deltas, positions, _hips = self.pose(seconds, y, fk)
+            return floor_clearance(positions)[0]
+
+        y = key_y
+        for _ in range(60):
+            if clearance(y) >= -FLOOR_TOLERANCE:
+                return y
+            y += 1.0
+        # No height clears the floor for this frame. Keep the key: a small dip is better than a jump.
+        return key_y
+
+    def _hips_heights(self):
+        """The hips height on every frame. It rises at once when the floor needs it, and it descends at a person's pace."""
+        heights = []
+        for frame in range(int(round(self.duration * FPS)) + 1):
+            seconds = frame / FPS
+            fk = self.curve.sample(seconds, self.lead)
+            wanted = self._lowest_hips(seconds, fk)
+            if heights:
+                wanted = max(wanted, heights[-1] - MAX_DESCENT_CM_PER_SECOND / FPS)
+            heights.append(wanted)
+        return heights
+
+    def sample(self, seconds):
+        """The world rotations and the hips position for a time, with the hips resting on the floor."""
+        if self._heights is None:
+            self._heights = self._hips_heights()
+        frame = min(max(int(round(seconds * FPS)), 0), len(self._heights) - 1)
+        fk = self.curve.sample(seconds, self.lead)
+        deltas, _positions, hips = self.pose(seconds, self._heights[frame], fk)
+        return deltas, hips
+
+
+def breathing(table, motion, seconds):
     """The lying pose with a sleeping breath of the chest and a slow settle of the head and the top leg."""
-    deltas, hips = curve.sample(curve.duration, {})
+    deltas, hips = motion.sample(motion.duration)
     # 0 at the start of the loop, so the loop starts on the last frame of the entry.
     inhale = breath(seconds)
     slow = 2 * math.pi * seconds / LOOP_SECONDS
@@ -361,25 +685,25 @@ def local_rotations(table, rest, deltas):
     return locals_
 
 
-def animation_frames(table, rest, mode):
+def animation_frames(table, rest, translations, mode):
     frames = []
     if mode == 'check-rest':
         locals_ = local_rotations(table, rest, {name: Quaternion() for name, _, _ in table})
         return [(locals_, Vector(STANDING['hips']))] * 2
     if mode == 'get-up':
-        curve = KeyCurve(table, rest, GET_UP_KEYS)
+        motion = Motion(table, rest, translations, GET_UP_KEYS, GET_UP_LEAD)
         for frame in range(int(round(GET_UP_SECONDS * FPS)) + 1):
-            deltas, hips = curve.sample(frame / FPS, GET_UP_LEAD)
+            deltas, hips = motion.sample(frame / FPS)
             frames.append((local_rotations(table, rest, deltas), hips))
         return frames
-    curve = KeyCurve(table, rest, KEYS)
+    motion = Motion(table, rest, translations, KEYS, LIE_DOWN_LEAD)
     total = int(round((ENTRY_SECONDS + LOOP_SECONDS) * FPS)) + 1
     for frame in range(total):
         seconds = frame / FPS
         if seconds <= ENTRY_SECONDS:
-            deltas, hips = curve.sample(seconds, LIE_DOWN_LEAD)
+            deltas, hips = motion.sample(seconds)
         else:
-            deltas, hips = breathing(table, curve, seconds - ENTRY_SECONDS)
+            deltas, hips = breathing(table, motion, seconds - ENTRY_SECONDS)
         frames.append((local_rotations(table, rest, deltas), hips))
     return frames
 
@@ -463,6 +787,51 @@ def export(armature, path):
     )
 
 
+def analyze(table, rest, armature, mode):
+    """Prints one line for each frame: the time, the hips, the floor clearance, and the speed. For checking the motion."""
+    translations = {name: values[1] for name, values in blender_rest(armature).items()}
+    keys, lead = (GET_UP_KEYS, GET_UP_LEAD) if mode == 'get-up' else (KEYS, LIE_DOWN_LEAD)
+    motion = Motion(table, rest, translations, keys, lead)
+    print('t, hips_y, clearance, lowest, hips_speed_m_s, head_y, rhand_h, lhand_h, rknee_h, lknee_h, rfoot_h, lfoot_h, rfoot_xz, lfoot_xz')
+    previous = None
+    for frame in range(int(round(motion.duration * FPS)) + 1):
+        seconds = frame / FPS
+        deltas, hips = motion.sample(seconds)
+        positions = joint_positions(table, rest, translations, deltas, hips)
+        clearance, lowest = floor_clearance(positions)
+        speed = 0.0 if previous is None else (hips - previous).length / 100.0 * FPS
+        previous = hips.copy()
+        if frame % 3 == 0:
+            h = lambda name, r: positions[name].y - r
+            xz = lambda name: f'({positions[name].x:.0f};{positions[name].z:.0f})'
+            print(f'{seconds:.2f}, {hips.y:.1f}, {clearance:.1f}, {lowest}, {speed:.2f}, {positions["Head"].y:.0f}, {h("RightHand", 4):.0f}, {h("LeftHand", 4):.0f}, {h("RightLeg", 7):.0f}, {h("LeftLeg", 7):.0f}, {h("RightFoot", 8):.0f}, {h("LeftFoot", 8):.0f}, {xz("RightFoot")}, {xz("LeftFoot")}')
+
+
+def smoothness(table, rest, armature, mode):
+    """Looks for jumps: the hips speed and the speed change on each frame, and the joints that move too fast."""
+    translations = {name: values[1] for name, values in blender_rest(armature).items()}
+    keys, lead = (GET_UP_KEYS, GET_UP_LEAD) if mode == 'get-up' else (KEYS, LIE_DOWN_LEAD)
+    motion = Motion(table, rest, translations, keys, lead)
+    previous, speeds, worst = None, [], []
+    last_positions = None
+    for frame in range(int(round(motion.duration * FPS)) + 1):
+        deltas, hips = motion.sample(frame / FPS)
+        positions = joint_positions(table, rest, translations, deltas, hips)
+        if previous is not None:
+            speeds.append((frame / FPS, (hips - previous).length / 100.0 * FPS, (hips.y - previous.y) / 100.0 * FPS))
+            fastest = max(((positions[n] - last_positions[n]).length / 100.0 * FPS, n) for n in positions)
+            worst.append((frame / FPS, fastest[0], fastest[1]))
+        previous, last_positions = hips.copy(), positions
+    print('hips: top speeds in m/s (time, speed, vertical speed)')
+    for item in sorted(speeds, key=lambda x: -x[1])[:6]:
+        print(f'  {item[0]:.2f}s  {item[1]:.2f}  {item[2]:+.2f}')
+    print('fastest joint (time, speed m/s, joint)')
+    for item in sorted(worst, key=lambda x: -x[1])[:8]:
+        print(f'  {item[0]:.2f}s  {item[1]:.2f}  {item[2]}')
+    jumps = [(t, b[1] - a[1]) for (t, *_), a, b in zip(speeds[1:], speeds, speeds[1:]) if abs(b[1] - a[1]) > 0.35]
+    print('speed jumps over 0.35 m/s between frames:', [f'{t:.2f}s' for t, _ in jumps])
+
+
 def main(argv):
     if len(argv) < 2:
         raise SystemExit(__doc__)
@@ -471,7 +840,13 @@ def main(argv):
     table = read_rest_table()
     rest = world_rest(table)
     armature = import_skeleton(skeleton)
-    frames = animation_frames(table, rest, mode)
+    if '--analyze' in argv[2:]:
+        analyze(table, rest, armature, mode)
+        return
+    if '--smooth' in argv[2:]:
+        smoothness(table, rest, armature, mode)
+        return
+    frames = animation_frames(table, rest, {name: values[1] for name, values in blender_rest(armature).items()}, mode)
     write_animation(armature, frames)
     export(armature, output)
     print(f'wrote {output} with {len(frames)} frames at {FPS} fps')
